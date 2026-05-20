@@ -1,0 +1,586 @@
+/**
+ * Inline `rdm:` post-processor.
+ *
+ * Obsidian renders inline code spans (`backtick-wrapped`) as <code>
+ * elements in the DOM. We walk the rendered DOM looking for <code>
+ * nodes whose text starts with `rdm:`, evaluate the expression
+ * against the note's scope, and replace the <code> with a custom
+ * span that:
+ *
+ *   - Shows the result (preview or locked, same display).
+ *   - Has a "Lock" button if currently unfilled.
+ *   - Has a "Reroll" button if currently locked (and the reroll
+ *     button is also available pre-lock to refresh the preview).
+ *   - Click on the result itself does nothing (don't accidentally
+ *     fire on bumps).
+ *
+ * Preview state lives in the plugin's PreviewRegistry. Re-renders of
+ * the same expression (scrolling, edits elsewhere) consult the
+ * registry and re-display the same result rather than re-rolling.
+ *
+ * The async pipeline (prefetch → resolve → engine) is reused from the
+ * codeblock processor's logic — just shaped for a single expression
+ * rather than a whole codeblock source.
+ */
+
+import {
+    MarkdownPostProcessorContext,
+    TFile,
+} from "obsidian";
+import { Evaluator } from "../engine/evaluator";
+import { buildInlineBundle } from "../resolver/scope";
+import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
+import { vaultFileSource } from "./vaultFileSource";
+import {
+    parseInlineCall,
+    applyLockToSource,
+    applyUnlockToSource,
+    PreviewRegistry,
+    PreviewKey,
+    INLINE_PREFIX,
+    findAllInlineCallPositions,
+    InlineCallPosition,
+} from "./lockingService";
+import { setSanitisedHtml, setSanitisedHtmlWithLinks } from "./sanitiser";
+import type RandomnessPlugin from "./main";
+
+/**
+ * Build the post-processor function for inline rdm: calls. Closes
+ * over the plugin so it can read settings, access vault, and share
+ * the preview registry across calls.
+ */
+export function buildInlineProcessor(plugin: RandomnessPlugin) {
+    return async function process(
+        el: HTMLElement,
+        ctx: MarkdownPostProcessorContext
+    ): Promise<void> {
+        // Walk all <code> elements. Each one is a potential inline
+        // call. Snapshot the list because we mutate as we go.
+        const codeNodes = Array.from(el.querySelectorAll("code"));
+        // Fast path: no inline calls in this block.
+        if (!codeNodes.some((c) =>
+            (c.textContent ?? "").startsWith(INLINE_PREFIX)
+        )) {
+            return;
+        }
+
+        // Read the note's source so we can compute SOURCE-LEVEL
+        // occurrence indices for every call. This is the key to
+        // distinguishing identical inline calls: by occurrence in
+        // source order (matching what applyLockToSource expects),
+        // not by render-time DOM position which collapses to 0
+        // when prior calls have already been replaced.
+        const sourcePositions = await readSourcePositions(
+            plugin,
+            ctx,
+            el
+        );
+
+        // Walk DOM `code` elements in document order and pair each
+        // with its source position. The N-th `rdm:` code element in
+        // the block corresponds to the N-th call in `sourcePositions`
+        // restricted to this block's line range — provided the
+        // expressions match.
+        let sourceIdx = 0;
+        for (const code of codeNodes) {
+            const text = code.textContent ?? "";
+            if (!text.startsWith(INLINE_PREFIX)) continue;
+            const call = parseInlineCall(text);
+            if (!call) continue;
+
+            // Advance `sourceIdx` past entries whose expr doesn't
+            // match — defensive: lets us recover gracefully if
+            // markdown processing skipped or reordered something.
+            // The vast majority of the time we land on the right
+            // entry on the first try.
+            let sourcePos: InlineCallPosition | undefined;
+            while (sourceIdx < sourcePositions.length) {
+                const candidate = sourcePositions[sourceIdx];
+                sourceIdx++;
+                if (candidate.call.expr === call.expr) {
+                    sourcePos = candidate;
+                    break;
+                }
+            }
+
+            // If we couldn't find a matching source position (e.g.
+            // getSectionInfo returned null, or the source diverged
+            // from the DOM), fall back to occurrence 0. This
+            // restores the old behaviour for the edge case — not
+            // ideal, but at least nothing crashes.
+            const occurrence = sourcePos?.occurrence ?? 0;
+            await processOne(code, text, ctx, plugin, occurrence);
+        }
+    };
+}
+
+/**
+ * Read the note's source and return only the inline-call positions
+ * that fall within the current block's source range.
+ *
+ * Strategy:
+ *   1. Get the block's line range via `getSectionInfo(el)`.
+ *   2. Read the full note source from the vault.
+ *   3. Enumerate every inline call with its source line.
+ *   4. Return only calls whose line is in [lineStart, lineEnd].
+ *
+ * If any step fails (no section info, file unreadable, etc.) we
+ * return an empty array. The caller treats that as "fall back to
+ * occurrence 0", which restores the buggy old behaviour for the
+ * edge case — but only in cases where we genuinely don't have
+ * enough information to do better.
+ */
+async function readSourcePositions(
+    plugin: RandomnessPlugin,
+    ctx: MarkdownPostProcessorContext,
+    el: HTMLElement
+): Promise<InlineCallPosition[]> {
+    try {
+        const sectionInfo = ctx.getSectionInfo(el);
+        const file = plugin.app.vault.getAbstractFileByPath(
+            ctx.sourcePath
+        );
+        if (!(file instanceof TFile)) return [];
+        const source = await plugin.app.vault.read(file);
+        const all = findAllInlineCallPositions(source);
+        if (!sectionInfo) {
+            // No section bounds — return all positions and rely on
+            // the expr-match in the caller to align correctly.
+            // Works fine when the entire note renders in one
+            // post-processor call (Reading view); less reliable
+            // under partial re-renders.
+            return all;
+        }
+        // Filter to calls whose source line is in the block's range.
+        // `lineEnd` is inclusive in Obsidian's API.
+        return all.filter(
+            (p) =>
+                p.line >= sectionInfo.lineStart &&
+                p.line <= sectionInfo.lineEnd
+        );
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Process a single inline call's <code> element. Replaces it with a
+ * span carrying the preview/locked state and the lock/reroll
+ * controls.
+ *
+ * `occurrence` is the source-level position of this call among
+ * same-expression calls in the note (0-indexed). Used both as the
+ * preview-registry key and as the target index for lock/reroll
+ * operations against the source.
+ */
+async function processOne(
+    codeEl: HTMLElement,
+    text: string,
+    ctx: MarkdownPostProcessorContext,
+    plugin: RandomnessPlugin,
+    occurrence: number
+): Promise<void> {
+    const call = parseInlineCall(text);
+    if (!call) return;
+
+    // Source-level occurrence: passed in by the caller, who computed
+    // it by aligning DOM order with source order. Reliable across
+    // re-renders and partial section updates because it's grounded
+    // in the persisted source text, not transient DOM state.
+    const previewKey: PreviewKey = {
+        sourcePath: ctx.sourcePath,
+        expr: call.expr,
+        occurrence,
+    };
+
+    // Determine the result to display.
+    let result: string;
+    let isLocked: boolean;
+    if (call.locked !== undefined) {
+        // Locked: source-of-truth is the text, ignore any stale preview.
+        result = call.locked;
+        isLocked = true;
+    } else {
+        // Unfilled: use any cached preview, else compute fresh.
+        const cached = plugin.previewRegistry.get(previewKey);
+        if (cached !== undefined) {
+            result = cached;
+        } else {
+            try {
+                result = await evaluateExpression(call.expr, ctx, plugin);
+            } catch (err) {
+                renderInlineError(codeEl, err);
+                return;
+            }
+            plugin.previewRegistry.set(previewKey, result);
+        }
+        isLocked = false;
+    }
+
+    // Render and keep a handle on the span we built — onReroll for an
+    // unfilled call updates it in place without needing a re-render
+    // from Obsidian.
+    const span = replaceCodeElement(codeEl, {
+        result,
+        isLocked,
+        expr: call.expr,
+        onLock: () => lockCall(ctx, plugin, call.expr, occurrence),
+        onReroll: () =>
+            rerollCall(
+                ctx,
+                plugin,
+                call.expr,
+                occurrence,
+                previewKey,
+                isLocked,
+                span
+            ),
+        plugin,
+        sourcePath: ctx.sourcePath,
+    });
+}
+
+/**
+ * Evaluate an inline expression against its containing note's scope.
+ * Composes prefetch + buildInlineBundle + Evaluator.
+ *
+ * Exported so commands ("Lock all in note") can evaluate uncached
+ * expressions without duplicating the pipeline.
+ */
+export async function evaluateInlineExpression(
+    expr: string,
+    notePath: string,
+    plugin: RandomnessPlugin
+): Promise<string> {
+    const { vault } = plugin.app;
+    const settings = plugin.settings;
+
+    // Read the note source so the inline scope can see same-note
+    // codeblocks. If the file isn't readable (e.g. we're inside a
+    // freshly-created note that hasn't persisted yet), fall back to
+    // empty source — the expression still evaluates, just without
+    // codeblock context.
+    let noteSource = "";
+    try {
+        noteSource = await vault.adapter.read(notePath);
+    } catch {
+        // intentionally swallowed; see comment above
+    }
+
+    // Prefetch the Use: graph reachable from the note's codeblocks.
+    const asyncSource = vaultFileSource(vault);
+    const prefetch = await prefetchUseGraph({
+        entryPath: notePath,
+        entrySource: noteSource,
+        generatorRoot: settings.generatorRoot || undefined,
+        source: asyncSource,
+    });
+
+    const bundle = buildInlineBundle(expr, {
+        notePath,
+        noteSource,
+        source: prefetch.source,
+        generatorRoot: settings.generatorRoot || undefined,
+    });
+
+    const evaluator = new Evaluator(bundle.main, bundle.extras, {});
+    return evaluator.run();
+}
+
+/**
+ * Original ctx-flavoured wrapper kept for the in-render path, which
+ * doesn't have a notePath without going through ctx.sourcePath.
+ */
+async function evaluateExpression(
+    expr: string,
+    ctx: MarkdownPostProcessorContext,
+    plugin: RandomnessPlugin
+): Promise<string> {
+    return evaluateInlineExpression(expr, ctx.sourcePath, plugin);
+}
+
+// ────────────────────────────────────────────────────────────────────
+// DOM rendering — kept simple. Standard DOM methods only (Obsidian's
+// HTMLElement extensions aren't in jsdom).
+// ────────────────────────────────────────────────────────────────────
+
+interface InlineRenderProps {
+    result: string;
+    isLocked: boolean;
+    expr: string;
+    onLock: () => Promise<void> | void;
+    onReroll: () => Promise<void> | void;
+    /**
+     * Optional: when present, the result is rendered with wiki-
+     * link interpolation enabled (`![[image.png]]` becomes an
+     * `<img>`, `[[note]]` becomes a clickable `<a>`). Required
+     * when used from the post-processor; tests that exercise
+     * replaceCodeElement directly can omit them.
+     */
+    plugin?: import("./main").default;
+    sourcePath?: string;
+}
+
+/**
+ * Replace a <code> element with our custom span. Returns the new span
+ * so callers can hold a reference for in-place updates (notably the
+ * reroll-on-unfilled flow updates the result text without rebuilding
+ * the whole element). Exported so tests can exercise it directly
+ * without going through the full processor pipeline.
+ */
+export function replaceCodeElement(
+    codeEl: HTMLElement,
+    props: InlineRenderProps
+): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "randomness-inline";
+    if (props.isLocked) span.classList.add("randomness-inline-locked");
+    else span.classList.add("randomness-inline-preview");
+
+    // Controls — anchored on the LEFT of the result text. Rationale:
+    // result lengths vary on reroll ("Bob" → "Selene Coalheart"), and
+    // if controls were on the right they'd shift each render, forcing
+    // the user to chase the buttons with the mouse.
+    //
+    // Within the controls, Reroll (🎲) is placed FIRST because it's
+    // present in both unfilled and locked states. Lock (🔒) is only
+    // shown in the unfilled state and goes second, so toggling from
+    // unfilled → locked doesn't shift the 🎲's x-position either.
+    // CSS hides whichever button is contextually irrelevant later.
+    const controls = document.createElement("span");
+    controls.className = "randomness-inline-controls";
+
+    const rerollBtn = makeControlButton("🎲", "Re-roll");
+    rerollBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        await props.onReroll();
+    });
+    controls.appendChild(rerollBtn);
+
+    if (!props.isLocked) {
+        const lockBtn = makeControlButton("🔒", "Lock this preview");
+        lockBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            await props.onLock();
+        });
+        controls.appendChild(lockBtn);
+    }
+
+    span.appendChild(controls);
+
+    // Result text — appended AFTER controls so it renders to the
+    // right. Wrapped so we can style it separately from the controls
+    // and so reroll-in-place can find just the result element.
+    //
+    // Route through the same sanitiser the codeblock processor uses
+    // — the engine emits real HTML (e.g. >> bold yields <b>X</b>),
+    // and using textContent here would render those tags as literal
+    // characters instead of bolding. Sanitiser drops anything outside
+    // the whitelist (scripts, iframes, attributes); same safety
+    // contract as codeblocks.
+    const resultSpan = document.createElement("span");
+    resultSpan.className = "randomness-inline-result";
+    if (props.plugin !== undefined && props.sourcePath !== undefined) {
+        setSanitisedHtmlWithLinks(
+            resultSpan,
+            props.result,
+            props.plugin,
+            props.sourcePath
+        );
+    } else {
+        setSanitisedHtml(resultSpan, props.result);
+    }
+    resultSpan.title = props.expr; // hover shows the expression
+    span.appendChild(resultSpan);
+
+    // Swap into the DOM.
+    codeEl.replaceWith(span);
+    return span;
+}
+
+function makeControlButton(label: string, title: string): HTMLElement {
+    const btn = document.createElement("button");
+    btn.className = "randomness-inline-button";
+    btn.type = "button";
+    btn.textContent = label;
+    btn.title = title;
+    btn.setAttribute("aria-label", title);
+    return btn;
+}
+
+/** Render an inline error in place of the code element. */
+export function renderInlineError(
+    codeEl: HTMLElement,
+    err: unknown
+): void {
+    const span = document.createElement("span");
+    span.className = "randomness-inline randomness-inline-error";
+    span.textContent =
+        "[error: " +
+        (err instanceof Error ? err.message : String(err)) +
+        "]";
+    codeEl.replaceWith(span);
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Lock / Reroll — write back to the note's source.
+//
+// Both use vault.process(file, fn) which is the atomic read-modify-
+// write primitive in Obsidian. The function we pass receives the
+// current file contents and returns the new contents; Obsidian
+// handles the rest, including triggering re-renders.
+// ────────────────────────────────────────────────────────────────────
+
+async function lockCall(
+    ctx: MarkdownPostProcessorContext,
+    plugin: RandomnessPlugin,
+    expr: string,
+    occurrence: number
+): Promise<void> {
+    // Read the current preview value from THIS specific call's
+    // registry slot. Previously this hard-coded occurrence=0 with
+    // a comment claiming all same-expression calls shared one
+    // cache key — but processOne writes per-occurrence, so the
+    // hard-coded lookup would either miss the fresh value for
+    // occurrences 1+ or pick up a stale value from another call.
+    //
+    // The user-visible symptom: clicking Lock on the bottom of
+    // three identical calls would commit the TOP one's value into
+    // the source at the top one's position, while the bottom
+    // stayed unfilled. By keying the lookup AND the source-write
+    // by occurrence, each call's lock now targets its own data.
+    const previewKey: PreviewKey = {
+        sourcePath: ctx.sourcePath,
+        expr,
+        occurrence,
+    };
+    const cached = plugin.previewRegistry.get(previewKey);
+    if (cached === undefined) {
+        // No preview to lock. Shouldn't happen in normal flow — the
+        // post-processor populates the registry before showing the
+        // Lock button. If it does happen, evaluate on the fly so the
+        // click does *something* useful.
+        try {
+            const fresh = await evaluateInlineExpression(
+                expr,
+                ctx.sourcePath,
+                plugin
+            );
+            plugin.previewRegistry.set(previewKey, fresh);
+            return lockWithResult(ctx, plugin, expr, occurrence, fresh);
+        } catch {
+            return; // give up silently
+        }
+    }
+    return lockWithResult(ctx, plugin, expr, occurrence, cached);
+}
+
+async function lockWithResult(
+    ctx: MarkdownPostProcessorContext,
+    plugin: RandomnessPlugin,
+    expr: string,
+    occurrence: number,
+    result: string
+): Promise<void> {
+    await modifyNote(plugin, ctx.sourcePath, (source) => {
+        // Target THIS occurrence in the source — applyLockToSource
+        // treats occurrence as the 0-indexed position among ALL
+        // same-expression calls (locked or not), which is the
+        // same scheme used by findAllInlineCallPositions when
+        // computing the render-time occurrence. They line up.
+        return applyLockToSource(source, expr, occurrence, result);
+    });
+}
+
+/**
+ * Re-roll a call.
+ *
+ *   - **Unfilled**: evaluate a fresh value, update the registry, and
+ *     update the visible span in place. No vault write — the source
+ *     text is already what we want, and Obsidian wouldn't re-render
+ *     anyway because nothing changed.
+ *   - **Locked**: write `applyUnlockToSource` to strip the `⟹result`
+ *     suffix. Obsidian sees the file change and re-renders, the
+ *     post-processor fires, and the freshly-rendered span shows a
+ *     new preview.
+ *
+ * The `span` param is the live `<span>` element produced by
+ * `replaceCodeElement` — we mutate its result-text node directly in
+ * the unfilled case rather than swapping the element. This keeps
+ * event listeners attached to the buttons (we'd lose them if we
+ * replaced the whole span), and means a rapid sequence of rerolls
+ * doesn't accumulate orphaned DOM nodes.
+ */
+async function rerollCall(
+    ctx: MarkdownPostProcessorContext,
+    plugin: RandomnessPlugin,
+    expr: string,
+    occurrence: number,
+    previewKey: PreviewKey,
+    wasLocked: boolean,
+    span: HTMLElement
+): Promise<void> {
+    if (wasLocked) {
+        // Locked → strip the lock from the source at THIS specific
+        // occurrence. Previously this used `findFirstLockedOccurrence`
+        // which always targeted the first locked call regardless of
+        // which Reroll button the user clicked — same shape of bug
+        // as the lock-targets-the-top one. Both are now position-
+        // aware.
+        plugin.previewRegistry.delete(previewKey);
+        await modifyNote(plugin, ctx.sourcePath, (source) => {
+            return applyUnlockToSource(source, expr, occurrence);
+        });
+        return;
+    }
+
+    // Unfilled → evaluate fresh, update the registry, repaint in place.
+    let fresh: string;
+    try {
+        fresh = await evaluateInlineExpression(expr, ctx.sourcePath, plugin);
+    } catch (err) {
+        // Replace the span with an error indicator. The user can edit
+        // the source to fix the expression.
+        renderInlineError(span, err);
+        return;
+    }
+    plugin.previewRegistry.set(previewKey, fresh);
+
+    // Update the visible result. Find the result subspan we created
+    // in replaceCodeElement; if it's missing (DOM was restructured by
+    // another plugin?), fall back to the parent span as a target.
+    //
+    // Route through the sanitiser for the same reason as the initial
+    // render — the engine emits real HTML for >> bold etc., which
+    // must be parsed as tags, not displayed as literal characters.
+    // Link-aware variant so wiki-syntax in rerolled output renders
+    // the same way as on the initial pass.
+    const resultSpan = span.querySelector(
+        ".randomness-inline-result"
+    ) as HTMLElement | null;
+    setSanitisedHtmlWithLinks(
+        resultSpan ?? span,
+        fresh,
+        plugin,
+        ctx.sourcePath
+    );
+}
+
+/**
+ * Helper: open the note, transform its contents, write it back. Uses
+ * vault.process for atomic read-modify-write. If the file isn't a
+ * TFile (e.g. it's a folder or doesn't exist), we silently do
+ * nothing — the user just clicked a stale button on a deleted note,
+ * which is a rare edge case not worth a notification.
+ */
+async function modifyNote(
+    plugin: RandomnessPlugin,
+    notePath: string,
+    transform: (source: string) => string
+): Promise<void> {
+    const file = plugin.app.vault.getAbstractFileByPath(notePath);
+    if (!(file instanceof TFile)) return;
+    await plugin.app.vault.process(file, transform);
+}

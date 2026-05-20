@@ -1,0 +1,52 @@
+// Title: Random Portrait
+//
+// Demonstrates the wiki-image-embed feature (v0.4.0). Each item
+// in the portrait table is a `![[…]]` embed referencing a real
+// SVG in the `images/` subfolder. Rolling on this table outputs
+// one of those embeds verbatim, and the post-processor turns the
+// `![[…]]` into an actual `<img>` element.
+//
+// To use: place this `.ipt` file alongside an `images/` folder
+// containing the six SVGs (goblin-warrior.svg, dwarf-cleric.svg,
+// etc.) in your vault. Then in any note:
+//
+//     ```randomness
+//     Use: portraits.ipt
+//     [@portrait]
+//     ```
+//
+// or inline:
+//
+//     `rdm:[@portrait Use: portraits.ipt]`
+//
+// Each roll picks one portrait and displays it.
+
+Title: Random Portrait
+Formatting: html
+
+// Main entry: roll a portrait. Pulls just the embed line, so the
+// caller sees `![[goblin-warrior.svg]]` (which renders as the
+// image) and nothing else.
+Table: portrait
+![[images/goblin-warrior.svg]]
+![[images/dwarf-cleric.svg]]
+![[images/elf-ranger.svg]]
+![[images/human-bard.svg]]
+![[images/halfling-rogue.svg]]
+![[images/tiefling-wizard.svg]]
+
+// Combo: a portrait + a flavour line. Demonstrates that the
+// engine still does its normal work around wiki-syntax — pick a
+// portrait, pick a flavour, concatenate them. The `\n` puts the
+// flavour on the line after the image, and the join-with-blank-
+// line treatment from v0.3.0 makes it read as a tidy block.
+Table: encounter
+[@portrait]\n[@flavour]
+
+Table: flavour
+A grizzled veteran covered in old scars.
+A young face full of nervous determination.
+Eyes that seem to look past you, at something only they can see.
+Carrying a bundle wrapped in stained linen — clearly heavy.
+Their hands tremble slightly when not occupied.
+Humming a tune you almost recognise.

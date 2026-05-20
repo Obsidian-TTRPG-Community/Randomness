@@ -1,0 +1,18 @@
+Header: Items you may get after picking someone's pocket, or cutting their purse/pouch.
+
+Table: PickPocket
+22:you get [! PickPocketItems >> implode]
+10:you get [!{1d2+1} PickPocketItems >> implode]
+1:Trap! [@PickPocketTrap]
+
+Table: PickPocketTrap
+You find a threatening note from the theives guild warning non-member pick pockets from working on their turf.
+You prick your finger on a poisoned needle (DC {1d6+9})
+2: You prick your finger on a needle.  Make a silence check or be caught.
+2: A mouse trap snaps shut on your fingers. Make a silence check or be caught.
+2: You just tried to pick the pocket of a better pick pocket.  lose some stuff.
+You get shocked for {1d3} points of damage as a spell defending the owner's purse is triggered.
+You trigger an alarm spell, and are immediately illuminated with glitterdust.
+You find a note saying to meet someone [|tonight|tomorrow night] [|in an alley|at a spot in the woods|by the water] who will deliver the gold and gems.  Its a ploy by [|a group of vigilantes fed up with local pick pockets|the local thieves guild fed up with non-guild members working on their turf|the local town watch], who will ambush the thief if he/she shows up!
+You find a scroll, cursed with [|explosive runes|a polymorph spell (frog)|a petrification spell].  Viewing the text on the scroll triggers the effect.
+You find a small [|wooden box|jar|bottle].  If opened, take {1d6} points of fire damage from the magical trap.

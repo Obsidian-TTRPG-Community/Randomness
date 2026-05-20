@@ -1,0 +1,10 @@
+node_modules/
+# main.js is committed — it's the build artifact users install. Some
+# Obsidian plugins gitignore it and only ship via Release assets; we
+# keep it tracked so a clean clone is immediately installable manually.
+*.log
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/

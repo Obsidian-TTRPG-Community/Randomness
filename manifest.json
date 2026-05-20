@@ -1,0 +1,9 @@
+{
+  "id": "randomness",
+  "name": "Randomness",
+  "version": "0.4.4",
+  "minAppVersion": "1.4.0",
+  "description": "IPP3-compatible random generator engine for Obsidian. Render `randomness` codeblocks inline with rich text output, plus support for legacy .ipt files.",
+  "author": "Josh",
+  "isDesktopOnly": false
+}

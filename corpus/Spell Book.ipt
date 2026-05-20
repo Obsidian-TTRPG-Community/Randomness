@@ -1,0 +1,14 @@
+use: srd\MageSpells.ipt
+
+Header: Random Wizard Spellbook, using spells from the OGL SRD5.
+Footer: <br>This material is Open Game Content, and is licensed for public use under the terms of the Open Game License v1.0a.
+Define: NumLoSpells={1d7+5}
+Define: NumSpells ={2d6}
+Define: NumMedSpells ={1d10}
+Define: NumHiSpells ={1d8}
+
+Table: Spellbook
+Roll: 1d102
+1-50:<u>First Level Spells:</u>\n[!{$NumLoSpells} SpellsMageLevel1 >> sort >> implode]
+51-75:<u>First Level Spells:</u>\n[!{$NumLoSpells} SpellsMageLevel1 >> sort >> implode]\n <u>Second Level Spells:</u>\n[!{$NumSpells} SpellsMageLevel2 >> sort >> implode]
+76-80:<u>First Level Spells:</u>\n[!{$NumLoSpells} SpellsMageLevel1 >> sort >> implode]\n <u>Second Level Spells:</u>\n[!{$NumSpells} SpellsMageLevel2 >> sort >> implode]\n <u>Third Level Spells:</u>\n[!{$NumSpells} SpellsMageLevel3 >> sort >> implode]\n 

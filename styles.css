@@ -1,0 +1,567 @@
+/*
+ * Randomness plugin styles.
+ *
+ * Kept minimal — uses Obsidian's CSS variables so the UI inherits the
+ * user's theme. Override in your snippets folder if you want a
+ * different look.
+ */
+
+/* Inline rdm: rendering */
+
+.randomness-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0 0.25em;
+    border-radius: 3px;
+    background: var(--background-modifier-hover);
+    font-family: inherit;
+}
+
+.randomness-inline-locked {
+    background: var(--background-modifier-success);
+    color: var(--text-on-accent);
+}
+
+.randomness-inline-preview {
+    background: var(--background-modifier-hover);
+    font-style: italic;
+}
+
+.randomness-inline-result {
+    /* The actual result text */
+}
+
+.randomness-inline-controls {
+    display: inline-flex;
+    gap: 0.15em;
+    /* Always visible. The earlier opacity-fade-on-hover hid them in
+     * Live Preview where mouse-tracking interacts oddly with
+     * CodeMirror, and made the lock/reroll buttons hard to find on
+     * first inspection. Explicit pointer-events guards against theme
+     * snippets that disable pointer-events on inline-children of
+     * code-styled spans. */
+    pointer-events: auto;
+}
+
+.randomness-inline-button {
+    background: none;
+    border: none;
+    padding: 0 0.15em;
+    margin: 0;
+    cursor: pointer;
+    font-size: 0.85em;
+    line-height: 1;
+    color: inherit;
+    /* Match the controls' pointer-events guard. */
+    pointer-events: auto;
+}
+
+.randomness-inline-button:hover {
+    opacity: 0.7;
+}
+
+.randomness-inline-error {
+    color: var(--text-error);
+    background: var(--background-modifier-error);
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+}
+
+/* Codeblock output */
+
+.randomness-loading {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.randomness-output {
+    /* Inherit from the surrounding markdown styling */
+}
+
+.randomness-error {
+    color: var(--text-error);
+    background: var(--background-modifier-error);
+    padding: 0.5em 0.75em;
+    border-radius: 4px;
+    border-left: 3px solid var(--text-error);
+}
+
+.randomness-error-message {
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+    margin-top: 0.25em;
+    white-space: pre-wrap;
+}
+
+/* Prompt controls */
+
+.randomness-prompts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    padding: 0.5em 0.75em;
+    margin-bottom: 0.75em;
+    background: var(--background-secondary);
+    border-radius: 4px;
+}
+
+.randomness-prompt-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.randomness-prompt-label {
+    font-weight: 500;
+    min-width: 8em;
+}
+
+.randomness-prompt-input,
+.randomness-prompt-select {
+    flex: 1;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* ── Generator browser (right-sidebar pane) ── */
+
+.randomness-browser {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0.5em;
+    gap: 0.5em;
+    overflow: hidden;
+}
+
+.randomness-browser-loading {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 1em;
+    text-align: center;
+}
+
+.randomness-browser-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5em;
+}
+
+.randomness-browser-header h3 {
+    margin: 0;
+    font-size: 1em;
+}
+
+.randomness-browser-header-actions {
+    display: flex;
+    gap: 0.3em;
+    flex-shrink: 0;
+}
+
+.randomness-browser-collapse-all,
+.randomness-browser-reload {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    padding: 0.2em 0.6em;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.8em;
+}
+
+.randomness-browser-collapse-all:hover,
+.randomness-browser-reload:hover {
+    background: var(--background-modifier-hover);
+}
+
+.randomness-browser-filter {
+    width: 100%;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    padding: 0.3em 0.5em;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.randomness-browser-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+}
+
+.randomness-browser-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 1em 0;
+}
+
+/* Tree nodes — folders and files. Indentation comes from nesting the
+ * children container; each level adds extra left-padding. */
+
+.randomness-browser-folder,
+.randomness-browser-file {
+    display: flex;
+    flex-direction: column;
+}
+
+.randomness-browser-folder-header,
+.randomness-browser-file-header {
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0.2em 0.3em;
+    border-radius: 3px;
+    cursor: pointer;
+    user-select: none;
+    /* Keep names from overflowing the sidebar horizontally; long names
+     * truncate with an ellipsis instead. */
+    min-width: 0;
+}
+
+.randomness-browser-folder-header:hover,
+.randomness-browser-file-header:hover {
+    background: var(--background-modifier-hover);
+}
+
+.randomness-browser-chevron {
+    color: var(--text-muted);
+    font-size: 0.8em;
+    width: 1em;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.randomness-browser-folder-name {
+    font-weight: 600;
+    color: var(--text-normal);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.randomness-browser-file-title {
+    color: var(--text-normal);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.randomness-browser-folder-count,
+.randomness-browser-file-count {
+    color: var(--text-muted);
+    font-size: 0.75em;
+    background: var(--background-modifier-border);
+    padding: 0 0.4em;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+/* Indent children one level. Nested folders inherit the indent
+ * cumulatively, so the depth is visible without per-level styles. */
+.randomness-browser-folder-children {
+    padding-left: 0.9em;
+    border-left: 1px dotted var(--background-modifier-border);
+    margin-left: 0.4em;
+}
+
+.randomness-browser-entry-error {
+    color: var(--text-error);
+    font-size: 0.85em;
+    padding: 0.2em 0.5em;
+}
+
+.randomness-browser-entry-note {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.85em;
+    padding: 0.2em 0.5em;
+}
+
+.randomness-browser-tables {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    /* Tables sit just inside an expanded file; indent them a touch
+     * so they group visually under the file's title row. */
+    padding-left: 1.4em;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+}
+
+.randomness-browser-table-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.randomness-browser-roll-btn {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    padding: 0.15em 0.6em;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.8em;
+    flex-shrink: 0;
+}
+
+.randomness-browser-roll-btn:hover {
+    background: var(--interactive-accent-hover);
+}
+
+/* Copy-inline button: emoji label so we don't fight for horizontal
+ * space with the Roll button + table name. Less visually heavy than
+ * the accent-coloured Roll button — it's the secondary action. */
+.randomness-browser-copy-inline-btn {
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    padding: 0.05em 0.4em;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    line-height: 1.2;
+}
+
+.randomness-browser-copy-inline-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* Pin toggle: visually consistent with Copy-inline (also a
+ * secondary button next to the Roll primary), but its filled
+ * state gets accent colour so the user can tell at a glance
+ * which tables they've pinned. */
+.randomness-browser-pin-btn {
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    padding: 0.05em 0.4em;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    line-height: 1.2;
+    /* Slightly muted when unpinned so the affordance is "ready
+     * to act on", not "hey look at me". */
+    opacity: 0.7;
+}
+
+.randomness-browser-pin-btn:hover {
+    background: var(--background-modifier-hover);
+    opacity: 1;
+}
+
+.randomness-browser-pin-btn-active {
+    /* Pinned state — full opacity and a subtle accent tint on the
+     * border so the pin button reads as "engaged". */
+    opacity: 1;
+    border-color: var(--interactive-accent);
+}
+
+/* Table name + optional source-file subtitle. The pinned-section
+ * variant stacks them vertically (display: flex column on the
+ * containing label wrap). Regular tree shows just the name. */
+.randomness-browser-table-label {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.randomness-browser-table-name {
+    color: var(--text-normal);
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.randomness-browser-table-source {
+    color: var(--text-muted);
+    font-size: 0.75em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Pull the subtitle visually closer to the name above it,
+     * since they're a unit. */
+    margin-top: -0.1em;
+}
+
+/* The Favourites section's outer wrap inherits folder styles;
+ * this extra class gives it a thin accent-coloured left border so
+ * it reads as a distinguished group at the top of the tree. */
+.randomness-browser-favourites {
+    border-left: 2px solid var(--interactive-accent);
+    margin-bottom: 0.4em;
+    padding-left: 2px;
+}
+
+.randomness-browser-result {
+    border-top: 1px solid var(--background-modifier-border);
+    padding-top: 0.5em;
+    /* Cap height so a very long result doesn't push the list out of
+     * view; the body itself scrolls if needed. */
+    max-height: 40%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    flex-shrink: 0;
+}
+
+.randomness-browser-result-hint {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    font-size: 0.85em;
+}
+
+.randomness-browser-result-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5em;
+}
+
+.randomness-browser-result-label {
+    font-weight: 600;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    /* Truncate the "Title / Table" label if too long. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.randomness-browser-copy-btn {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    padding: 0.15em 0.6em;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.8em;
+    flex-shrink: 0;
+}
+
+.randomness-browser-copy-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+.randomness-browser-result-body {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    padding: 0.5em;
+    overflow-y: auto;
+    /* Keep whitespace from multi-result rolls (newline-joined). */
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+.randomness-browser-result-body:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* Embedded images from `![[image.png]]` wiki-syntax. Cap the
+ * max width so a huge image doesn't blow out the layout of the
+ * codeblock/inline/result containers — but respect intrinsic
+ * smaller sizes and any explicit width="N" from the pipe-syntax. */
+.randomness-embed-image {
+    max-width: 100%;
+    height: auto;
+    display: inline-block;
+    vertical-align: middle;
+    border-radius: 3px;
+}
+
+/* Unresolved wiki link. Matches Obsidian's own convention — a
+ * muted, dashed-underline appearance so the user can see the
+ * link is broken but the text still reads. */
+.randomness-unresolved-link {
+    color: var(--text-error, var(--text-muted));
+    text-decoration: underline dashed;
+    cursor: help;
+}
+
+/* Reference view — read-only help pane opened from settings or
+ * the "Open reference" command. Cap inner width on wide displays
+ * so the long-form prose stays readable; add comfortable padding
+ * and let Obsidian's theme handle typography. */
+.randomness-reference-view {
+    padding: 1em 1.5em;
+    overflow-y: auto;
+}
+
+.randomness-reference-content {
+    max-width: 50em;
+    margin: 0 auto;
+    /* Inherit theme font / sizes — don't override; the goal is
+     * "looks native". The padding gives some breathing room from
+     * the pane edges on narrow displays. */
+}
+
+/* The rendered markdown contains code blocks. Obsidian renders
+ * them with its own styling already, but we boost padding a hair
+ * so syntax examples don't crowd the prose around them. */
+.randomness-reference-content pre {
+    margin: 0.8em 0;
+}
+
+/* Inline rdm:[@ autocomplete suggestion items. Two-line layout:
+ * the table name on top, the source file as a muted subtitle
+ * below. Obsidian's suggestion-container provides padding and
+ * hover highlight; we only style the inner content. */
+.randomness-suggest-item {
+    display: flex;
+    flex-direction: column;
+    /* tight vertical spacing — the popup is already padded */
+    gap: 0;
+}
+
+.randomness-suggest-name {
+    font-size: 0.95em;
+    color: var(--text-normal);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.randomness-suggest-source {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: -0.1em;
+}
+
+/* Out-of-scope suggestion items — tables that exist somewhere in
+ * the vault but aren't imported by the current note. Picking one
+ * surfaces a Notice telling the user how to import it. Visually
+ * muted so the in-scope items are obviously the primary
+ * suggestions. */
+.randomness-suggest-out-of-scope .randomness-suggest-name {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.randomness-suggest-out-of-scope .randomness-suggest-source {
+    color: var(--text-faint);
+}
