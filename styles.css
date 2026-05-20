@@ -493,10 +493,16 @@
 
 /* Unresolved wiki link. Matches Obsidian's own convention — a
  * muted, dashed-underline appearance so the user can see the
- * link is broken but the text still reads. */
+ * link is broken but the text still reads.
+ *
+ * Use longhand text-decoration-line / -style rather than the
+ * shorthand `text-decoration: underline dashed` — older Electron
+ * versions Obsidian shipped on don't parse the multi-value
+ * shorthand consistently. Longhand is universally supported. */
 .randomness-unresolved-link {
     color: var(--text-error, var(--text-muted));
-    text-decoration: underline dashed;
+    text-decoration-line: underline;
+    text-decoration-style: dashed;
     cursor: help;
 }
 
