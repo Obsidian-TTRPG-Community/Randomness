@@ -3,7 +3,7 @@
   "name": "Randomness",
   "version": "0.4.4",
   "minAppVersion": "1.4.0",
-  "description": "IPP3-compatible random generator engine for Obsidian. Render `randomness` codeblocks inline with rich text output, plus support for legacy .ipt files.",
+  "description": "Random table generator for TTRPG and creative writing. Compatible with the Inspiration Pad Pro 3 (IPP3) syntax. Roll inline, lock results, browse generators in a sidebar.",
   "author": "Josh",
   "isDesktopOnly": false
 }
