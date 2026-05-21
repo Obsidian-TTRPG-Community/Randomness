@@ -33,9 +33,16 @@ import {
     openReferenceView,
 } from "./referenceView";
 import { TableAutocomplete } from "./tableAutocomplete";
+import { createApi, RandomnessAPI } from "../api";
 
 export default class RandomnessPlugin extends Plugin {
     settings: RandomnessSettings = DEFAULT_SETTINGS;
+    /**
+     * Public JS API. Attached in onload(); accessible from other
+     * plugins / Templater / DataviewJS via:
+     *   app.plugins.plugins["randomness"].api
+     */
+    api!: RandomnessAPI;
     /**
      * Shared preview registry. Lives for the plugin's lifetime;
      * cleared per-note when a note's source changes underneath us.
@@ -50,6 +57,10 @@ export default class RandomnessPlugin extends Plugin {
 
     async onload(): Promise<void> {
         await this.loadSettings();
+
+        // Build the public API. Attached as `plugin.api`; reachable
+        // from other plugins via app.plugins.plugins["randomness"].api
+        this.api = createApi(this);
 
         // Register the codeblock processor for ```randomness blocks.
         this.registerMarkdownCodeBlockProcessor(
