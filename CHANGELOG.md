@@ -4,8 +4,12 @@ All notable changes to the Randomness plugin.
 
 ## 0.7.0
 
-Public JavaScript API documentation and refinements. The API surface
-(version `1.0.0`) is now fully documented in [API.md](API.md).
+Full implementation and documentation of the public JavaScript API.
+The complete API surface (version `1.0.0`) is implemented, covered by
+64 dedicated tests, and documented in [API.md](API.md).
+
+**Thanks to [@pjjelly17](https://github.com/pjjelly17)**, whose PR #1
+proposed the public JS API that this release builds on and documents.
 
 ### Added
 - **`rollUnscoped(tableName, opts?)`** — roll a table found anywhere in
