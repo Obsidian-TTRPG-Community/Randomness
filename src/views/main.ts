@@ -33,6 +33,8 @@ import {
     openReferenceView,
 } from "./referenceView";
 import { TableAutocomplete } from "./tableAutocomplete";
+import { createApi, RandomnessAPI } from "../api";
+import { VaultIndex } from "../resolver/vaultIndex";
 
 export default class RandomnessPlugin extends Plugin {
     settings: RandomnessSettings = DEFAULT_SETTINGS;
@@ -47,6 +49,20 @@ export default class RandomnessPlugin extends Plugin {
      * cache without having to chase the suggester reference.
      */
     tableAutocomplete: TableAutocomplete | null = null;
+    /**
+     * Public JS API for other plugins, Templater scripts, and
+     * DataviewJS. Reachable from outside via:
+     *   app.plugins.plugins["randomness"].api
+     * Built once in onload. See src/api/index.ts for the surface.
+     */
+    api!: RandomnessAPI;
+    /**
+     * Vault index: maps bare filenames and table names to paths, so
+     * generators can be referenced without full paths. Built on load,
+     * kept fresh via vault events, rebuildable via command. See
+     * src/resolver/vaultIndex.ts. Exposed for the API + autocomplete.
+     */
+    vaultIndex!: VaultIndex;
 
     async onload(): Promise<void> {
         await this.loadSettings();
@@ -83,6 +99,60 @@ export default class RandomnessPlugin extends Plugin {
         this.tableAutocomplete = new TableAutocomplete(this.app, this);
         this.registerEditorSuggest(this.tableAutocomplete);
 
+        // Build the vault index (bare-filename + table-name → path).
+        // Reads files lazily via the vault adapter; scoped to the
+        // generator root if one is set, else the whole vault. Kept
+        // fresh by invalidating on vault structure changes below.
+        this.vaultIndex = new VaultIndex(
+            {
+                getFiles: () =>
+                    this.app.vault
+                        .getFiles()
+                        .map((f) => ({ path: f.path })),
+                read: (path: string) => {
+                    const af =
+                        this.app.vault.getAbstractFileByPath(path);
+                    if (af instanceof TFile) {
+                        return this.app.vault.cachedRead(af);
+                    }
+                    return Promise.reject(
+                        new Error(`not a file: ${path}`)
+                    );
+                },
+            },
+            () => this.settings.generatorRoot || ""
+        );
+        // Invalidate on any structural change to an .ipt file. The
+        // rescan is deferred to the next lookup (cheap invalidate now,
+        // rebuild lazily). modify fires on content edits — relevant
+        // because a file's *table names* can change, affecting the
+        // table-name map.
+        const maybeInvalidate = (path: string): void => {
+            if (path.toLowerCase().endsWith(".ipt")) {
+                this.vaultIndex.invalidate();
+            }
+        };
+        this.registerEvent(
+            this.app.vault.on("create", (f) => maybeInvalidate(f.path))
+        );
+        this.registerEvent(
+            this.app.vault.on("delete", (f) => maybeInvalidate(f.path))
+        );
+        this.registerEvent(
+            this.app.vault.on("rename", (f, oldPath) => {
+                maybeInvalidate(f.path);
+                maybeInvalidate(oldPath);
+            })
+        );
+        this.registerEvent(
+            this.app.vault.on("modify", (f) => maybeInvalidate(f.path))
+        );
+
+        // Build the public API. Attached as `plugin.api`; reachable
+        // from other plugins, Templater scripts, and DataviewJS via
+        // app.plugins.plugins["randomness"].api. See src/api/index.ts.
+        this.api = createApi(this);
+
         this.addSettingTab(new RandomnessSettingsTab(this.app, this));
 
         // ─── Commands ───
@@ -102,6 +172,18 @@ export default class RandomnessPlugin extends Plugin {
             id: "open-reference",
             name: "Open reference",
             callback: () => void openReferenceView(this),
+        });
+
+        this.addCommand({
+            id: "rebuild-generator-index",
+            name: "Rebuild generator index",
+            callback: () => {
+                void (async () => {
+                    this.vaultIndex.invalidate();
+                    await this.vaultIndex.prewarm();
+                    new Notice("Randomness: generator index rebuilt.");
+                })();
+            },
         });
     }
 

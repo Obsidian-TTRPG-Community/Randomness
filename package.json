@@ -1,6 +1,6 @@
 {
   "name": "randomness",
-  "version": "0.4.4",
+  "version": "0.7.0",
   "description": "IPP3-compatible random generator engine for Obsidian",
   "main": "main.js",
   "scripts": {
@@ -21,7 +21,6 @@
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
-    "builtin-modules": "^5.2.0",
     "esbuild": "^0.28.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^30.4.1",

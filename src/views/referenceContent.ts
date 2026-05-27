@@ -332,6 +332,99 @@ If the \`Use:\` line is already present (e.g. the cache was
 stale and the table was actually in scope), the operation is a
 no-op — no duplicate lines.
 
+## Referencing generators by name
+
+(Added in v0.6.0.)
+
+You don't have to manage full paths. Randomness keeps an index of
+every \`.ipt\` file in your vault (or under the Generator Root, if
+set), so you can reference generators two ways:
+
+- **By bare filename in a \`Use:\` line.** Write \`Use: Names.ipt\`
+  (no folder path) and Randomness finds that file wherever it
+  lives. Explicit paths still work and always take precedence — the
+  bare-filename lookup is only a fallback when a path isn't given.
+- **By table name when rolling.** \`rollUnscoped("TableName")\` (and
+  the sidebar) find the defining file for you.
+
+If two files share a name, Randomness prefers one in the same
+folder as the file referencing it, otherwise picks the first
+alphabetically and logs a one-time console note. To force a
+specific file, use its full path.
+
+The index refreshes automatically when you add, rename, move, or
+edit \`.ipt\` files. If it ever seems out of date (e.g. after a sync
+dropped files in while Obsidian was closed), run the **"Rebuild
+generator index"** command.
+
+## Scripting API
+
+(Added in v0.5.0.)
+
+Other plugins, Templater scripts, and DataviewJS can roll tables
+programmatically through a public API at:
+
+\`\`\`text
+app.plugins.plugins["randomness"].api
+\`\`\`
+
+This is handy for generating notes from templates: roll values
+in the template script and write the *results* into the note, so
+the finished note contains plain text with no live \`rdm:\`
+references that would re-roll every time it's opened.
+
+**Templater example** — roll an NPC into a new note:
+
+\`\`\`text
+<%*
+const api = app.plugins.plugins["randomness"].api;
+const name = await api.rollUnscoped("ShopkeeperNPC");
+const shop = await api.rollUnscoped("ShopName");
+tR += \`# \${shop.result}\\n\\nProprietor: \${name.result}\`;
+%>
+\`\`\`
+
+Because Templater writes the rolled strings into the file, the
+saved note is static — nothing re-rolls on reopen. \`rollUnscoped\`
+is used here (rather than \`roll\`) because a note being created
+from a template has no scope yet — \`rollUnscoped\` finds the
+generator anywhere in your vault without needing a \`Use:\` line.
+
+**Methods:**
+
+- \`roll(tableName, opts?)\` — roll a named table. Returns a
+  result object with \`.result\` (the text), \`.table\`,
+  \`.expression\`, \`.source\`, \`.timestamp\`, and \`.rollId\`.
+  Resolves the table from the calling note's scope (set via
+  \`opts.callerNotePath\`), so the note must define or \`Use:\`
+  the table.
+- \`rollUnscoped(tableName, opts?)\` — roll a named table found
+  ANYWHERE in the vault, ignoring note scope. Searches every
+  \`.ipt\` file (under the generator root if set), loads the
+  defining file plus its \`Use:\` graph, and rolls. Best for
+  scripting and template-generated notes, where you want to roll
+  a generator without first wiring up a note's scope. Pass
+  \`opts.filePath\` to disambiguate when two files share a table
+  name.
+- \`rollExpression(expr, opts?)\` — roll an arbitrary expression
+  like \`"[@Names] of [@Origin]"\`.
+- \`tables(callerNotePath?)\` — list table names visible from a
+  note, deduped and sorted.
+- \`tablesWithSources(callerNotePath?)\` — list tables with their
+  source files; in-scope tables first, then the rest of the vault.
+- \`onRoll(callback)\` — subscribe to every roll (success and
+  failure). Returns an unsubscribe function.
+
+**Options** (\`opts\`): \`callerNotePath\` sets the scope (which
+\`Use:\` imports and same-note tables are visible; defaults to the
+active note); \`seed\` makes the roll deterministic (same seed →
+same result); \`promptValues\` supplies values for prompts by
+label.
+
+The API version is at \`api.version\` and follows semver
+independently of the plugin version, so consumers can check it
+and branch on the surface they need.
+
 ## Settings reference
 
 - **Generator Root** — folder where shared generators live.

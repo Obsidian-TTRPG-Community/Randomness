@@ -45,6 +45,16 @@ export interface PrefetchOptions {
     source: AsyncFileSource;
     /** Cap on import depth. Default 32 — matches resolver's default. */
     maxImportDepth?: number;
+    /**
+     * Optional bare-filename fallback (the vault index). Consulted
+     * only when positional resolution fails and the ref is a bare
+     * filename. Mirrors resolveUsePath's step 5 so prefetch discovers
+     * the same files the synchronous resolver will.
+     */
+    basenameResolver?: (
+        basename: string,
+        callerDir: string
+    ) => string | null;
 }
 
 export interface PrefetchResult {
@@ -105,7 +115,8 @@ export async function prefetchUseGraph(
                 rawRef,
                 fromDir,
                 opts.generatorRoot,
-                opts.source
+                opts.source,
+                opts.basenameResolver
             );
             if (resolved === null) {
                 missing.push(rawRef);
@@ -183,7 +194,8 @@ async function resolveAsync(
     rawRef: string,
     callerDir: string,
     generatorRoot: string | undefined,
-    source: AsyncFileSource
+    source: AsyncFileSource,
+    basenameResolver?: (basename: string, callerDir: string) => string | null
 ): Promise<string | null> {
     const ref = normalisePath(rawRef);
     if (ref === "") return null;
@@ -204,6 +216,14 @@ async function resolveAsync(
         if (await source.exists(rootCandidate)) return rootCandidate;
     }
     if (await source.exists(ref)) return ref;
+    // Step 5: bare-filename index fallback. Mirrors resolveUsePath's
+    // step 5 so prefetch discovers the same files the synchronous
+    // resolver will. Only for bare filenames, only after positional
+    // resolution fails, and only if the result actually exists.
+    if (basenameResolver && !ref.includes("/")) {
+        const found = basenameResolver(ref, callerDir);
+        if (found !== null && (await source.exists(found))) return found;
+    }
     return null;
 }
 

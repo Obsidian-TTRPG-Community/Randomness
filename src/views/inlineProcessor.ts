@@ -250,7 +250,8 @@ async function processOne(
 export async function evaluateInlineExpression(
     expr: string,
     notePath: string,
-    plugin: RandomnessPlugin
+    plugin: RandomnessPlugin,
+    opts?: { seed?: number; promptValues?: Record<string, string> }
 ): Promise<string> {
     const { vault } = plugin.app;
     const settings = plugin.settings;
@@ -283,7 +284,16 @@ export async function evaluateInlineExpression(
         generatorRoot: settings.generatorRoot || undefined,
     });
 
-    const evaluator = new Evaluator(bundle.main, bundle.extras, {});
+    const evaluator = new Evaluator(bundle.main, bundle.extras, {
+        // Thread seed + promptValues through when provided (used by
+        // the public API's roll options). Both are first-class
+        // EvaluatorOptions fields, so this is a clean pass-through:
+        // seed → deterministic RNG, promptValues → prompt overrides.
+        // Omitting them (the in-render path) preserves prior
+        // behaviour: random seed, prompt defaults.
+        seed: opts?.seed,
+        promptValues: opts?.promptValues,
+    });
     return evaluator.run();
 }
 

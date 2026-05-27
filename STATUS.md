@@ -1,3 +1,341 @@
+# Randomness — v0.6.0 Status
+
+## v0.6.0 — Vault index (reference by filename or table name)
+
+Adds a vault-wide index so generators can be referenced by **bare
+filename** or **table name** without managing full paths. Two maps,
+built on load and kept fresh: `basename → path[]` and
+`tableName → path[]`.
+
+### What it enables
+
+1. **Bare-filename `Use:` resolution.** A generator can now say
+   `use: Names.ipt` (no path) and the helper is found wherever it
+   lives in the vault. Verified end-to-end: a shop file in
+   `Generators/shops/` importing `Names.ipt` resolves a helper in
+   `Generators/common/`.
+2. **Faster `rollUnscoped`.** Table-name lookup now hits the cached
+   index instead of re-scanning the vault on every call (falls back
+   to a fresh scan if the index is unavailable or stale).
+
+### Scope
+
+Indexes `.ipt` files under the Generator Root if one is set,
+otherwise the whole vault — matching `discoverGenerators` and the
+"one parent folder, organise freely inside" model.
+
+### Collisions
+
+When a bare name maps to multiple files, resolution:
+- prefers a file in/under the caller's folder (so a sibling wins);
+- otherwise takes the first by sorted path;
+- and emits a **one-time console warning** naming the ambiguity so
+  the user can disambiguate with a full path if it matters.
+
+This is the design the user chose ("warn but proceed with first
+match") for cases like their two `AdventureHooks.ipt` files.
+
+### Freshness
+
+The index invalidates on vault `create` / `delete` / `rename` /
+`modify` of any `.ipt` (rescan deferred to the next lookup — cheap
+invalidate, lazy rebuild). A **"Rebuild generator index"** command
+is the escape hatch for a rare missed event (e.g. a file dropped in
+by sync while Obsidian was closed).
+
+### Additive by design — existing resolution unchanged
+
+The index is a **step-5 fallback** in both `resolveUsePath` (sync)
+and the prefetcher's `resolveAsync` (async mirror). It fires ONLY
+when:
+- the four positional steps (caller dir → root/Common → root → as-is)
+  all fail, AND
+- the ref is a bare filename (no `/`), AND
+- a `basenameResolver` was supplied.
+
+So every existing generator resolves exactly as before; explicit
+relative and rooted paths always win over the index. Confirmed by a
+test asserting positional resolution beats an index that points
+elsewhere.
+
+### Implementation
+
+**New:** `src/resolver/vaultIndex.ts` — the `VaultIndex` class
+(scan, two maps, collision rule, invalidate, prewarm, rebuild).
+Pure of Obsidian types (takes a minimal `IndexVault`), so it's unit
+testable; the plugin supplies a vault-backed adapter.
+
+**Modified:**
+- `src/resolver/fileResolver.ts` — `ResolveOptions.basenameResolver`
+  (optional callback) + step 5 in `resolveUsePath`. Flows through
+  `resolveBundle`'s recursion via `...opts`.
+- `src/resolver/asyncPrefetcher.ts` — `PrefetchOptions.basenameResolver`
+  + step 5 in `resolveAsync`, so prefetch discovers the same
+  bare-filename targets the sync resolver will.
+- `src/views/main.ts` — instantiates `VaultIndex` (reads via
+  `cachedRead`, scoped by generator root), registers the four vault
+  event listeners to invalidate, adds the "Rebuild generator index"
+  command.
+- `src/api/index.ts` — `rollUnscoped` uses the index for table
+  lookup (with discovery fallback) and passes `basenameResolver`
+  into prefetch + resolve. `opts.filePath` now used directly as the
+  target path.
+
+### Test coverage
+
+**16 new tests:**
+- `__tests__/resolver/vaultIndex.test.ts` (14): basename lookup
+  (unique, case-insensitive, missing), collisions (nearest-folder
+  preference, first-by-path + one-time warning), table lookup
+  (unique, ambiguous-sorted, parse-error-still-basename-indexed),
+  scope (root-only), invalidation (rebuild picks up new files), and
+  the four resolveUsePath step-5 guarantees (fallback only after
+  positional fail, positional wins, no-fire-on-slash, verifies
+  existence).
+- `__tests__/api/bareFilenameUse.test.ts` (2): end-to-end
+  bare-filename `use:` across folders, with and without a generator
+  root.
+
+### Test count
+
+**853 tests across 30 suites** (+16 since v0.5.1). All green.
+
+### Not done this release (deliberate)
+
+Autocomplete still uses its own out-of-scope discovery cache rather
+than the shared index. It already surfaces vault-wide tables, so
+this is a consistency/perf consolidation, not a capability gap —
+deferred to avoid churning a working feature. Future: point
+autocomplete at `vaultIndex` too.
+
+---
+
+# Randomness — v0.5.1 Status
+
+## v0.5.1 — `rollUnscoped` (vault-wide roll)
+
+Adds `api.rollUnscoped(tableName, opts?)` — roll a table found
+anywhere in the vault, ignoring note scope.
+
+### Why
+
+v0.5.0's `roll()` resolves tables through the *calling note's
+scope* (its codeblocks + `Use:` imports). That's correct for
+in-note rolls but fails for the primary scripting use case:
+a template generating a note from a shared generator library.
+Two compounding reasons it failed:
+
+1. **No scope at creation time.** A note being created by
+   Templater doesn't exist on disk yet, so it has no scope —
+   `roll("X")` finds nothing.
+2. **`roll()` can't read a bare `.ipt` as scope even if pointed
+   at one.** The inline-scope path (`buildInlineBundle`) extracts
+   tables from markdown ` ```randomness ` codeblocks. A plain
+   `.ipt` file has no codeblocks, so its top-level `Table:`
+   definitions are invisible to that path. Pointing
+   `callerNotePath` at the `.ipt` doesn't help.
+
+A real user hit this immediately: a `.ipt` with
+`Table: AdventureHooks` (which calls `[@MasterAdventureHooks]`
+via a `use:` line) returned "Unknown table: AdventureHooks" from
+`roll()`, because the file's tables never entered scope.
+
+### What rollUnscoped does
+
+Bypasses the inline-scope machinery entirely and uses the real
+file resolver:
+
+1. Scans the vault via `discoverGenerators` (respecting generator
+   root) to find which `.ipt` defines the requested table. First
+   match by path wins; `opts.filePath` pins a specific file when
+   names collide.
+2. Reads that file, prefetches its `Use:` graph (so master/
+   imported files load), and resolves the bundle through
+   `resolveBundle` — which parses `.ipt` top-level `Table:`
+   definitions AND walks `use:` correctly.
+3. Rolls the table by name with `Evaluator.runByName`.
+
+Same `RollResult` shape, same `onRoll` event emission (success
+and failure), same `seed`/`promptValues` support as `roll`.
+
+### Recommended usage for template generation
+
+```js
+const api = app.plugins.plugins["randomness"].api;
+const shop = await api.rollUnscoped("ShopName");
+const owner = await api.rollUnscoped("ShopkeeperNPC");
+tR += `# ${shop.result}\n\nProprietor: ${owner.result}`;
+```
+
+No scope wiring, no `Use:` line in the template, no scope-hub
+note. The generator just needs to exist as an `.ipt` somewhere in
+the vault (under the generator root if one is configured).
+
+### Implementation
+
+**Modified:** `src/api/index.ts` — added `UnscopedRollOptions`
+type, `rollUnscoped` to the interface + implementation, exported
+it on the API object. Imports `resolveBundle` + `dirname` from
+the file resolver and `Evaluator` from the engine. No changes to
+engine, resolver, or other views.
+
+**Disambiguation:** when two files define the same table name,
+first-by-path wins unless `opts.filePath` is given. Documented.
+
+### Test coverage
+
+**6 new tests** in the API suite:
+
+- Documents that scoped `roll()` still can't reach a bare `.ipt`
+  table (pins the gap rollUnscoped fills).
+- Finds a table anywhere in the vault and follows `use:`
+  (the user's exact AdventureHooks → MasterAdventureHooks case).
+- Rejects a genuinely missing table.
+- Seed makes an unscoped roll deterministic.
+- `filePath` disambiguates same-named tables across files.
+- Fires `onRoll` on unscoped success and failure.
+
+### Test count
+
+**826 tests across 26 suites** (+6 since v0.5.0). All green.
+
+### Reference updated
+
+The "Scripting API" section now documents `rollUnscoped` and the
+Templater example uses it (the correct call for template
+generation, since a new note has no scope).
+
+---
+
+# Randomness — v0.5.0 Status
+
+## v0.5.0 — Public scripting API
+
+A public JS API at `app.plugins.plugins["randomness"].api` for
+other plugins, Templater scripts, and DataviewJS to roll tables
+programmatically. The primary motivating use case: generating
+notes from templates where the rolled values are written as
+static text (so the finished note doesn't re-roll on every open).
+
+### Provenance
+
+The API surface (`roll` / `rollExpression` / `tables` /
+`tablesWithSources` / `onRoll`) follows the design proposed by
+@pjjelly17 in PR #1. Rather than merge that PR (which had a
+build-breaking typecheck error in its test mocks, and left
+`seed`/`promptValues` as documented no-ops), the design was taken
+as a spec and built directly into core so it composes with the
+upcoming bake-to-static feature and wires the options through
+properly. Credit to @pjjelly17 for the surface design.
+
+### Surface
+
+Exposed at `app.plugins.plugins["randomness"].api`:
+
+- `roll(tableName, opts?)` → `Promise<RollResult>` — roll a named
+  table (wrapped internally as `[@tableName]`).
+- `rollExpression(rawExpr, opts?)` → `Promise<RollResult>` — roll
+  an arbitrary expression.
+- `tables(callerNotePath?)` → `Promise<string[]>` — table names
+  visible from a note, deduped + sorted.
+- `tablesWithSources(callerNotePath?)` → `Promise<TableSource[]>`
+  — tables with source paths, in-scope first then vault-wide.
+- `onRoll(cb)` → `() => void` — subscribe to every roll attempt
+  (success and failure); returns an unsubscribe function.
+- `version` — semver of the API surface (`API_VERSION`),
+  independent of the plugin version.
+
+`RollResult` = `{ result, table, expression, source?, error?,
+timestamp, rollId }`. On failure the call rejects AND a failure
+event is emitted to `onRoll` subscribers (so a subscriber sees
+the full stream), with `error` set and `result` carrying a
+visible `[ROLL ERROR: ...]` marker.
+
+`RollOptions` = `{ callerNotePath?, seed?, promptValues? }`.
+
+### Differences from PR #1 (improvements)
+
+- **`seed` is wired through, not a no-op.** Added an optional
+  `opts` param to `evaluateInlineExpression` that threads `seed`
+  and `promptValues` into the Evaluator's options. Same seed +
+  same expression + same scope → same result. This is a real
+  determinism guarantee, tested.
+- **`promptValues` is wired through** the same way (it was
+  already a first-class `EvaluatorOptions` field).
+- **Build is green.** PR #1's test file had two incomplete mock
+  casts that failed `tsc` (and therefore `npm run build`, since
+  tsconfig includes the test tree). The core-built version has
+  no such issue.
+- **`rollId` has a fallback** for runtimes without
+  `crypto.randomUUID` (very old environments) — still
+  unique-enough for dedup.
+
+### Implementation notes
+
+**New file:** `src/api/index.ts` (~330 lines incl. JSDoc + types).
+Thin orchestration layer over existing internals: wraps
+`evaluateInlineExpression`, `prefetchUseGraph`, `buildInlineBundle`,
+`collectTablesFromBundle`, `discoverGenerators`,
+`vaultFileSource`. No new evaluation logic.
+
+**Modified:** `src/views/inlineProcessor.ts` — added optional
+`opts?: { seed?, promptValues? }` param to
+`evaluateInlineExpression`, threaded into the Evaluator. Backward-
+compatible (omitting opts preserves prior random-seed behaviour);
+the in-render path passes nothing.
+
+**Modified:** `src/views/main.ts` — `api` field + `this.api =
+createApi(this)` in onload (one import, field, one line).
+
+**Scope isolation:** `tablesWithSources` isolates in-scope
+resolution from vault-wide discovery — if one throws, the other
+still returns, so consumers get a partial-but-useful answer.
+
+### Test coverage
+
+**21 tests** in `__tests__/api/index.test.ts`, run against a real
+in-memory vault (real engine + resolver, not mocked internals):
+
+- `version` (2) — API_VERSION exposed + semver shape.
+- `roll` (7) — populated result shape, `[@name]` wrapping,
+  **seed determinism**, seed influences output, active-note
+  fallback, unknown-table rejection, unique rollIds.
+- `rollExpression` (2) — arbitrary expression eval, bad-expression
+  rejection.
+- `tables` (2) — in-scope deduped+sorted, includes out-of-scope.
+- `tablesWithSources` (3) — in-scope-first ordering, out-of-scope
+  filePath carried, no in-scope/out-of-scope duplication.
+- `onRoll` (5) — fires on success, fires on failure with error
+  set, unsubscribe stops delivery, multi-listener delivery,
+  throwing-listener isolation.
+
+Fewer tests than PR #1's 29 because these exercise real
+end-to-end evaluation rather than mocking each internal — broader
+actual coverage per test, and they can test seed determinism
+(which the mock-based version couldn't).
+
+### Reference updated
+
+New "Scripting API" section in the in-app reference with a
+Templater example and the full method/option list. Pinned as a
+required section in the reference smoke test.
+
+### Test count
+
+**820 tests across 26 suites** (+21 since v0.4.4). All green.
+
+### Follow-ups queued
+
+- **Bake-to-static** (`api.bakeNote()` + a "Bake all rolls in
+  current note" command) — next release. For users hand-authoring
+  notes with live refs who want to freeze them. The Templater
+  roll-and-splice path above already covers the
+  template-generation use case without it.
+- **Quick-roll command palette** — offered to @pjjelly17 as a
+  follow-up contribution; sits on top of this API.
+
+---
+
 # Randomness — v0.4.4 Status
 
 ## v0.4.4 — Auto-add `Use:` on out-of-scope autocomplete pick

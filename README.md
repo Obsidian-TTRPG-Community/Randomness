@@ -42,6 +42,11 @@ ecosystem.
   command.
 - **Existing `.ipt` files work as-is.** The engine survives the full
   AddCommas/Random-Treasure-CR1-CR30 stress test from the NBOS corpus.
+- **JavaScript API** — roll generators from other plugins or Templater
+  scripts via `app.plugins.plugins["randomness"].api`. Scoped and
+  unscoped rolls, prompt overrides, deterministic seeds, and a roll
+  event stream. Ideal for generating notes from a shared generator
+  library. See [API.md](API.md).
 
 ## Install
 
@@ -149,6 +154,48 @@ relative to the **Generator root** configured in Settings → Randomness.
   otherwise) and writes all locks in one atomic save.
 - **Reroll all `rdm:` in current note** — strips every lock and clears
   cached previews. The next render shows fresh previews everywhere.
+- **Rebuild generator index** — rescans the vault for `.ipt` generators.
+  Run this after adding or renaming generator files if the JS API's
+  `rollUnscoped` / bare-filename `Use:` resolution looks stale.
+
+## Scripting: the JS API
+
+Randomness exposes a JavaScript API for other plugins and for
+[Templater](https://github.com/SilentVoid13/Templater) scripts, so you
+can roll generators from code — for example, to populate a freshly
+created note from a shared generator library.
+
+```js
+const api = app.plugins.plugins["randomness"].api;
+
+// Roll a generator found anywhere in the vault (ignores note scope):
+const r = await api.rollUnscoped("VillainName");
+console.log(r.result); // -> "Mordred the Pale"
+```
+
+The two rolls you'll use most:
+
+- **`roll(name, opts?)`** — rolls a table **in note scope** (sees the
+  note's same-note codeblocks and `Use:` imports). Use it when rolling
+  from the context of a specific note.
+- **`rollUnscoped(name, opts?)`** — rolls a table found **anywhere in
+  the vault**, ignoring scope. Use it for automation and note
+  generation, where there's no scope wired up yet — e.g. a Templater
+  template that builds a note from your shared generators.
+
+Both accept `promptValues` (override a generator's prompts by label) and
+`seed` (deterministic rolls). `rollUnscoped` also accepts `filePath` to
+disambiguate when two files define the same table name.
+
+```js
+// Pass values into a generator's prompts, by label:
+const inn = await api.rollUnscoped("TF-Inn", {
+  promptValues: { town: "Frostkey", shopName: "The Salty Anchor" },
+});
+```
+
+**Full reference, including every method, option, the `RollResult`
+shape, collision handling, and recipes: see [API.md](API.md).**
 
 ## Settings
 

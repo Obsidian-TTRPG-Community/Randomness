@@ -55,6 +55,8 @@ describe("REFERENCE_MARKDOWN content", () => {
             "Calling from notes",
             "Escaping",
             "autocomplete",
+            "Referencing generators by name",
+            "Scripting API",
         ];
         for (const section of requiredSections) {
             // Case-insensitive check — section headings can shift

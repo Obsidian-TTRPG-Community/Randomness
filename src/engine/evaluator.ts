@@ -108,7 +108,7 @@ export class Evaluator {
         // Seed built-in variables
         const now = opts.now ?? new Date();
         this.vars.set("app", "Randomness");
-        this.vars.set("version", "0.4.4");
+        this.vars.set("version", "0.6.0");
         this.vars.set("os", "browser");
         this.vars.set("cli", "");
         this.vars.set("hostlanguage", "en");

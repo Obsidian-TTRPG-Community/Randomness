@@ -1,0 +1,90 @@
+// shop-weapon.ipt
+// =====================================================================
+// A PF2e weaponsmith / arms dealer. Reuses people, customers, prices.
+// Entry table: [@WeaponShop]
+//
+// Prices in COPPER (1 gp = 100 cp), from PF2e Core weapon tables
+// where confident; (~) marks approximations to verify.
+
+Title: Weapon Shop
+Use: people.ipt
+Use: customers.ipt
+Use: prices.ipt
+
+// Optional inputs from a caller (e.g. Town Forge via the API's
+// promptValues). Defaults keep the file working standalone.
+//   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
+Prompt: town {} an unnamed town
+Prompt: shopType {} weapons
+Prompt: shopName {} 
+
+Table: TF-WeaponShop
+Set: town={$prompt1}
+Set: passedName={$prompt3}
+Set: m=[@Markup]
+Set: owner=[@PersonName]
+Set: oanc=[@Ancestry]
+**[@WeaponTitle]** *(weapons in {$town})*\n&
+**Proprietor:** {$owner}, a [@PersonDesc] {$oanc} who is [@Personality].\n&
+**Prices:** {$markupReason}.\n&
+**Rack:**\n&
+[@WeaponStock]\n&
+**{$owner} says:** "[@WeaponQuote]"\n&
+**Also here:** [@Customer]
+
+// Caller-supplied name if given, else roll. Prefixed to avoid collision.
+Table: WeaponTitle
+[when]{$passedName}=[do][@WeaponShopName][else]{$passedName}[end]
+
+Table: WeaponShopName
+The Whetstone
+Edge & Haft
+The Iron Arm
+Bloodied Anvil Arms
+The Keen Edge
+Hilt & Pommel
+The Last Word Weaponry
+Grimsteel Arms
+The Sharp Bargain
+Two-Handed Tom's
+
+Table: WeaponStock
+{!n=={6+1d3}}[@{$n} WeaponItemLine]
+
+// PF2e Core weapon prices (copper).
+Table: WeaponItemLine
+[@WeaponItem]\n
+
+Table: WeaponItem
+- Dagger ............. [@PricedAs with 200]
+- Sword (short) ...... [@PricedAs with 900]
+- Sword (long) ....... [@PricedAs with 100]
+- Greatsword ......... [@PricedAs with 200]
+- Mace ............... [@PricedAs with 100]
+- Warhammer .......... [@PricedAs with 100]
+- Battle axe ......... [@PricedAs with 100]
+- Spear .............. [@PricedAs with 100]
+- Halberd ............ [@PricedAs with 200]
+- Glaive ............. [@PricedAs with 100]
+- Rapier ............. [@PricedAs with 200]
+- Shortbow ........... [@PricedAs with 300]
+- Longbow ............ [@PricedAs with 600]
+- Crossbow ........... [@PricedAs with 300]
+- Sling .............. [@PricedAs with 1]
+- Sap ................ [@PricedAs with 100]
+- Club ............... [@PricedAs with 1]
+- Sickle ............. [@PricedAs with 100]
+- Whip ............... [@PricedAs with 100]
+- Throwing knife ..... (~) [@PricedAs with 200]
+- Quiver of 20 arrows  [@PricedAs with 10]
+- Case of 10 bolts ... [@PricedAs with 10]
+
+Table: WeaponQuote
+Balance is everything. Heft it before you buy it.
+A dull blade's just a heavy stick, friend.
+That one's seen blood. Priced to reflect it.
+I sharpen free for a week after purchase.
+Don't point it at me unless you mean to pay for it.
+Steel doesn't lie, and neither do I.
+You want pretty, go to the jeweller. You want deadly, stay here.
+Every weapon here will outlive the fool who underestimates it.

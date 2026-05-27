@@ -66,6 +66,22 @@ export interface ResolveOptions {
      * top out around 3-5; cycles are caught explicitly.)
      */
     maxImportDepth?: number;
+    /**
+     * Optional bare-filename fallback. When the four positional
+     * resolution steps fail and the ref looks like a bare filename
+     * (no slash), this is consulted to look the file up by basename
+     * via the vault index. Returns an absolute vault path or null.
+     *
+     * Kept as a callback (rather than wiring the index in directly)
+     * so the resolver stays pure and unit-testable: tests pass a
+     * trivial map; the plugin passes the real index lookup. The
+     * `callerDir` is provided so the resolver can prefer a nearby
+     * match when the index reports a collision.
+     */
+    basenameResolver?: (
+        basename: string,
+        callerDir: string
+    ) => string | null;
 }
 
 const DEFAULT_MAX_IMPORT_DEPTH = 32;
@@ -209,9 +225,20 @@ export function resolveUsePath(
         const rootCandidate = joinPath(opts.generatorRoot, ref);
         if (opts.source.exists(rootCandidate)) return rootCandidate;
     }
-    // 4. As a final fallback, try the ref as-is (it might already be
-    //    vault-rooted).
+    // 4. As a final positional fallback, try the ref as-is (it might
+    //    already be vault-rooted).
     if (opts.source.exists(ref)) return ref;
+    // 5. Bare-filename index fallback. Only when the ref has no path
+    //    separator (a bare filename like "AdventureHooks.ipt") and a
+    //    basenameResolver was supplied. This is purely additive: it
+    //    fires only after every positional step above has failed, so
+    //    explicit relative/rooted paths always win and existing
+    //    generators resolve exactly as before. The resolver still
+    //    verifies the returned path exists in the source.
+    if (opts.basenameResolver && !ref.includes("/")) {
+        const found = opts.basenameResolver(ref, opts.callerDir);
+        if (found !== null && opts.source.exists(found)) return found;
+    }
     return null;
 }
 

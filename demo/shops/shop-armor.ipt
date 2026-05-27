@@ -1,0 +1,83 @@
+// shop-armor.ipt
+// =====================================================================
+// A PF2e armorer. Reuses people, customers, prices.
+// Entry table: [@ArmorShop]
+// Prices in COPPER (1 gp = 100 cp), PF2e Core armor tables; (~) approx.
+
+Title: Armor Shop
+Use: people.ipt
+Use: customers.ipt
+Use: prices.ipt
+
+// Optional inputs from a caller (e.g. Town Forge via the API's
+// promptValues). Defaults keep the file working standalone.
+//   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
+Prompt: town {} an unnamed town
+Prompt: shopType {} armor
+Prompt: shopName {} 
+
+Table: TF-ArmorShop
+Set: town={$prompt1}
+Set: passedName={$prompt3}
+Set: m=[@Markup]
+Set: owner=[@PersonName]
+Set: oanc=[@Ancestry]
+**[@ArmorTitle]** *(armor in {$town})*\n&
+**Proprietor:** {$owner}, a [@PersonDesc] {$oanc} who is [@Personality].\n&
+**Prices:** {$markupReason}.\n&
+**Fitted stock:**\n&
+[@ArmorStock]\n&
+**{$owner} says:** "[@ArmorQuote]"\n&
+**Also here:** [@Customer]
+
+// Caller-supplied name if given, else roll. Prefixed to avoid collision.
+Table: ArmorTitle
+[when]{$passedName}=[do][@ArmorShopName][else]{$passedName}[end]
+
+Table: ArmorShopName
+The Dented Pauldron
+Plate & Mail
+The Sure Shield
+Ironhide Armoury
+The Standing Wall
+Buckler & Brace
+The Second Skin
+Forgewright Armour
+The Turtle's Shell
+Vambrace & Greave
+
+Table: ArmorStock
+{!n=={6+1d3}}[@{$n} ArmorItemLine]
+
+// PF2e Core armor prices (copper).
+Table: ArmorItemLine
+[@ArmorItem]\n
+
+Table: ArmorItem
+- Padded armor ....... [@PricedAs with 20]
+- Leather armor ...... [@PricedAs with 200]
+- Studded leather .... [@PricedAs with 300]
+- Chain shirt ........ [@PricedAs with 500]
+- Hide armor ......... [@PricedAs with 200]
+- Scale mail ......... [@PricedAs with 400]
+- Chain mail ......... [@PricedAs with 600]
+- Breastplate ........ [@PricedAs with 800]
+- Splint mail ........ [@PricedAs with 1300]
+- Half plate ......... [@PricedAs with 1800]
+- Full plate ......... [@PricedAs with 3000]
+- Buckler ............ [@PricedAs with 100]
+- Wooden shield ...... [@PricedAs with 100]
+- Steel shield ....... [@PricedAs with 200]
+- Tower shield ....... [@PricedAs with 1000]
+- Armor repair kit ... (~) [@PricedAs with 200]
+- Helm (open) ........ (~) [@PricedAs with 200]
+
+Table: ArmorQuote
+A good fit saves your life. A bad one ends it.
+Let me see your shoulders — armour's no good if you can't swing.
+This plate turned three blades for its last owner.
+I'll adjust the straps free if it pinches.
+Padding underneath, always. I'll not sell you a bruise.
+Heavier isn't safer. Smarter is safer.
+You'll thank me when something tries to open you up.
+Try it on. Walk a circle. Then we'll talk price.
