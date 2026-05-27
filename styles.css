@@ -495,14 +495,16 @@
  * muted, dashed-underline appearance so the user can see the
  * link is broken but the text still reads.
  *
- * Use longhand text-decoration-line / -style rather than the
- * shorthand `text-decoration: underline dashed` — older Electron
- * versions Obsidian shipped on don't parse the multi-value
- * shorthand consistently. Longhand is universally supported. */
+ * A dashed `border-bottom` is used for the underline rather than an
+ * underline decoration: the Obsidian community-plugin linter flags
+ * the underline-decoration family as only partially supported on the
+ * older minAppVersion, whereas a dashed bottom border is universally
+ * supported and renders identically. padding-bottom keeps the border
+ * clear of the text baseline. */
 .randomness-unresolved-link {
     color: var(--text-error, var(--text-muted));
-    text-decoration-line: underline;
-    text-decoration-style: dashed;
+    border-bottom: 1px dashed currentColor;
+    padding-bottom: 1px;
     cursor: help;
 }
 

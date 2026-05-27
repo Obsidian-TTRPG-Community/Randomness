@@ -2,11 +2,17 @@
 
 All notable changes to the Randomness plugin.
 
-## 0.7.0
+## 1.0.0
 
-Full implementation and documentation of the public JavaScript API.
-The complete API surface (version `1.0.0`) is implemented, covered by
-64 dedicated tests, and documented in [API.md](API.md).
+First stable release. Full implementation and documentation of the
+public JavaScript API; the complete API surface (version `1.0.0`) is
+implemented, covered by 64 dedicated tests, and documented in
+[API.md](API.md). Ships with an expanded PF2e settlement generator
+library.
+
+This release marks the plugin as stable for general use. The API
+surface is committed: breaking changes to it will bump the major
+version.
 
 **Thanks to [@pjjelly17](https://github.com/pjjelly17)**, whose PR #1
 proposed the public JS API that this release builds on and documents.
@@ -35,8 +41,14 @@ proposed the public JS API that this release builds on and documents.
 
 ### Notes
 - The public API surface version is `1.0.0`. The plugin version (this
-  `0.7.0`) and the API version are tracked separately; read `api.version`
+  `1.0.0`) and the API version are tracked separately; read `api.version`
   for the latter.
+
+### Fixed
+- CSS lint: the broken-link style now uses a dashed `border-bottom`
+  instead of an underline decoration, clearing the community-plugin
+  linter's "partially supported on minAppVersion" warning. Identical
+  visual result.
 
 ## 0.6.0
 - Vault index for basename and table-name lookup.
