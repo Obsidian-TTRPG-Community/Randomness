@@ -2,6 +2,22 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.2
+
+### Fixed
+- **`Use:` target not found for files added outside Obsidian.** A `.ipt`
+  file dropped into the vault via Finder/Explorer could fail to resolve
+  from a `Use:` directive at every location, because file lookups went
+  only through Obsidian's metadata index (`getFiles`), which doesn't
+  include files Obsidian hasn't indexed yet. File resolution now falls
+  back to a raw `adapter.list()` directory scan that reads the vault
+  contents directly, catching unindexed files (and resolving them
+  case-insensitively). Reported on macOS with `portraits.ipt`.
+- **Clearer "not found" error.** When a `Use:` target can't be resolved,
+  the error now points at the most common real cause — an unindexed
+  file — and suggests reloading Obsidian or running "Rebuild generator
+  index", instead of implying the path is wrong.
+
 ## 1.0.0
 
 First stable release. Full implementation and documentation of the
