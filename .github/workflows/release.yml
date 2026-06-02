@@ -47,12 +47,12 @@ jobs:
           echo "Releasing tag: ${TAG}"
 
       - name: Checkout (at the tag)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ steps.tag.outputs.tag }}
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
