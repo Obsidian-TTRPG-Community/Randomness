@@ -1,0 +1,150 @@
+name: Release
+
+# Tag a version like `1.0.11` (no leading v — Obsidian's community-plugin
+# checker matches manifest.version literally against the tag). The
+# workflow:
+#   1. Checks the tag matches manifest.json (catches the BRAT-mismatch
+#      class of bug where a tag and the shipped manifest disagree).
+#   2. Runs the full test suite — a tagged build that fails tests must
+#      NOT publish.
+#   3. Builds main.js via the production esbuild config.
+#   4. Reads the matching section out of CHANGELOG.md as the release body.
+#   5. Uploads main.js, manifest.json, and styles.css as loose assets
+#      (Obsidian's community-plugin checker needs them loose, not zipped).
+#
+# Manual override: `workflow_dispatch` with a `tag` input lets a
+# maintainer re-run the publish against an existing tag without pushing
+# a new one (e.g. if the first attempt failed mid-build).
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re-)publish, e.g. 1.0.11"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Releasing tag: ${TAG}"
+
+      - name: Checkout (at the tag)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Version-consistency guard: refuse to publish if the tag and the
+      # shipped manifest.version disagree. This is the BRAT-mismatch
+      # class of bug — a tag the user thinks is "1.0.11" but the
+      # manifest.json inside it still reads "1.0.10".
+      - name: Verify tag matches manifest.json
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          echo "Tag:              ${TAG}"
+          echo "manifest.version: ${MANIFEST_VERSION}"
+          if [ "${TAG}" != "${MANIFEST_VERSION}" ]; then
+            echo "::error::Tag '${TAG}' does not match manifest.version '${MANIFEST_VERSION}'. Bump manifest.json (and package.json, versions.json) before tagging."
+            exit 1
+          fi
+
+      # Test gate. A tagged build with failing tests must not publish.
+      - name: Run tests
+        run: npm test -- --ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build artefacts exist
+        run: |
+          for f in main.js manifest.json styles.css; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Build artefact missing: $f"
+              exit 1
+            fi
+          done
+
+      # Attest provenance on the loose artefacts so installers can
+      # verify the build came from this workflow on this repo.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      # Pull the matching section out of CHANGELOG.md. Looks for a
+      # heading `## <tag>` and grabs everything up to (but not including)
+      # the next `## ` heading. Falls back to a generic line if no
+      # matching section is found, so a release isn't blocked on a
+      # missing entry — but the warning is logged.
+      - name: Extract release notes
+        id: notes
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          NOTES_FILE="$(mktemp)"
+          if grep -q "^## ${TAG}$" CHANGELOG.md; then
+            awk -v tag="## ${TAG}" '
+              $0 == tag { capture=1; next }
+              capture && /^## / { exit }
+              capture { print }
+            ' CHANGELOG.md > "$NOTES_FILE"
+            sed -i -e '/./,$!d' -e ':a' -e '/^\n*$/{$d;N;ba' -e '}' "$NOTES_FILE"
+            echo "Used CHANGELOG.md section for ${TAG}."
+          else
+            echo "::warning::No '## ${TAG}' section found in CHANGELOG.md."
+            echo "Randomness ${TAG}. See CHANGELOG.md for details." > "$NOTES_FILE"
+          fi
+          echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
+          echo "--- notes preview ---"
+          cat "$NOTES_FILE"
+          echo "--- end notes ---"
+
+      # Publish. The community-plugin checker requires loose
+      # main.js/manifest.json/styles.css attached to the release (not a
+      # zip). gh handles "release already exists" via --clobber.
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} exists — updating notes and replacing assets."
+            gh release edit "$TAG" \
+              --title "Randomness ${TAG}" \
+              --notes-file "${{ steps.notes.outputs.notes_file }}"
+            gh release upload "$TAG" main.js manifest.json styles.css --clobber
+          else
+            gh release create "$TAG" \
+              --title "Randomness ${TAG}" \
+              --notes-file "${{ steps.notes.outputs.notes_file }}" \
+              main.js manifest.json styles.css
+          fi

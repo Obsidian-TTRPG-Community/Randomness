@@ -78,6 +78,7 @@ const r = await api.roll("Weather", {
 | `callerNotePath` | `string` | Note path used to resolve scope (which `Use:` imports and same-note tables are visible). Falls back to the active note, then to no scope. |
 | `seed` | `number` | Deterministic roll: same seed + same expression + same scope → same result. Omit for normal random behaviour. |
 | `promptValues` | `Record<string,string>` | Override generator prompts, keyed by prompt label. Prompts without an override use their declared default. |
+| `dictKey` | `string` | For dictionary tables (`Type: Dictionary`), the key to look up. Equivalent to evaluating `[#<key> <Table>]` directly. See **Dictionary tables** below. |
 
 ---
 
@@ -98,6 +99,7 @@ const r = await api.rollUnscoped("TF-Inn", {
 | `seed` | `number` | Deterministic roll (wired to the engine RNG). |
 | `promptValues` | `Record<string,string>` | Prompt overrides keyed by prompt label. |
 | `filePath` | `string` | Disambiguate when multiple files define the same table name: only consider the file at this exact vault path. |
+| `dictKey` | `string` | For dictionary tables, the key to look up. See **Dictionary tables** below. |
 
 **Collision handling.** If two files define the same table name, the
 first discovered (sorted by path) wins, and a one-time warning is logged
@@ -220,6 +222,56 @@ await api.rollUnscoped("TF-Inn", {
 - Inside the generator, prompts are read positionally as `{$prompt1}`,
   `{$prompt2}`, … in declaration order. (A common pattern is to copy
   them into named variables: `Set: town={$prompt1}`.)
+
+---
+
+## Dictionary tables
+
+IPP3 supports **dictionary** tables — named lookups rather than random
+draws. Each entry has a key and a value; you don't roll them, you pick
+one by key.
+
+```
+Table: SkillML
+Type: Dictionary
+Inept: {1d20+29}
+Novice: {1d10+49}
+Aspirant: {1d10+59}
+Professional: {1d10+69}
+Expert: {1d10+79}
+Paragon: {1d10+89}
+```
+
+Calling `roll("SkillML")` on this with no key returns `""` — dictionary
+tables don't roll randomly. Pass the key as `dictKey`:
+
+```js
+const r = await api.rollUnscoped("SkillML", { dictKey: "Inept" });
+// r.result is a string like "37" (1d20+29 evaluated)
+```
+
+Equivalent to writing the IPP3 pick expression directly:
+
+```js
+const r = await api.rollExpression("[#Inept SkillML]");
+```
+
+`dictKey` is purely a convenience for callers that already have a key
+in hand (commonly from frontmatter or a `meta-bind` input):
+
+```js
+const r = await api.rollUnscoped("SkillML", {
+  dictKey: dv.current().competence,  // e.g. "Professional"
+});
+```
+
+The value-side expressions (`{1d20+29}` etc.) are evaluated the same
+way as any other table item, so dice, variables, and nested rolls all
+work inside dictionary entries.
+
+**Unknown keys** return an empty string rather than throwing — match
+the behaviour of `[#bogus Table]` in IPP3. If you need a default,
+test for an empty result on the caller side.
 
 ---
 

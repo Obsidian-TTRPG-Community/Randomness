@@ -2,6 +2,21 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.11
+
+### Added
+- **`dictKey` option for dictionary tables.** `roll()` and `rollUnscoped()`
+  now accept a `dictKey` to look up an entry in a `Type: Dictionary`
+  table — equivalent to the IPP3 `[#<key> <Table>]` pick syntax.
+  Reported: calling `api.roll()` on a dictionary table silently returned
+  an empty string because dictionaries aren't rolled randomly and
+  `promptValues` doesn't address dictionary keys. The
+  `rollExpression("[#<key> <Table>]")` form already worked and
+  continues to; `dictKey` is the typed convenience for callers that
+  have a key in hand (typically from frontmatter or a meta-bind input).
+  Unknown keys return an empty string, matching IPP3's `[#bogus Table]`
+  behaviour.
+
 ## 1.0.10
 
 ### Fixed

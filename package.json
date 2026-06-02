@@ -1,6 +1,6 @@
 {
   "name": "randomness",
-  "version": "0.7.0",
+  "version": "1.0.11",
   "description": "IPP3-compatible random generator engine for Obsidian",
   "main": "main.js",
   "scripts": {
