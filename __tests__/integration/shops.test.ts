@@ -51,9 +51,11 @@ describe("shops: each type rolls a populated block", () => {
                 expect(out).toContain("Also here:");
                 // At least one coin denomination appears (priced stock).
                 expect(out).toMatch(/\d+ (gp|sp|cp)|free/);
-                // Stock has multiple item lines (6-8 items + structure).
+                // Stock has multiple item lines. Counts now scale with
+                // settlement size; with no size passed, shops default to
+                // the "town" band (≈4-6 items), so assert a sane minimum.
                 const itemLines = (out.match(/- /g) ?? []).length;
-                expect(itemLines).toBeGreaterThanOrEqual(6);
+                expect(itemLines).toBeGreaterThanOrEqual(3);
             }
         });
     }
