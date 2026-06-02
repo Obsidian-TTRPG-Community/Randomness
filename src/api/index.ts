@@ -62,6 +62,16 @@ export interface RollOptions {
      * declared default.
      */
     promptValues?: Record<string, string>;
+    /**
+     * For dictionary tables (`Type: Dictionary`), the key to look up.
+     * Dictionary tables aren't rolled randomly — each entry is named,
+     * and a key selects one. With `dictKey` set, `roll(name, ...)`
+     * resolves to that entry's value (equivalent to evaluating the
+     * IPP3 expression `[#<dictKey> <name>]` directly). Ignored for
+     * non-dictionary tables. Without it, calling `roll()` on a
+     * dictionary returns an empty result.
+     */
+    dictKey?: string;
 }
 
 /** Result of a single roll attempt (success or failure). */
@@ -114,6 +124,12 @@ export interface UnscopedRollOptions {
      * wins.
      */
     filePath?: string;
+    /**
+     * For dictionary tables (`Type: Dictionary`), the key to look up.
+     * See `RollOptions.dictKey`. Resolves to the entry equivalent to
+     * the IPP3 expression `[#<dictKey> <name>]`.
+     */
+    dictKey?: string;
 }
 
 /** The public API surface. */
@@ -294,8 +310,14 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         opts?: RollOptions
     ): Promise<RollResult> => {
         // Wrap the bare table name as an expression and tag the
-        // original name so the result reflects it.
-        const expr = `[@${tableName}]`;
+        // original name so the result reflects it. For dictionary
+        // tables, a `dictKey` opt selects the entry by name —
+        // equivalent to writing `[#<key> <Table>]` directly. Without
+        // it, dictionary tables resolve to empty (they aren't rolled
+        // randomly), so we build the pick form when a key is given.
+        const expr = opts?.dictKey
+            ? `[#${opts.dictKey} ${tableName}]`
+            : `[@${tableName}]`;
         const internalOpts: InternalRollOptions = {
             ...opts,
             [REQUESTED_TABLE]: tableName,
@@ -307,7 +329,12 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         tableName: string,
         opts?: UnscopedRollOptions
     ): Promise<RollResult> => {
-        const expr = `[@${tableName}]`;
+        // For dictionary tables, a `dictKey` opt picks the entry by
+        // name (equivalent to the IPP3 `[#<key> <Table>]` form).
+        // Without it, dictionary tables roll to empty.
+        const expr = opts?.dictKey
+            ? `[#${opts.dictKey} ${tableName}]`
+            : `[@${tableName}]`;
         try {
             // 1. Find which .ipt file defines this table. Prefer the
             //    vault index (cached) when available; fall back to a
@@ -390,7 +417,12 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
                 basenameResolver,
             });
 
-            // 3. Roll the table by name.
+            // 3. Roll the table by name. For a dictionary lookup
+            //    (opts.dictKey), we instead inject a synthetic
+            //    one-item table whose content is the `[#key Table]`
+            //    expression and run THAT — `runByName(tableName)`
+            //    on a Type: Dictionary table returns empty (the IPP3
+            //    contract — dictionaries aren't rolled randomly).
             const evaluator = new Evaluator(
                 bundle.main,
                 bundle.extras,
@@ -399,7 +431,25 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
                     promptValues: opts?.promptValues,
                 }
             );
-            const resultText = evaluator.runByName(tableName);
+            let resultText: string;
+            if (opts?.dictKey) {
+                const SYNTH = "__randomness_dict_pick";
+                bundle.main.tables.push({
+                    name: SYNTH,
+                    type: "weighted",
+                    shuffleTargets: [],
+                    inTableSets: [],
+                    items: [{ weight: 1, rawContent: expr }],
+                });
+                // Re-instantiate so the new table is in its lookup map.
+                const ev2 = new Evaluator(bundle.main, bundle.extras, {
+                    seed: opts?.seed,
+                    promptValues: opts?.promptValues,
+                });
+                resultText = ev2.runByName(SYNTH);
+            } else {
+                resultText = evaluator.runByName(tableName);
+            }
 
             const result: RollResult = {
                 result: resultText,
