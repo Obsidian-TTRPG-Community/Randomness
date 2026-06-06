@@ -623,6 +623,10 @@ function parseSubtableCall(
     // 2. Check for reps/index: number or {expression} or {$var} followed by whitespace
     //    For [#…], this is the index; for others, it's the reps.
     let leadingExprSource: string | undefined;
+    // For [#"quoted key" Table], the literal dictionary key (used
+    // instead of leadingExprSource so the key is passed through to
+    // the evaluator verbatim, no expression evaluation).
+    let pickLiteralKey: string | undefined;
     // Try {…} first
     if (rest.startsWith("{")) {
         const braceMatch = matchLeadingBrace(rest);
@@ -651,14 +655,46 @@ function parseSubtableCall(
         // token, it's the table name (`[#tableName]` = current-
         // index pick).
         //
+        // For dictionary keys with spaces or other characters that
+        // whitespace-split would mishandle, quote the key:
+        //   [#"Knight Bachelor" Occupation]
+        //   [#"key, with: punctuation" Table]
+        // Quoted keys capture everything up to the closing quote
+        // (with backslash escape for embedded "). Unquoted keys
+        // remain whitespace-delimited for back-compat — every
+        // hyphen/underscore/dotted key that worked before still
+        // works.
+        //
         // The evaluator decides what to do based on table type at
         // run time: numeric token + lookup table → range match;
         // numeric token + weighted → positional; string token +
-        // dictionary → key lookup.
-        const splitMatch = rest.match(/^(\S+)\s+(\S.*)$/);
-        if (splitMatch) {
-            leadingExprSource = splitMatch[1];
-            rest = splitMatch[2];
+        // dictionary → key lookup. Quoted keys are passed as
+        // literalKey on the AST node so the evaluator skips
+        // expression evaluation on the key entirely.
+        if (rest.startsWith('"')) {
+            // Walk until the matching unescaped closing quote.
+            let end = -1;
+            for (let i = 1; i < rest.length; i++) {
+                if (rest[i] === "\\" && i + 1 < rest.length) {
+                    i++; // skip escaped char
+                    continue;
+                }
+                if (rest[i] === '"') {
+                    end = i;
+                    break;
+                }
+            }
+            if (end > 0) {
+                // Unescape \" inside the captured key.
+                pickLiteralKey = rest.slice(1, end).replace(/\\"/g, '"');
+                rest = rest.slice(end + 1).replace(/^\s+/, "");
+            }
+        } else {
+            const splitMatch = rest.match(/^(\S+)\s+(\S.*)$/);
+            if (splitMatch) {
+                leadingExprSource = splitMatch[1];
+                rest = splitMatch[2];
+            }
         }
     } else {
         // For [@…] and [!…], the leading token (if any) is reps,
@@ -686,6 +722,7 @@ function parseSubtableCall(
         return {
             type: "subtable_pick",
             indexSource: leadingExprSource,
+            literalKey: pickLiteralKey,
             tableSource,
             withParams,
             filters,

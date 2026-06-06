@@ -312,11 +312,14 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         // Wrap the bare table name as an expression and tag the
         // original name so the result reflects it. For dictionary
         // tables, a `dictKey` opt selects the entry by name —
-        // equivalent to writing `[#<key> <Table>]` directly. Without
-        // it, dictionary tables resolve to empty (they aren't rolled
-        // randomly), so we build the pick form when a key is given.
+        // equivalent to writing `[#"<key>" <Table>]` directly. We
+        // emit the quoted form so keys with spaces or punctuation
+        // are passed verbatim (the unquoted [#key Table] form
+        // whitespace-splits and can't represent multi-word keys).
+        // Without dictKey, dictionary tables resolve to empty
+        // (they aren't rolled randomly).
         const expr = opts?.dictKey
-            ? `[#${opts.dictKey} ${tableName}]`
+            ? `[#"${opts.dictKey.replace(/"/g, '\\"')}" ${tableName}]`
             : `[@${tableName}]`;
         const internalOpts: InternalRollOptions = {
             ...opts,
@@ -330,10 +333,12 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         opts?: UnscopedRollOptions
     ): Promise<RollResult> => {
         // For dictionary tables, a `dictKey` opt picks the entry by
-        // name (equivalent to the IPP3 `[#<key> <Table>]` form).
-        // Without it, dictionary tables roll to empty.
+        // name (equivalent to the IPP3 `[#"<key>" <Table>]` form).
+        // The recorded expression uses the quoted form because that's
+        // the syntax that handles arbitrary keys correctly. Without
+        // dictKey, dictionary tables roll to empty.
         const expr = opts?.dictKey
-            ? `[#${opts.dictKey} ${tableName}]`
+            ? `[#"${opts.dictKey.replace(/"/g, '\\"')}" ${tableName}]`
             : `[@${tableName}]`;
         try {
             // 1. Find which .ipt file defines this table. Prefer the
@@ -418,11 +423,12 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
             });
 
             // 3. Roll the table by name. For a dictionary lookup
-            //    (opts.dictKey), we instead inject a synthetic
-            //    one-item table whose content is the `[#key Table]`
-            //    expression and run THAT — `runByName(tableName)`
-            //    on a Type: Dictionary table returns empty (the IPP3
-            //    contract — dictionaries aren't rolled randomly).
+            //    (opts.dictKey), call runByKey directly — this passes
+            //    the user's key literally to the evaluator's dict
+            //    lookup, so keys with spaces, hyphens, or other
+            //    non-identifier characters work without needing to
+            //    round-trip through expression syntax that would
+            //    whitespace-split them.
             const evaluator = new Evaluator(
                 bundle.main,
                 bundle.extras,
@@ -431,25 +437,9 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
                     promptValues: opts?.promptValues,
                 }
             );
-            let resultText: string;
-            if (opts?.dictKey) {
-                const SYNTH = "__randomness_dict_pick";
-                bundle.main.tables.push({
-                    name: SYNTH,
-                    type: "weighted",
-                    shuffleTargets: [],
-                    inTableSets: [],
-                    items: [{ weight: 1, rawContent: expr }],
-                });
-                // Re-instantiate so the new table is in its lookup map.
-                const ev2 = new Evaluator(bundle.main, bundle.extras, {
-                    seed: opts?.seed,
-                    promptValues: opts?.promptValues,
-                });
-                resultText = ev2.runByName(SYNTH);
-            } else {
-                resultText = evaluator.runByName(tableName);
-            }
+            const resultText = opts?.dictKey
+                ? evaluator.runByKey(tableName, opts.dictKey)
+                : evaluator.runByName(tableName);
 
             const result: RollResult = {
                 result: resultText,

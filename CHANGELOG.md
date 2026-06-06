@@ -2,6 +2,28 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.12
+
+### Fixed
+- **Dictionary keys with spaces or other punctuation now work in
+  `api.roll`/`rollUnscoped` via `dictKey`.** 1.0.11 built
+  `[#<key> <Table>]` expressions internally; that form whitespace-
+  splits, so a key like `"Knight Bachelor"` was misparsed as key
+  `Knight` against a non-existent table `Bachelor <Table>`. The API
+  now looks the entry up directly via a new `Evaluator.runByKey`
+  method, passing the key verbatim. Hyphenated, punctuated, and
+  embedded-quote keys all resolve.
+
+### Added
+- **Quoted-key syntax for IPP3 dictionary lookups.** In a `.ipt`
+  file, write `[#"key with spaces" Table]` to look up a dictionary
+  entry whose key isn't a single bareword. Embedded double-quotes
+  can be escaped: `[#"a \"b\" c" Table]`. Unquoted keys
+  (`[#Plain Table]`, `[#Master-Adept Table]`, `[#{$var} Table]`)
+  continue to work exactly as before — the quoted form is additive,
+  not a syntax change. Reported by claudermilk while building an
+  NPC generator driven by meta-bind dropdowns.
+
 ## 1.0.11
 
 ### Added

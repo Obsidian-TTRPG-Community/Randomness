@@ -265,6 +265,38 @@ const r = await api.rollUnscoped("SkillML", {
 });
 ```
 
+### Keys with spaces, hyphens, and other punctuation
+
+`dictKey` is passed verbatim to the dictionary lookup — keys can
+contain anything, including spaces, hyphens, quotes, or other
+characters that wouldn't fit in a single bareword:
+
+```
+Table: Occupation
+Type: Dictionary
+Knight Bachelor: a sworn knight in service to a lord
+Master-Adept: an established mage of some renown
+```
+
+```js
+const r = await api.rollUnscoped("Occupation", {
+  dictKey: "Knight Bachelor",   // multi-word keys work directly
+});
+```
+
+In raw IPP3 source, the bare `[#key Table]` form whitespace-splits the
+key, so a multi-word key has to be **quoted**:
+
+```
+[#"Knight Bachelor" Occupation]
+[#"a key with: weird, punctuation" Table]
+```
+
+Embedded double-quotes can be escaped with a backslash:
+`[#"a \"b\" c" Table]`. Single-word keys still work unquoted —
+`[#Plain Table]`, `[#Master-Adept Table]`, `[#{$variable} Table]`
+all behave exactly as before.
+
 The value-side expressions (`{1d20+29}` etc.) are evaluated the same
 way as any other table item, so dice, variables, and nested rolls all
 work inside dictionary entries.

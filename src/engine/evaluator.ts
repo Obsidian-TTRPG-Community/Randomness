@@ -214,6 +214,51 @@ export class Evaluator {
         return this.runTable(t, []);
     }
 
+    /**
+     * Pick and render a specific entry from a dictionary table by key.
+     *
+     * Used by the API's `dictKey` option. Unlike the IPP3
+     * `[#<key> <Table>]` expression form, the key here is taken
+     * literally — it can contain spaces, hyphens, quotes, anything —
+     * because we look it up directly rather than parsing it out of an
+     * expression string where whitespace would split it.
+     *
+     * Returns "" for unknown keys (matching IPP3's `[#bogus Table]`
+     * semantics). Throws for unknown tables or wrong table type.
+     */
+    runByKey(name: string, key: string): string {
+        const t = this.tables.get(name.toLowerCase());
+        if (!t) throw new Error(`Unknown table: ${name}`);
+        if (t.type !== "dictionary") {
+            throw new Error(
+                `Table "${name}" is not a dictionary (Type: ${t.type}); ` +
+                    `dictKey only applies to Type: Dictionary tables.`
+            );
+        }
+        // Apply in-table Sets/Defines first (matches runTable's
+        // contract), so any value expression referring to a Set'd
+        // variable still works. We don't push positional params —
+        // dictionary lookups don't take positional args.
+        for (const a of t.inTableSets) {
+            if (a.kind === "define") {
+                this.defines.set(a.name, a.valueSource);
+            } else {
+                this.vars.set(a.name, this.evalRawText(a.valueSource));
+            }
+        }
+        const item = this.pickDictItem(t, key);
+        if (!item) return "";
+        const nodes = this.parseItem(item);
+        // Push positional index so [#current-pick] inside the item
+        // resolves (parallels runTable behaviour).
+        this.currentItemIndexStack.push(t.items.indexOf(item) + 1);
+        try {
+            return this.renderNodes(nodes);
+        } finally {
+            this.currentItemIndexStack.pop();
+        }
+    }
+
     /** Evaluate a free-form content string (used for inline `rdm:` calls). */
     evalRawText(source: string): string {
         const nodes = parseContent(source);
@@ -646,8 +691,16 @@ export class Evaluator {
         const params = n.withParams.map(p => this.evalRawText(p));
         let result: string;
         if (table.type === "dictionary") {
-            // Pick by key
-            const key = n.indexSource ? this.evalRawText(n.indexSource) : "";
+            // Pick by key. literalKey (from [#"quoted" Table]) bypasses
+            // expression evaluation so spaces/punctuation come through
+            // verbatim. Unquoted keys still go through evalRawText so
+            // [#{$var} Table] / [#someBareWord Table] keep working.
+            const key =
+                n.literalKey !== undefined
+                    ? n.literalKey
+                    : n.indexSource
+                    ? this.evalRawText(n.indexSource)
+                    : "";
             const picked = this.pickDictItem(table, key);
             if (picked) {
                 result = this.renderNodes(this.parseItem(picked));

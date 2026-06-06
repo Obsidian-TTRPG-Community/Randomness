@@ -82,7 +82,7 @@ describe("api.rollUnscoped with dictKey", () => {
         // The result reports the table name as requested.
         expect(r.table).toBe("SkillML");
         // expression reflects the IPP3 form we evaluated.
-        expect(r.expression).toBe("[#Inept SkillML]");
+        expect(r.expression).toBe(`[#"Inept" SkillML]`);
     });
 
     test("Paragon hits the high band", async () => {
