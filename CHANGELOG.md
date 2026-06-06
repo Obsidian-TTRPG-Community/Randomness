@@ -23,6 +23,16 @@ All notable changes to the Randomness plugin.
   continue to work exactly as before — the quoted form is additive,
   not a syntax change. Reported by claudermilk while building an
   NPC generator driven by meta-bind dropdowns.
+- **Community generators section in settings.** Two buttons: one
+  opens the `community-generators/` folder on GitHub to browse
+  contributions; the other opens a pre-filled GitHub issue for
+  submitting your own. Contributions are stored in the repo and
+  reviewed by maintainers before being added.
+- **`API.md` recipe for storing roll results in frontmatter.**
+  Documents the dataviewjs feedback loop that happens when render-
+  time blocks write back to the same note, and shows two patterns
+  to avoid it (seed off a stable value, or move writes out of the
+  render path).
 
 ## 1.0.11
 

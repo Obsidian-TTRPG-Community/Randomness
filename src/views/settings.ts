@@ -198,6 +198,128 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+        // ─── Community generators ──────────────────────────────
+        //
+        // Two paths into the same GitHub folder:
+        //   - Browse takes the user to the live community-
+        //     generators/ tree on GitHub, where each contribution
+        //     sits in its own folder with a README and the .ipt
+        //     files. Users download the files they want and drop
+        //     them into their vault.
+        //   - Submit opens a pre-filled GitHub issue with a
+        //     template asking for the generator file content,
+        //     attribution, and a short description. A maintainer
+        //     reviews the issue and adds the contribution to the
+        //     repo. Issues are easier than PRs for casual
+        //     contributors who don't know git.
+        //
+        // We deliberately don't try to download or install
+        // contributions inside the plugin — that introduces a
+        // trust boundary (writing arbitrary files to user vaults)
+        // and a maintenance burden (categorisation, search,
+        // updates, conflict resolution) that aren't justified
+        // until the community-generators/ folder has substantial
+        // content. If/when it does, build the in-plugin browser
+        // then; for now, GitHub's own tree view is fine.
+
+        const COMMUNITY_BROWSE_URL =
+            "https://github.com/Obsidian-TTRPG-Community/Randomness/" +
+            "tree/main/community-generators";
+
+        new Setting(containerEl)
+            .setName("Browse community generators")
+            .setDesc(
+                "Open the community-generators folder on GitHub. " +
+                    "Each contribution sits in its own subfolder with a " +
+                    "README, sample output, and the .ipt files you'd drop " +
+                    "into your vault."
+            )
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Open on GitHub")
+                    .setCta()
+                    .onClick(() => {
+                        window.open(COMMUNITY_BROWSE_URL, "_blank");
+                    })
+            );
+
+        // Pre-filled issue URL. The body is a checklist + paste-zone
+        // template; GitHub fills the textarea with it on open. We
+        // hard-wrap roughly at 70 cols inside the body so the
+        // rendered issue isn't a single long line on narrow
+        // screens.
+        const SUBMIT_BODY = [
+            "## What is this generator?",
+            "",
+            "<!-- One or two sentences: what it's for, what system " +
+                "(if any), what it produces. -->",
+            "",
+            "## File(s)",
+            "",
+            "<!-- Paste the contents of your .ipt file(s) below," +
+                " each in its own code block. If you have several" +
+                " files that work together, paste them all and " +
+                "explain how they relate. -->",
+            "",
+            "````",
+            "Paste your .ipt content here",
+            "````",
+            "",
+            "## Attribution",
+            "",
+            "- Author / handle: ",
+            "- License: ",
+            "  <!-- e.g. CC0, CC-BY, MIT — pick something that " +
+                "allows others to use and adapt it. If your content " +
+                "draws on someone else's IP, name the source and " +
+                "their license. -->",
+            "- Sources / credits: ",
+            "  <!-- If you built on top of another generator or " +
+                "drew tables from a published source, credit them " +
+                "here. -->",
+            "",
+            "## Anything maintainers should know",
+            "",
+            "<!-- Special syntax used, dependencies on other files," +
+                " known limitations, version of Randomness you " +
+                "developed against, etc. -->",
+            "",
+            "---",
+            "",
+            "<!-- By submitting, you confirm you have the right to " +
+                "share this content under the license you named. -->",
+        ].join("\n");
+
+        const submitUrl = (() => {
+            const base =
+                "https://github.com/Obsidian-TTRPG-Community/" +
+                "Randomness/issues/new";
+            const params = new URLSearchParams({
+                labels: "community-generator",
+                title: "[Community generator] ",
+                body: SUBMIT_BODY,
+            });
+            return `${base}?${params.toString()}`;
+        })();
+
+        new Setting(containerEl)
+            .setName("Share your own generators")
+            .setDesc(
+                "Opens a pre-filled GitHub issue. Paste your .ipt " +
+                    "content, add attribution, and submit — a maintainer " +
+                    "reviews and adds it to the community folder. " +
+                    "Requires a free GitHub account. If you'd rather open " +
+                    "a pull request directly, see the contributing notes " +
+                    "linked from the browse page above."
+            )
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Open submission form")
+                    .onClick(() => {
+                        window.open(submitUrl, "_blank");
+                    })
+            );
     }
 }
 
