@@ -239,11 +239,11 @@ export class TableAutocomplete extends EditorSuggest<TableSuggestion> {
         }
         // Use native DOM (not Obsidian's createDiv) so jsdom tests
         // can exercise this without extra plumbing.
-        const nameRow = document.createElement("div");
+        const nameRow = activeDocument.createElement("div");
         nameRow.className = "randomness-suggest-name";
         nameRow.textContent = item.isMain ? `★ ${item.name}` : item.name;
         el.appendChild(nameRow);
-        const subtitleRow = document.createElement("div");
+        const subtitleRow = activeDocument.createElement("div");
         subtitleRow.className = "randomness-suggest-source";
         // For out-of-scope items, prefix the source with a hint
         // so the user understands why this item looks different.
@@ -336,7 +336,6 @@ export class TableAutocomplete extends EditorSuggest<TableSuggestion> {
         editor: Editor,
         filePath: string
     ): number {
-        const lineCount = editor.lineCount();
         // Scan for an existing randomness codeblock.
         const block = findFirstRandomnessCodeblock(editor);
         if (block !== null) {

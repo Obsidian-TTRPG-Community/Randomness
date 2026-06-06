@@ -223,7 +223,7 @@ export function renderOutput(
  */
 export function renderError(container: HTMLElement, err: unknown): void {
     const wrap = makeChildDiv(container, "randomness-error");
-    const heading = document.createElement("strong");
+    const heading = activeDocument.createElement("strong");
     heading.textContent = "Randomness: render failed";
     wrap.appendChild(heading);
     const messageDiv = makeChildDiv(wrap, "randomness-error-message");
@@ -244,7 +244,7 @@ function clearElement(el: HTMLElement): void {
 }
 
 function makeChildDiv(parent: HTMLElement, className?: string): HTMLDivElement {
-    const div = document.createElement("div");
+    const div = activeDocument.createElement("div");
     if (className) div.className = className;
     parent.appendChild(div);
     return div;

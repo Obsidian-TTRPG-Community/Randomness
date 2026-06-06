@@ -187,7 +187,7 @@ export default class RandomnessPlugin extends Plugin {
         });
     }
 
-    async onunload(): Promise<void> {
+    onunload(): void {
         this.previewRegistry.clear();
     }
 

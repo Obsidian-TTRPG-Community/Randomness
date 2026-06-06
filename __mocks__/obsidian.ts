@@ -2,6 +2,11 @@
 // code touches — small enough that TypeScript is happy, behaviour
 // stays predictable, and we don't accidentally lean on real Obsidian
 // quirks that wouldn't survive the bundler.
+//
+// Note: Obsidian's `activeDocument` / `activeWindow` globals are
+// polyfilled in `jest.setup.ts` (runs before any test module loads),
+// not here — view code touches them at module init, which is before
+// the obsidian mock evaluates.
 
 export class Plugin {
     app: App;

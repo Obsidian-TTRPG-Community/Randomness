@@ -45,7 +45,7 @@ export function renderPromptControls(
     container: HTMLElement,
     props: PromptUIProps
 ): HTMLElement {
-    const wrap = document.createElement("div");
+    const wrap = activeDocument.createElement("div");
     wrap.className = "randomness-prompts";
 
     if (props.prompts.length === 0) {
@@ -62,10 +62,10 @@ export function renderPromptControls(
     const liveValues: Record<string, string> = { ...props.values };
 
     for (const prompt of props.prompts) {
-        const row = document.createElement("div");
+        const row = activeDocument.createElement("div");
         row.className = "randomness-prompt-row";
 
-        const label = document.createElement("label");
+        const label = activeDocument.createElement("label");
         label.className = "randomness-prompt-label";
         label.textContent = prompt.label;
         row.appendChild(label);
@@ -107,7 +107,7 @@ function makeTextInput(
     initialValue: string,
     onChange: (value: string) => void
 ): HTMLInputElement {
-    const input = document.createElement("input");
+    const input = activeDocument.createElement("input");
     input.type = "text";
     input.className = "randomness-prompt-input";
     input.value = initialValue;
@@ -125,10 +125,10 @@ function makeSelect(
     initialValue: string,
     onChange: (value: string) => void
 ): HTMLSelectElement {
-    const select = document.createElement("select");
+    const select = activeDocument.createElement("select");
     select.className = "randomness-prompt-select";
     for (const opt of options) {
-        const optionEl = document.createElement("option");
+        const optionEl = activeDocument.createElement("option");
         optionEl.value = opt;
         optionEl.textContent = opt;
         if (opt === initialValue) optionEl.selected = true;

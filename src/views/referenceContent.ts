@@ -134,7 +134,7 @@ tables, which can call others, and so on.
 | \`[#"key with spaces" table]\` | Same, when the key contains whitespace or punctuation. |
 | \`[!table]\` | Deck pick — don't repeat items until the table's exhausted. |
 | \`[!N table]\` | Deck pick \`N\` items without duplicates. |
-| \`[\|a\|b\|c]\` | Inline table — pick one of \`a\`, \`b\`, \`c\` at random. |
+| \`[|a|b|c]\` | Inline table — pick one of \`a\`, \`b\`, \`c\` at random. |
 
 Examples:
 

@@ -62,7 +62,7 @@ export class ReferenceView extends ItemView {
         // Cap the content width on wide displays so the
         // line-length stays readable. Padding gives the markdown
         // some breathing room from the pane edges.
-        const inner = document.createElement("div");
+        const inner = activeDocument.createElement("div");
         inner.className = "randomness-reference-content";
         content.appendChild(inner);
         // MarkdownRenderer.render is async — it loads code-block

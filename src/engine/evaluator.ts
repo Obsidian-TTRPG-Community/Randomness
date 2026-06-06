@@ -16,8 +16,7 @@
 import { GeneratorFile, Node, TableDecl, TableItem } from "./ast";
 import { parseContent } from "./contentParser";
 import { ExprContext, evaluateExpression, Value } from "./expressions";
-import { FilterCall } from "./ast";
-import { FilterContext, FilterValue, applyFilters } from "./filters";
+import { FilterContext, applyFilters } from "./filters";
 import { RNG } from "./rng";
 
 export interface EvaluatorOptions {

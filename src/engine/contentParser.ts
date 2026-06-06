@@ -283,7 +283,7 @@ class ContentReader {
         // We're lenient: any expression containing only digits, d/D, +-*/, spaces, parens.
         // The dedicated dice path is mainly a fast lane; the expression evaluator handles it too.
         // Detect "pure dice" only when it looks like one die OR sum/diff of dice and constants.
-        const pureDice = /^\d+\s*[dD]\s*\d+(\s*[+\-*\/]\s*\d+(\s*[dD]\s*\d+)?)*$/.test(expressionSource);
+        const pureDice = /^\d+\s*[dD]\s*\d+(\s*[+\-*/]\s*\d+(\s*[dD]\s*\d+)?)*$/.test(expressionSource);
         if (pureDice) {
             return { type: "dice", source: expressionSource };
         }

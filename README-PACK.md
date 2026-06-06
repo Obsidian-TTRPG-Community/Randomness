@@ -1,89 +1,89 @@
-# Randomness 1.0.15 release pack
+# Randomness 1.0.16 release pack
 
-Compliance release. Fixes every error flagged by the Obsidian
-community plugin automated review of 1.0.14. The plugin was
-delisted pending a passing review; tagging this should restore
-listing.
+Warning-cleanup release. Addresses all warnings flagged by the
+Obsidian community plugin automated review of 1.0.15. No errors
+in that review — listing is not at risk; this is the follow-up
+cleanup release.
 
 ## What's in here
 
-### Source changes
-- `src/engine/filters.ts` — eslint-disable comment now has
-  justification text (`-- intentional lazy require to break
-  circular dep with contentParser`)
-- `src/views/browserView.ts` — `revealLeaf` awaited;
-  `htmlToPlainText` uses DOMParser instead of innerHTML;
-  `.style.cursor = "pointer"` replaced with
-  `.addClass("randomness-clickable")`
-- `src/views/referenceView.ts` — `revealLeaf` awaited in both
-  the existing-leaf path and the new-leaf path
-- `src/views/sanitiser.ts` — `sanitiseHtmlToFragment` uses
-  DOMParser instead of `template.innerHTML`
-- `src/views/settings.ts` — removed `console.error` +
-  no-console eslint-disable from `seedExampleGenerators`;
-  first failure message now surfaces in the Notice itself
+### Source changes — Category A (47 sites)
+- `src/views/browserView.ts`, `codeblockProcessor.ts`,
+  `inlineProcessor.ts`, `iptView.ts`, `obsidianLinks.ts`,
+  `promptUI.ts`, `referenceView.ts`, `sanitiser.ts`,
+  `tableAutocomplete.ts` — `document` → `activeDocument` for
+  popout-window compatibility
+- `src/api/index.ts`, `src/views/browserView.ts` —
+  `globalThis` → `window` for browser-API feature detection
 
-### Metadata
-- `manifest.json` — version → 1.0.15, minAppVersion → 1.7.2
-  (required for the new async `revealLeaf` signature)
-- `package.json` — version → 1.0.15
-- `versions.json` — adds 1.0.15 entry pointing at 1.7.2
-- `CHANGELOG.md` — 1.0.15 section at top
-- `styles.css` — adds `.randomness-clickable` utility class
-- `main.js` — production build
+### Source changes — Category D (filters.ts refactor)
+- `src/engine/filters.ts` — `require()` → static `import` (the
+  "circular dep" the lazy require was working around no longer
+  exists). Knocks out the require warning AND ~15 unsafe-any
+  cascades it caused.
 
-## What this fixes from the review
+### Source changes — Category B & F (cleanup)
+- `src/engine/evaluator.ts` — removed unused `FilterCall`,
+  `FilterValue` imports
+- `src/views/inlineProcessor.ts` — removed unused `PreviewRegistry`
+  import; converted `querySelector` cast to generic parameter
+- `src/views/browserView.ts` — converted three unnecessary
+  type assertions to generic parameters
+- `src/resolver/vaultIndex.ts` — removed unused `folderOf` helper
+- `src/views/tableAutocomplete.ts` — removed unused `lineCount`
+  local
 
-| Reviewer error | Status |
-| --- | --- |
-| `filters.ts:41` undescribed directive comment | ✅ added justification |
-| `settings.ts:464` undescribed directive comment | ✅ removed entirely |
-| `browserView.ts:708` direct style assignment | ✅ CSS class |
-| `browserView.ts:1134, 1144` newer API than minAppVersion | ✅ bumped minAppVersion to 1.7.2 |
-| `referenceView.ts:108, 119` newer API than minAppVersion | ✅ same |
-| `browserView.ts:1197` unsafe innerHTML | ✅ DOMParser |
-| `sanitiser.ts:117` unsafe innerHTML | ✅ DOMParser |
-| `settings.ts:464` disabling no-console | ✅ removed |
+### Source changes — Category E (settings.ts)
+- `src/views/settings.ts` — `catch (e: any)` → `catch (e: unknown)`
+  with a small `errorMessage` helper
+
+### Source changes — Category G (promise handling)
+- `src/views/inlineProcessor.ts` — async event handlers replaced
+  with sync handlers + `void` on the async call
+- `src/views/obsidianLinks.ts` — `openLinkText` result voided
+- `src/views/main.ts` — `onunload` no longer `async` (body has
+  no async work; matches base-class signature)
+
+### Source changes — Category C (escapes)
+- `src/engine/contentParser.ts` — `\/` → `/` in regex
+- `src/engine/fileParser.ts` — `\&` → `&` in regex
+- `src/views/referenceContent.ts` — removed unnecessary `\|` in
+  markdown table (inside backtick spans, which GFM treats opaquely)
+
+### Tests
+- `jest.setup.ts` — polyfills `activeDocument` / `activeWindow`
+  for jsdom-based view tests. Wired via `setupFiles` in
+  `jest.config.js`.
+- `__mocks__/obsidian.ts` — comment note about where the polyfill
+  lives (kept the mock itself unchanged)
+
+### Metadata + build
+- `manifest.json`, `package.json` — bumped to 1.0.16
+- `versions.json` — adds 1.0.16 entry (minAppVersion still 1.7.2)
+- `CHANGELOG.md` — 1.0.16 section at top
+- `main.js` — production build of all the above
 
 ## Verified
 
-- **975 / 975 tests green** (no regressions from any of the fixes)
-- **Build clean**
-- **All 8 reviewer-flagged error patterns are absent from the
-  source** (verified via grep)
-
-## Warnings deferred
-
-The same review flagged ~80 warnings. They don't block listing
-and are scheduled for a 1.0.16 cleanup release. Most are
-mechanical (`document` → `activeDocument`, `globalThis` →
-`window`/`activeWindow`, unsafe-any in filters.ts).
+- **975 / 975 tests green** — no behaviour regressions
+- **Production build clean** — `npm run build` succeeds without errors
+- **All 8 warning-flag patterns absent from source** (verified
+  via per-category grep sweep)
 
 ## Release sequence
 
     # 1. Drop the pack contents into the repo, overwriting existing files
+    # (note: this includes jest.config.js and a new jest.setup.ts at the repo root)
+
+    # 2. Verify locally
     npm test          # should be 975 / 975
     npm run build     # clean
 
-    # 2. Commit, push
+    # 3. Commit, push
     git add .
-    git commit -m "Release 1.0.15: review compliance — address all errors from 1.0.14 review"
+    git commit -m "Release 1.0.16: warning cleanup — activeDocument, type tightening, dead-code removal"
     git push origin main
 
-    # 3. Tag (triggers workflow)
-    git tag 1.0.15
-    git push origin 1.0.15
-
-After the workflow ships the release, the listing should
-re-process. If you need to manually re-trigger a review,
-that's done through the obsidian-releases repo (the same
-process as the initial submission).
-
-## Note on minAppVersion bump
-
-Bumping from 1.4.0 to 1.7.2 narrows the supported Obsidian
-versions. This is necessary — `revealLeaf` became async in
-1.7.2, and the lint rule was right to flag that we were
-using a signature newer than our declared compat. Users on
-Obsidian < 1.7.2 will see the plugin as incompatible in their
-community-plugin list; that's accurate.
+    # 4. Tag (triggers workflow)
+    git tag 1.0.16
+    git push origin 1.0.16

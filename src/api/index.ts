@@ -206,7 +206,7 @@ function resolveCallerNotePath(
 
 /** Generate a roll ID. Uses crypto.randomUUID when available. */
 function makeRollId(): string {
-    const c = globalThis.crypto;
+    const c = window.crypto;
     if (c && typeof c.randomUUID === "function") {
         return c.randomUUID();
     }

@@ -2,6 +2,68 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.16
+
+Cleanup release addressing the warnings flagged by the Obsidian
+community plugin automated review of 1.0.15. No errors flagged in
+that review (1.0.15 fixed all blocking issues); this release clears
+the warning backlog so future submissions stay clean.
+
+No user-visible behaviour changes — all fixes are lint compliance,
+type tightening, and dead-code removal.
+
+### Changed
+- **`document` / `window` → `activeDocument` / `activeWindow`** in 47
+  sites across nine view files. Obsidian's `activeDocument` /
+  `activeWindow` globals correctly resolve to the popout window's
+  document when one is focused; bare `document` always returns the
+  main window. Behaviour is identical when no popout is open
+  (which is the common case), but plugin UI created in a popout
+  now wires up to the right document.
+- **`globalThis` → `window`** for browser-API feature detection
+  (`crypto.randomUUID`, `ClipboardItem`). These checks aren't
+  popout-sensitive, so `window` is the right primitive.
+- **`require()` → static `import`** in `filters.ts`. The lazy
+  require was originally added to break a circular dependency
+  with `contentParser` that no longer exists. Switching to static
+  imports also eliminates the unsafe-`any` cascade that came from
+  `require()` returning `any` — about 15 lint warnings cleared in
+  one change.
+- **`catch (e: any)` → `catch (e: unknown)`** with a small
+  `errorMessage(e)` helper. Same Notice text reaches the user;
+  the type is now correct.
+- **Unnecessary type assertions removed** in three sites
+  (`as HTMLElement | null` after `querySelector` — fixed by using
+  `querySelector<HTMLElement>`).
+- **Promise handling in event listeners** — `addEventListener`
+  handlers that did async work used to be declared `async`, which
+  returns a promise the listener API silently drops. Replaced with
+  synchronous handlers that `void` the inner async call, making
+  fire-and-forget intent explicit.
+- **`Plugin.onunload`** is no longer `async` (body had no async
+  work; matches the base-class signature).
+
+### Removed
+- Unused imports: `FilterCall`, `FilterValue` from `evaluator.ts`;
+  `PreviewRegistry` from `inlineProcessor.ts`.
+- Unused helper `folderOf` from `vaultIndex.ts`.
+- Unused local `lineCount` in `tableAutocomplete.ts`.
+- Stale `eslint-disable` comments that are no longer reachable
+  after the `require()` → `import` change.
+
+### Fixed
+- Unnecessary escape characters in three regexes (`\/`, `\&`) and
+  one markdown table (`\|` inside backtick code spans, where GFM
+  treats inline code as opaque).
+
+### Tests
+- New `jest.setup.ts` polyfills `activeDocument` / `activeWindow`
+  for jsdom-based view tests. Obsidian provides these globals at
+  runtime; jsdom doesn't, and view code now touches them at module
+  init. The setup file aliases them to regular `document` / `window`
+  under jsdom, which matches Obsidian's behaviour when no popout
+  is open. All 975 existing tests pass unchanged.
+
 ## 1.0.15
 
 Compliance release addressing all errors flagged by the Obsidian

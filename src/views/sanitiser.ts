@@ -106,9 +106,9 @@ const ALLOWED_TAGS: ReadonlySet<string> = new Set([
  * runtime (Obsidian / jsdom) always has it.
  */
 export function sanitiseHtmlToFragment(html: string): DocumentFragment {
-    // Parse the input HTML in a detached document via DOMParser.
+    // Parse the input HTML in a detached activeDocument via DOMParser.
     // This is the safe pattern for "parse arbitrary HTML into a
-    // DOM tree": the document the parser builds is fully detached
+    // DOM tree": the activeDocument the parser builds is fully detached
     // and never connected to the page, so `<img>`/`<script>`/etc.
     // can't fire load events, run code, or fetch resources even if
     // they survive parsing (which they don't — cleanNode strips
@@ -118,8 +118,8 @@ export function sanitiseHtmlToFragment(html: string): DocumentFragment {
     if (typeof DOMParser === "undefined") {
         // Test/node environment without a DOM parser — degrade
         // to a fragment containing the raw input as text.
-        const fb = document.createDocumentFragment();
-        fb.appendChild(document.createTextNode(html));
+        const fb = activeDocument.createDocumentFragment();
+        fb.appendChild(activeDocument.createTextNode(html));
         return fb;
     }
     const parsed = new DOMParser().parseFromString(
@@ -128,7 +128,7 @@ export function sanitiseHtmlToFragment(html: string): DocumentFragment {
     );
     const sourceRoot = parsed.body;
 
-    const fragment = document.createDocumentFragment();
+    const fragment = activeDocument.createDocumentFragment();
     for (const child of Array.from(sourceRoot.childNodes)) {
         const cleaned = cleanNode(child);
         if (cleaned !== null) fragment.appendChild(cleaned);
@@ -231,7 +231,7 @@ function cleanNode(node: Node): Node | null {
         // Text content carried through verbatim. Note: textContent
         // here is the *parsed* form, with HTML entities already
         // decoded, which is what we want.
-        return document.createTextNode(node.textContent ?? "");
+        return activeDocument.createTextNode(node.textContent ?? "");
     }
     if (node.nodeType !== Node.ELEMENT_NODE) {
         // Comments, CDATA, processing instructions — drop entirely.
@@ -245,10 +245,10 @@ function cleanNode(node: Node): Node | null {
         // content is the safe move.
         return null;
     }
-    // Allowed: build a fresh element in OUR document (not the
+    // Allowed: build a fresh element in OUR activeDocument (not the
     // sandbox doc), copy nothing but the children. ALL attributes
     // are dropped — see top-of-file rationale.
-    const clean = document.createElement(tag);
+    const clean = activeDocument.createElement(tag);
     for (const child of Array.from(el.childNodes)) {
         const cleanedChild = cleanNode(child);
         if (cleanedChild !== null) clean.appendChild(cleanedChild);

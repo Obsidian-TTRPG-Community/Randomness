@@ -186,7 +186,7 @@ export function interpolateObsidianLinks(
  * its `[[…]]` rewritten.
  *
  * Handles three node kinds: text (collected), elements (recursed
- * into unless they're code/pre), and document fragments (recursed
+ * into unless they're code/pre), and activeDocument fragments (recursed
  * into — fragments are the typical input shape from the sanitiser).
  */
 function collectTextNodes(node: Node, out: Text[]): void {
@@ -261,7 +261,7 @@ function processTextNode(
     for (const match of matches) {
         if (match.start > cursor) {
             newNodes.push(
-                document.createTextNode(text.slice(cursor, match.start))
+                activeDocument.createTextNode(text.slice(cursor, match.start))
             );
         }
         if (match.replacement !== null) {
@@ -270,13 +270,13 @@ function processTextNode(
             // Unparseable — keep the literal text so the user sees
             // what they wrote (and can correct it).
             newNodes.push(
-                document.createTextNode(text.slice(match.start, match.end))
+                activeDocument.createTextNode(text.slice(match.start, match.end))
             );
         }
         cursor = match.end;
     }
     if (cursor < text.length) {
-        newNodes.push(document.createTextNode(text.slice(cursor)));
+        newNodes.push(activeDocument.createTextNode(text.slice(cursor)));
     }
 
     // Swap into the DOM. Insert all new nodes before the original,
@@ -321,7 +321,7 @@ function buildImageElement(
     if (file === null) {
         return makeUnresolvedSpan(parsed.linkpath, true);
     }
-    const img = document.createElement("img");
+    const img = activeDocument.createElement("img");
     // src comes from a vault API — no path for attacker-controlled
     // values to land here. The `getResourcePath` API returns
     // app:// URLs that resolve to local vault files only.
@@ -359,7 +359,7 @@ function buildLinkElement(
         ? parsed.linkpath + "#" + parsed.heading
         : parsed.linkpath;
     const file = resolveLink(plugin, parsed.linkpath, sourcePath);
-    const a = document.createElement("a");
+    const a = activeDocument.createElement("a");
     // We don't set href — Obsidian uses a synthetic data-href
     // convention and handles clicks via JS, since the resolved
     // URL changes with workspace state. Real Obsidian rendering
@@ -373,8 +373,10 @@ function buildLinkElement(
         e.preventDefault();
         // Ctrl/Cmd modifier → new pane, matching Obsidian
         // convention. The third arg of openLinkText is "newLeaf".
+        // openLinkText is async; we don't need to track the
+        // result here (click handlers are fire-and-forget).
         const newLeaf = e.ctrlKey || e.metaKey;
-        plugin.app.workspace.openLinkText(target, sourcePath, newLeaf);
+        void plugin.app.workspace.openLinkText(target, sourcePath, newLeaf);
     });
     return a;
 }
@@ -406,7 +408,7 @@ function resolveLink(
  * in (typically a muted/dashed-underline appearance).
  */
 function makeUnresolvedSpan(linkpath: string, isEmbed: boolean): Node {
-    const span = document.createElement("span");
+    const span = activeDocument.createElement("span");
     span.className = "randomness-unresolved-link";
     // For embeds we keep the `!` prefix in the display so the user
     // can see that an embed was attempted (and is failing).

@@ -78,7 +78,7 @@ export class IptView extends TextFileView {
         // touch children[0] — Obsidian owns the title bar.
         const root = this.containerEl.children[1] as HTMLElement;
         clearElement(root);
-        const wrap = document.createElement("div");
+        const wrap = activeDocument.createElement("div");
         wrap.className = "randomness-ipt-view";
         root.appendChild(wrap);
         this.renderTarget = wrap;
@@ -132,7 +132,7 @@ export class IptView extends TextFileView {
         const target = this.renderTarget;
         if (!target) return;
         clearElement(target);
-        const loading = document.createElement("div");
+        const loading = activeDocument.createElement("div");
         loading.className = "randomness-loading";
         loading.textContent = "Rolling…";
         target.appendChild(loading);
@@ -151,7 +151,7 @@ export class IptView extends TextFileView {
                     },
                 });
             }
-            const outputDiv = document.createElement("div");
+            const outputDiv = activeDocument.createElement("div");
             outputDiv.className = "randomness-output";
             setSanitisedHtmlWithLinks(
                 outputDiv,
@@ -162,12 +162,12 @@ export class IptView extends TextFileView {
             target.appendChild(outputDiv);
         } catch (err) {
             clearElement(target);
-            const wrap = document.createElement("div");
+            const wrap = activeDocument.createElement("div");
             wrap.className = "randomness-error";
-            const heading = document.createElement("strong");
+            const heading = activeDocument.createElement("strong");
             heading.textContent = "Randomness: render failed";
             wrap.appendChild(heading);
-            const messageDiv = document.createElement("div");
+            const messageDiv = activeDocument.createElement("div");
             messageDiv.className = "randomness-error-message";
             messageDiv.textContent =
                 err instanceof Error ? err.message : String(err);

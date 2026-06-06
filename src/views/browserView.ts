@@ -112,7 +112,7 @@ export class BrowserView extends ItemView {
         // and a content child; we write to the content child.
         const target = this.containerEl.children[1] as HTMLElement;
         clearElement(target);
-        const wrap = document.createElement("div");
+        const wrap = activeDocument.createElement("div");
         wrap.className = "randomness-browser";
         target.appendChild(wrap);
         this.root = wrap;
@@ -151,7 +151,7 @@ export class BrowserView extends ItemView {
 
         // Header: title + Collapse all + Reload.
         const header = el(this.root, "div", "randomness-browser-header");
-        const h = document.createElement("h3");
+        const h = activeDocument.createElement("h3");
         h.textContent = "Generators";
         header.appendChild(h);
 
@@ -179,7 +179,7 @@ export class BrowserView extends ItemView {
         reloadBtn.addEventListener("click", () => void this.refresh());
 
         // Search filter.
-        const filterBox = document.createElement("input") as HTMLInputElement;
+        const filterBox = activeDocument.createElement("input");
         filterBox.type = "text";
         filterBox.className = "randomness-browser-filter";
         filterBox.placeholder = "Filter…";
@@ -219,9 +219,9 @@ export class BrowserView extends ItemView {
      */
     private renderList(): void {
         if (!this.root) return;
-        const list = this.root.querySelector(
+        const list = this.root.querySelector<HTMLElement>(
             '[data-role="list"]'
-        ) as HTMLElement | null;
+        );
         if (!list) return;
         clearElement(list);
 
@@ -526,7 +526,7 @@ export class BrowserView extends ItemView {
 
         // Roll button — evaluates the table and shows the
         // result in the bottom panel.
-        const rollBtn = document.createElement("button");
+        const rollBtn = activeDocument.createElement("button");
         rollBtn.className = "randomness-browser-roll-btn";
         rollBtn.textContent = "Roll";
         rollBtn.title = `Roll ${file.title} → ${tableName}`;
@@ -543,7 +543,7 @@ export class BrowserView extends ItemView {
         // live-rolling reference into their note. Also shows
         // the Use: line they'll need in a codeblock if their
         // note doesn't already import this file.
-        const copyBtn = document.createElement("button");
+        const copyBtn = activeDocument.createElement("button");
         copyBtn.className = "randomness-browser-copy-inline-btn";
         copyBtn.textContent = "📋";
         copyBtn.title =
@@ -569,7 +569,7 @@ export class BrowserView extends ItemView {
             file.path,
             tableName
         );
-        const pinBtn = document.createElement("button");
+        const pinBtn = activeDocument.createElement("button");
         pinBtn.className =
             "randomness-browser-pin-btn" +
             (pinned ? " randomness-browser-pin-btn-active" : "");
@@ -667,9 +667,9 @@ export class BrowserView extends ItemView {
      */
     private renderResult(): void {
         if (!this.root) return;
-        const area = this.root.querySelector(
+        const area = this.root.querySelector<HTMLElement>(
             '[data-role="result"]'
-        ) as HTMLElement | null;
+        );
         if (!area) return;
         clearElement(area);
 
@@ -682,7 +682,7 @@ export class BrowserView extends ItemView {
         const head = el(area, "div", "randomness-browser-result-head");
         const label = el(head, "span", "randomness-browser-result-label");
         label.textContent = `Last roll — ${this.lastRoll.table}`;
-        const copyBtn = document.createElement("button");
+        const copyBtn = activeDocument.createElement("button");
         copyBtn.className = "randomness-browser-copy-btn";
         copyBtn.textContent = "Copy";
         copyBtn.title = "Copy this result to the clipboard";
@@ -1159,7 +1159,7 @@ function el(
     tag: string,
     className?: string
 ): HTMLElement {
-    const e = document.createElement(tag);
+    const e = activeDocument.createElement(tag);
     if (className) e.className = className;
     parent.appendChild(e);
     return e;
@@ -1192,7 +1192,7 @@ function countFiles(folder: FolderNode): number {
  * Exported for tests.
  */
 export function htmlToPlainText(html: string): string {
-    // Parse via DOMParser into a detached document, then read
+    // Parse via DOMParser into a detached activeDocument, then read
     // textContent. This is the safer pattern than `tmp.innerHTML =
     // html` — DOMParser-built documents are fully detached and
     // never wired to the live page, so even unsanitised input can't
@@ -1240,12 +1240,12 @@ export async function writeRichClipboard(
         navigator.clipboard !== undefined &&
         typeof (navigator.clipboard as { write?: unknown }).write ===
             "function" &&
-        typeof (globalThis as { ClipboardItem?: unknown }).ClipboardItem ===
+        typeof (window as unknown as { ClipboardItem?: unknown }).ClipboardItem ===
             "function";
 
     if (supportsRich) {
         try {
-            const Ctor = (globalThis as {
+            const Ctor = (window as unknown as {
                 ClipboardItem: new (items: Record<string, Blob>) => unknown;
             }).ClipboardItem;
             const item = new Ctor({

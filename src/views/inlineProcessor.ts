@@ -35,7 +35,6 @@ import {
     parseInlineCall,
     applyLockToSource,
     applyUnlockToSource,
-    PreviewRegistry,
     PreviewKey,
     INLINE_PREFIX,
     findAllInlineCallPositions,
@@ -76,7 +75,7 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
             el
         );
 
-        // Walk DOM `code` elements in document order and pair each
+        // Walk DOM `code` elements in activeDocument order and pair each
         // with its source position. The N-th `rdm:` code element in
         // the block corresponds to the N-th call in `sourcePositions`
         // restricted to this block's line range — provided the
@@ -342,7 +341,7 @@ export function replaceCodeElement(
     codeEl: HTMLElement,
     props: InlineRenderProps
 ): HTMLElement {
-    const span = document.createElement("span");
+    const span = activeDocument.createElement("span");
     span.className = "randomness-inline";
     if (props.isLocked) span.classList.add("randomness-inline-locked");
     else span.classList.add("randomness-inline-preview");
@@ -357,23 +356,26 @@ export function replaceCodeElement(
     // shown in the unfilled state and goes second, so toggling from
     // unfilled → locked doesn't shift the 🎲's x-position either.
     // CSS hides whichever button is contextually irrelevant later.
-    const controls = document.createElement("span");
+    const controls = activeDocument.createElement("span");
     controls.className = "randomness-inline-controls";
 
     const rerollBtn = makeControlButton("🎲", "Re-roll");
-    rerollBtn.addEventListener("click", async (e) => {
+    rerollBtn.addEventListener("click", (e) => {
+        // addEventListener expects a void-returning handler. Wrap
+        // the async work and void the promise — uncaught rejections
+        // would otherwise be invisible.
         e.stopPropagation();
         e.preventDefault();
-        await props.onReroll();
+        void props.onReroll();
     });
     controls.appendChild(rerollBtn);
 
     if (!props.isLocked) {
         const lockBtn = makeControlButton("🔒", "Lock this preview");
-        lockBtn.addEventListener("click", async (e) => {
+        lockBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             e.preventDefault();
-            await props.onLock();
+            void props.onLock();
         });
         controls.appendChild(lockBtn);
     }
@@ -390,7 +392,7 @@ export function replaceCodeElement(
     // characters instead of bolding. Sanitiser drops anything outside
     // the whitelist (scripts, iframes, attributes); same safety
     // contract as codeblocks.
-    const resultSpan = document.createElement("span");
+    const resultSpan = activeDocument.createElement("span");
     resultSpan.className = "randomness-inline-result";
     if (props.plugin !== undefined && props.sourcePath !== undefined) {
         setSanitisedHtmlWithLinks(
@@ -411,7 +413,7 @@ export function replaceCodeElement(
 }
 
 function makeControlButton(label: string, title: string): HTMLElement {
-    const btn = document.createElement("button");
+    const btn = activeDocument.createElement("button");
     btn.className = "randomness-inline-button";
     btn.type = "button";
     btn.textContent = label;
@@ -425,7 +427,7 @@ export function renderInlineError(
     codeEl: HTMLElement,
     err: unknown
 ): void {
-    const span = document.createElement("span");
+    const span = activeDocument.createElement("span");
     span.className = "randomness-inline randomness-inline-error";
     span.textContent =
         "[error: " +
@@ -567,9 +569,9 @@ async function rerollCall(
     // must be parsed as tags, not displayed as literal characters.
     // Link-aware variant so wiki-syntax in rerolled output renders
     // the same way as on the initial pass.
-    const resultSpan = span.querySelector(
+    const resultSpan = span.querySelector<HTMLElement>(
         ".randomness-inline-result"
-    ) as HTMLElement | null;
+    );
     setSanitisedHtmlWithLinks(
         resultSpan ?? span,
         fresh,

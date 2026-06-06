@@ -20,6 +20,18 @@ import {
 import type RandomnessPlugin from "./main";
 import { EXAMPLE_FILES, EXAMPLES_README } from "../examples";
 
+/**
+ * Extract a readable message from a caught value. `catch` clauses
+ * give us `unknown`; we want to surface a string in Notices without
+ * sprinkling `(e as any).message` everywhere. Falls back to
+ * `String(e)` for non-Error throws.
+ */
+function errorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (typeof e === "string") return e;
+    return String(e);
+}
+
 export interface RandomnessSettings {
     /**
      * Vault-relative folder where shared generators live. `Use:` paths
@@ -216,9 +228,9 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                                     `Created folder: ${rootPath}`
                                 );
                                 this.display(); // refresh — folder exists now
-                            } catch (e: any) {
+                            } catch (e: unknown) {
                                 new Notice(
-                                    `Couldn't create folder: ${e?.message ?? e}`
+                                    `Couldn't create folder: ${errorMessage(e)}`
                                 );
                             }
                         })
@@ -438,8 +450,8 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     await vault.create(path, content);
                     created++;
                 }
-            } catch (e: any) {
-                errors.push(`${filename} (${e?.message ?? e})`);
+            } catch (e: unknown) {
+                errors.push(`${filename} (${errorMessage(e)})`);
             }
         };
 

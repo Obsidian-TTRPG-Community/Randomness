@@ -68,8 +68,8 @@ function preprocessLines(source: string): { text: string; lineNum: number }[] {
         // Set's value and the table emits empty output.
         const isDirective = DIRECTIVE_PREFIX.test(current);
         if (!isDirective) {
-            while (i + 1 < rawLines.length && /\&\s*$/.test(current)) {
-                current = current.replace(/\&\s*$/, "") + rawLines[i + 1];
+            while (i + 1 < rawLines.length && /&\s*$/.test(current)) {
+                current = current.replace(/&\s*$/, "") + rawLines[i + 1];
                 i++;
             }
         }

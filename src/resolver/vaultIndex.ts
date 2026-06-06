@@ -54,12 +54,6 @@ function underRoot(path: string, root: string): boolean {
     return path === root || path.startsWith(root + "/");
 }
 
-/** Folder portion of a vault path ("a/b/c.ipt" → "a/b"; "c.ipt" → ""). */
-function folderOf(path: string): string {
-    const i = path.lastIndexOf("/");
-    return i < 0 ? "" : path.slice(0, i);
-}
-
 /** Basename of a path ("a/b/c.ipt" → "c.ipt"). */
 function basenameOf(path: string): string {
     const i = path.lastIndexOf("/");
