@@ -2,6 +2,51 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.15
+
+Compliance release addressing all errors flagged by the Obsidian
+community plugin automated review of 1.0.14. The plugin was
+delisted pending a passing review; this release fixes each error
+individually. Warnings from the same review are left for a follow-
+up release that doesn't block listing.
+
+### Fixed (review compliance)
+- **`revealLeaf` calls are now awaited.** `Workspace.revealLeaf`
+  returns a `Promise<void>` in current Obsidian; we were calling
+  it without `await`, which both triggered the unawaited-promise
+  rule and meant code after the call could execute before the
+  leaf was actually revealed. Now properly awaited in both
+  `browserView` and `referenceView`.
+- **Bumped minAppVersion from 1.4.0 to 1.7.2.** The async
+  signature for `revealLeaf` requires the newer API; the lint
+  rule was correctly flagging that our declared compatibility
+  was older than what we actually use.
+- **Replaced `innerHTML` parsing with `DOMParser`.** Two sites —
+  `sanitiser.sanitiseHtmlToFragment` (HTML cleaning entrypoint)
+  and `browserView.htmlToPlainText` (clipboard conversion). Both
+  were already safe (detached documents, sanitised inputs), but
+  `DOMParser` is the recommended pattern and doesn't trip the
+  no-unsafe-innerHTML rule.
+- **Replaced inline style with a CSS class.** The browser pane's
+  click-to-copy cursor was set via `body.style.cursor = "pointer"`;
+  now uses a new \`.randomness-clickable\` class in `styles.css`.
+  Matches Obsidian's plugin guideline that styling lives in
+  stylesheets, not JS.
+- **eslint-disable directives now include justification text.**
+  The single `eslint-disable-next-line` in `filters.ts` (lazy
+  require to break a circular dep with `contentParser`) now
+  explains why it's there. The `no-console` disable in
+  `settings.ts` was removed entirely — the example-seeding
+  diagnostics now surface in the user-facing Notice instead of
+  the developer console.
+
+### Note on warnings
+The same review flagged ~80 warnings (unsafe-any in filters,
+`globalThis` instead of `window`/`activeWindow`, `document`
+instead of `activeDocument`, some unused imports). These don't
+block listing but are real cleanup work; addressing them in a
+follow-up release lets this compliance release ship quickly.
+
 ## 1.0.14
 
 This is a substantial release covering real-world IPP3 compatibility,

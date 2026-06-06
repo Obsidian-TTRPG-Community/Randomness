@@ -105,7 +105,7 @@ export async function openReferenceView(
     // Reuse an existing leaf if any.
     const existing = workspace.getLeavesOfType(VIEW_TYPE_REFERENCE);
     if (existing.length > 0) {
-        workspace.revealLeaf(existing[0]);
+        await workspace.revealLeaf(existing[0]);
         return;
     }
     // Open a new leaf. `getLeaf("split")` opens in a vertical
@@ -116,5 +116,5 @@ export async function openReferenceView(
         type: VIEW_TYPE_REFERENCE,
         active: true,
     });
-    workspace.revealLeaf(leaf);
+    await workspace.revealLeaf(leaf);
 }

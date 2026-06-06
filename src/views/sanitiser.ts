@@ -106,16 +106,27 @@ const ALLOWED_TAGS: ReadonlySet<string> = new Set([
  * runtime (Obsidian / jsdom) always has it.
  */
 export function sanitiseHtmlToFragment(html: string): DocumentFragment {
-    const doc = document.implementation.createHTMLDocument("");
-    // Use the document's own parser via innerHTML on a detached
-    // element. The detachment matters: a freshly-created element
-    // not attached to any document won't fire `load` events for
-    // `<img>` or `<script>`, even if those tags survive in the
-    // parsed tree (which they don't, but defence in depth is
-    // free here).
-    const sandbox = doc.createElement("template");
-    sandbox.innerHTML = html;
-    const sourceRoot = (sandbox as HTMLTemplateElement).content;
+    // Parse the input HTML in a detached document via DOMParser.
+    // This is the safe pattern for "parse arbitrary HTML into a
+    // DOM tree": the document the parser builds is fully detached
+    // and never connected to the page, so `<img>`/`<script>`/etc.
+    // can't fire load events, run code, or fetch resources even if
+    // they survive parsing (which they don't — cleanNode strips
+    // them below). It also avoids the innerHTML assignment that
+    // some lint rules ban as an XSS smell, even when the call is
+    // demonstrably safe.
+    if (typeof DOMParser === "undefined") {
+        // Test/node environment without a DOM parser — degrade
+        // to a fragment containing the raw input as text.
+        const fb = document.createDocumentFragment();
+        fb.appendChild(document.createTextNode(html));
+        return fb;
+    }
+    const parsed = new DOMParser().parseFromString(
+        `<!doctype html><body>${html}</body>`,
+        "text/html"
+    );
+    const sourceRoot = parsed.body;
 
     const fragment = document.createDocumentFragment();
     for (const child of Array.from(sourceRoot.childNodes)) {

@@ -8,6 +8,12 @@
 
 /* Inline rdm: rendering */
 
+.randomness-clickable {
+    /* Generic "this element is clickable" pointer cue. Used by
+     * the browser pane's result body to signal click-to-copy. */
+    cursor: pointer;
+}
+
 .randomness-inline {
     display: inline-flex;
     align-items: center;
@@ -80,8 +86,7 @@
 }
 
 .randomness-error {
-    /* `--background-modifier-error` is a vivid red in many themes,
-     * and `--text-error` is also red — so red-on-red made the
+    /* `--background-modifier-error` is a vivid red in many themes,     * and `--text-error` is also red — so red-on-red made the
      * message invisible (the bar showed but the text didn't).
      * Use a subdued error background and the normal text colour
      * so the message is readable regardless of theme. The strong

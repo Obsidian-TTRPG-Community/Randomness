@@ -37,8 +37,12 @@ export interface FilterContext extends ExprContext {
  * filter implementations have to resolve them.
  */
 function renderArgs(args: string, ctx: FilterContext): string {
-    // Lazy import to avoid circular dep
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // We require contentParser at call time rather than importing it
+    // at the top of the file because contentParser imports filters
+    // (via parseBracket → filter parsing), so a static import would
+    // create a circular dependency that breaks under some bundlers
+    // and at jest's module-init phase.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- intentional lazy require to break circular dep with contentParser
     const { parseContent } = require("./contentParser");
     // We need an evaluator-like to render nodes. We have ctx (FilterContext)
     // which has getVar / evalEmbeddedCall — that's enough for our purposes.

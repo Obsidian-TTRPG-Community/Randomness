@@ -704,8 +704,10 @@ export class BrowserView extends ItemView {
             this.lastRoll.sourcePath
         );
         // Also make clicking the body itself copy — common UX expectation
-        // for "click to copy" panels.
-        body.style.cursor = "pointer";
+        // for "click to copy" panels. Cursor styling lives in
+        // styles.css via the .randomness-clickable class so we keep
+        // styling out of JS.
+        body.addClass("randomness-clickable");
         body.title = "Click to copy";
         body.addEventListener("click", () =>
             void this.copyResult(this.lastRoll!.result)
@@ -1131,7 +1133,7 @@ async function activateBrowserView(plugin: RandomnessPlugin): Promise<void> {
     // If an instance exists, reveal it rather than spawning a new one.
     const existing = workspace.getLeavesOfType(VIEW_TYPE_BROWSER);
     if (existing.length > 0) {
-        workspace.revealLeaf(existing[0]);
+        await workspace.revealLeaf(existing[0]);
         return;
     }
     // Else create one in the right sidebar.
@@ -1141,7 +1143,7 @@ async function activateBrowserView(plugin: RandomnessPlugin): Promise<void> {
         return;
     }
     await leaf.setViewState({ type: VIEW_TYPE_BROWSER, active: true });
-    workspace.revealLeaf(leaf);
+    await workspace.revealLeaf(leaf);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -1190,12 +1192,17 @@ function countFiles(folder: FolderNode): number {
  * Exported for tests.
  */
 export function htmlToPlainText(html: string): string {
-    const tmp = document.createElement("div");
-    // Safe: input has already been through the sanitiser in the
-    // calling code path. Even if not, innerHTML inside a detached
-    // div doesn't execute scripts.
-    tmp.innerHTML = html;
-    return tmp.textContent ?? "";
+    // Parse via DOMParser into a detached document, then read
+    // textContent. This is the safer pattern than `tmp.innerHTML =
+    // html` — DOMParser-built documents are fully detached and
+    // never wired to the live page, so even unsanitised input can't
+    // trigger script execution or resource loads. (Callers always
+    // pass sanitised HTML anyway, but defence in depth is cheap.)
+    if (typeof DOMParser === "undefined") {
+        return html; // node/test fallback
+    }
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return doc.body.textContent ?? "";
 }
 
 /**

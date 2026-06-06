@@ -454,16 +454,18 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         if (errors.length > 0) {
             summary.push(`${errors.length} failed`);
         }
-        const summaryText = summary.length > 0
+        let summaryText = summary.length > 0
             ? `Examples: ${summary.join(", ")}.`
             : "Nothing happened.";
+        // If anything failed, surface the first error in the Notice
+        // itself rather than logging to console — gives the user
+        // something actionable without breaking the lint policy
+        // around console use.
+        if (errors.length > 0) {
+            summaryText += ` First error: ${errors[0]}`;
+        }
 
         new Notice(summaryText, errors.length > 0 ? 8000 : 4000);
-        if (errors.length > 0) {
-            // Log details to console for diagnosis without spamming UI.
-            // eslint-disable-next-line no-console
-            console.error("Randomness: example seeding errors:", errors);
-        }
     }
 }
 
