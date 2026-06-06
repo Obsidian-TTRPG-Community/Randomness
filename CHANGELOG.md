@@ -2,14 +2,18 @@
 
 All notable changes to the Randomness plugin.
 
-## 1.0.13
+## 1.0.14
+
+This is a substantial release covering real-world IPP3 compatibility,
+better first-run setup, and a thorough reference-guide rewrite. Most
+community generators that previously rendered empty or crashed should
+now render correctly, and new users can get from "just installed" to
+"rolling a working generator" in two clicks.
 
 ### Fixed (IPP3 compatibility)
 Six independent fixes uncovered while loading real community
 generators (`Dungeon_Room_Description.ipt` and
-`Ultimate_Powers_Character_Generator.ipt`). Most community files
-that previously rendered empty or crashed should now render
-correctly.
+`Ultimate_Powers_Character_Generator.ipt`).
 
 - **Variable names are now case-insensitive.** `{$Prompt1}`,
   `{$prompt1}`, and `{$PROMPT1}` all refer to the same value. IPP3
@@ -66,9 +70,52 @@ correctly.
   noting that Randomness finds files by name anywhere in the
   vault.
 
+- **The "red error" in the in-app reference guide is gone.**
+  Five places in the reference used inline triple-backticks to
+  represent a `randomness` codeblock visually. Obsidian's reader
+  sometimes parsed those as actual fenced codeblocks with
+  `randomness` as the language, which then triggered the
+  plugin's codeblock processor to render an error *inside* the
+  reference view. All five rewritten to use single-backtick
+  inline code.
+
+- **Reference guide syntax examples corrected throughout.**
+  Several examples used outdated or wrong syntax: `[table]` for
+  table calls (should be `[@table]`), `!set name=...` for
+  variables (should be `Set: name=...`), `N[table]` for
+  repetition (should be `[@N table]`), and
+  `[when expr][do …][else …][end]` for conditionals (should be
+  `[when]expr[do]…[else]…[end]`). All rewritten to match what
+  the parser actually accepts.
+
+### Added
+- **Generator-root folder helpers in settings.** When the
+  Generator root path is set but the folder doesn't exist yet,
+  a **Create folder** button appears under it. Once the folder
+  exists, an **Add examples** button writes five bundled
+  example `.ipt` files plus a README into it. Makes first-time
+  setup a two-click experience instead of "open file explorer,
+  create folder, come back, type path".
+
+- **Five bundled example generators** (`01-greetings.ipt` →
+  `05-treasure-dictionary.ipt`) demonstrating the language
+  features in progressive order — basics, sub-table composition,
+  variables/prompts/dice/inline tables, lookup tables, and
+  dictionary tables with conditionals. Each is heavily commented;
+  they're meant as both runnable examples and a learning
+  resource.
+
+- **New reference-guide sections** for **Lookup tables**,
+  **Dictionary tables**, **Prompts**, **Variable arithmetic**,
+  and **Getting started** — each with multiple worked examples.
+  Many additional examples added throughout existing sections.
+
 ### Tests
-- Added 12 regression tests in `__tests__/integration/ipp3-compat.test.ts`
-  covering each compatibility fix. Total: 969 tests across 38
+- Added 12 regression tests in
+  `__tests__/integration/ipp3-compat.test.ts` covering each IPP3
+  compatibility fix, plus 6 in
+  `__tests__/integration/bundled-examples.test.ts` verifying every
+  shipped example produces output. Total: 975 tests across 39
   suites, all green.
 
 ## 1.0.12

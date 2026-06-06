@@ -24,9 +24,30 @@ export const REFERENCE_MARKDOWN = `# Randomness — Reference
 A quick reference for building random tables. For the full design
 rationale and history, see the project README on GitHub.
 
+## Getting started
+
+If you've just installed the plugin, the fastest way to get
+something running:
+
+1. Open **Settings → Randomness**.
+2. Type a folder name in **Generator root** (e.g. \`Generators\`).
+3. Click **Create folder**, then **Add examples**. This drops
+   five small \`.ipt\` files into the folder, each demonstrating
+   a different feature with heavy comments.
+4. Open a note and add a fenced codeblock with the language tag
+   \`randomness\` containing a table call like \`[@TavernName]\`,
+   then click the codeblock to roll. Try \`[@MonsterEncounter]\`,
+   \`[@Shop]\`, or \`[@TreasureHoard]\` to see the other examples.
+
+For the exact markdown syntax of a fenced codeblock, see
+**Calling from notes** below.
+
+The rest of this document explains the syntax used by those
+examples (and by any community generator you'd pick up).
+
 ## File structure
 
-Generators live in \`.ipt\` files (or fenced \`\`\`randomness\`\`\`
+Generators live in \`.ipt\` files (or fenced \`randomness\`
 codeblocks inside notes). Each file starts with optional
 directives, then one or more tables.
 
@@ -77,11 +98,11 @@ starting with \`//\` are comments and ignored.
 
 ## Calling tables
 
-The basic syntax is \`[table_name]\`:
+The basic syntax is \`[@table]\`:
 
 \`\`\`text
 Table: encounter
-The party meets [creature] in [location].
+The party meets [@creature] in [@location].
 
 Table: creature
 a goblin scout
@@ -94,21 +115,51 @@ the ruins of an old chapel
 a creaking wooden bridge
 \`\`\`
 
-Rolling \`encounter\` once might give:
+Rolling \`encounter\` might give:
 *"The party meets a wandering merchant in a sunlit clearing."*
 
-### Variations
+The text between brackets can include literal text and other
+calls. Calls nest freely — \`[@creature]\` can itself call other
+tables, which can call others, and so on.
 
-- \`[@table]\` — roll the table. Same as \`[table]\` but explicit.
-- \`[#n table]\` — pick item number \`n\` from the table (lookup).
-- \`[#<key> table]\` — dictionary-style lookup by item prefix.
-- \`[!table]\` — deck pick (don't repeat items until exhausted).
-- \`[|a|b|c]\` — inline table; pick one of \`a\`, \`b\`, \`c\`.
+### Call variations
+
+| Syntax | What it does |
+| --- | --- |
+| \`[@table]\` | Roll the table once, insert the result. |
+| \`[@N table]\` | Roll the table \`N\` times, results joined with blank lines. |
+| \`[@{1d4} table]\` | Roll \`N\` from dice, then roll the table that many times. |
+| \`[#N table]\` | Pick item number \`N\` (no roll — deterministic). |
+| \`[#<key> table]\` | Pick the entry whose key matches \`<key>\` (dictionary tables). |
+| \`[#"key with spaces" table]\` | Same, when the key contains whitespace or punctuation. |
+| \`[!table]\` | Deck pick — don't repeat items until the table's exhausted. |
+| \`[!N table]\` | Deck pick \`N\` items without duplicates. |
+| \`[\|a\|b\|c]\` | Inline table — pick one of \`a\`, \`b\`, \`c\` at random. |
+
+Examples:
+
+\`\`\`text
+Table: party
+The party of [@4 hero] sets out.
+
+Table: hero
+a dwarven cleric
+a halfling rogue
+a human wizard
+an elven ranger
+
+Table: order
+First in line: [@1 hero]. Second: [@1 hero]. Third: [@1 hero].
+\`\`\`
+
+Note the difference: \`[@4 hero]\` returns four results joined with
+blank lines; \`[@1 hero]\` returns one result inline. For complex
+formatting use a sub-table plus filters (see Repetitions).
 
 ## Dice
 
 \`{NdN}\` rolls dice. \`{2d6}\` rolls two six-siders and sums them.
-Modifiers: \`{1d20+5}\`, \`{3d6-2}\`.
+Modifiers and arithmetic work as you'd expect.
 
 \`\`\`text
 Table: damage
@@ -116,30 +167,68 @@ The sword deals {1d8+2} damage.
 
 Table: stats
 STR {3d6}, DEX {3d6}, CON {3d6}, INT {3d6}, WIS {3d6}, CHA {3d6}
+
+Table: random_loot
+The chest contains {2d6+3} silver pieces and {1d4-1} potions.
+\`\`\`
+
+Dice expressions can be used as repetition counts:
+
+\`\`\`text
+Table: ambush
+A pack of {1d6+1} wolves appears, and [@{1d3} reaction].
+
+Table: reaction
+they snarl and circle
+they freeze and watch
+they charge immediately
 \`\`\`
 
 ## Variables
 
-\`{var}\` references a variable previously set with \`!set\`:
+The \`Set:\` directive assigns a value to a variable. Reference it
+later with \`{$name}\` or just \`{name}\`. Names are
+**case-insensitive** — \`{$Name}\`, \`{$name}\`, and \`{$NAME}\` all
+refer to the same value.
 
 \`\`\`text
 Table: introduction
-!set name=[first_name]
-!set class=[class]
-{name} the {class} steps forward.
-"I am {name}!" they declare.
+Set: name=[@first_name]
+Set: class=[@class]
+{$name} the {$class} steps forward.
+"I am {$name}!" they declare.
 \`\`\`
 
-\`{$var}\` is the legacy form, equivalent to \`{var}\`.
+\`Set:\` is **quiet by default** — assigning a variable doesn't
+emit anything. Use it to compute values once and reference them
+multiple times, like consistent character names across an output.
+
+### Variable arithmetic
+
+When a variable holds a numeric value, you can do math on it inside
+\`{...}\`:
+
+\`\`\`text
+Set: str=15
+Set: dex=12
+STR mod = {({$str} - 10) / 2}
+Total = {{$str} + {$dex}}
+\`\`\`
+
+Variables that look numeric (like \`15\`) are treated as numbers
+when added; explicit string literals (\`'15'\`) stay strings and
+concatenate.
 
 ## Filters
 
-\`>>\` applies a filter to the result of a call:
+\`>>\` applies a filter to the result of a call. Filters chain
+left-to-right.
 
 \`\`\`text
-[creature >> upper]            // shouts the creature name
-[name >> proper]               // Title-cases the name
-[items >> sort >> implode , ]  // sort, then join with ", "
+[@creature >> upper]            // SHOUTS THE CREATURE NAME
+[@name >> proper]               // Title-cases the name
+[@5 items >> sort >> implode , ]// sort, then join with ", "
+[@village >> a]                 // "a village" or "an oasis"
 \`\`\`
 
 Common filters:
@@ -148,39 +237,151 @@ Common filters:
 - **proper** — Title Case
 - **bold / italic / underline** — wrap in \`<b>\`/\`<i>\`/\`<u>\`
 - **sort** — sort alphabetically (multi-rep results)
-- **implode <glue>** — join multi-rep results with the glue string
-- **replace <from>/<to>** — substring replace
+- **implode \\<glue\\>** — join multi-rep results with the glue string
+- **replace \\<from\\>/\\<to\\>** — substring replace
 - **trim** — strip leading and trailing whitespace
 - **left N / right N / mid N M** — substring extraction
-- **eachchar <filter>** — apply a filter to each character
+- **eachchar \\<filter\\>** — apply a filter to each character
 - **a** — prefix "a" or "an" based on what follows
 
 ## Repetitions
 
-\`N[table]\` rolls the table \`N\` times. Results are joined by
-blank lines (the default visual separator). Use \`implode\` to
-override the separator:
+To roll a table multiple times, put the count before the table
+name inside the brackets:
 
 \`\`\`text
-[3@treasure]                       // three treasures, blank-separated
-[5@spell >> implode ", "]          // five spells, comma-separated
-[1d4@goblin]                       // 1-4 goblins
+[@3 treasure]                       // three treasures, blank-separated
+[@5 spell >> implode ", "]          // five spells, comma-separated
+[@{1d4} goblin]                     // 1-4 goblins
 \`\`\`
 
 The file's \`MaxReps:\` directive caps the repetition count,
 useful when authors want to allow variable reps but prevent a
-runaway \`[100@expensive_table]\`.
+runaway \`[@100 expensive_table]\`.
 
 ## Conditionals
 
-\`[when expr][do …][else …][end]\` — run the \`do\` branch if
-\`expr\` is truthy, otherwise the \`else\` branch. Variables and
-dice work inside the condition.
+\`[when]condition[do]...[else]...[end]\` — render the \`do\` branch
+if the condition is truthy, otherwise the \`else\` branch. Variables
+and dice work inside conditions, and \`else\` is optional.
 
 \`\`\`text
-!set roll={1d6}
-[when {roll}>3][do A high roll!][else A low roll.][end]
+Set: roll={1d6}
+[when]{$roll}>3[do]A high roll: {$roll}.[else]A low roll: {$roll}.[end]
 \`\`\`
+
+Comparison operators inside conditions: \`=\`, \`<>\`, \`<\`, \`>\`,
+\`<=\`, \`>=\`. Numeric comparison happens when both sides look
+numeric; otherwise string comparison.
+
+\`\`\`text
+Prompt: Difficulty {Easy|Hard} Easy
+
+Table: enemy
+[when]{$Prompt1}=Easy[do][@weak_enemy][else][@tough_enemy][end]
+
+Table: weak_enemy
+a lone goblin
+a stray wolf
+
+Table: tough_enemy
+an ogre captain with two bodyguards
+a wight in ancient mail
+\`\`\`
+
+You can wrap a conditional in brackets to use its result as a
+value — this is the idiom for "pick a tier, then either use it
+or roll one":
+
+\`\`\`text
+Prompt: Tier {Roll|Low|High} Roll
+Set: tier=[[when]{$Prompt1}=Roll[do][|Low|High][else]{$Prompt1}[end]]
+Tier: {$tier}
+\`\`\`
+
+The outer \`[…]\` here is *not* an Obsidian wiki-link — Randomness
+recognises it as an IPP3 expression wrap because the content
+contains \`[when]/[do]/[end]\`. Plain \`[[note name]]\` still passes
+through as a wiki-link.
+
+## Lookup tables
+
+A regular table picks one item uniformly. A **lookup table** rolls
+dice and picks the item whose range covers the result. Use
+\`Type: Lookup\` and give each item a range prefix \`N-M:\`.
+
+\`\`\`text
+Table: rarity
+Type: Lookup
+01-50: common
+51-85: uncommon
+86-98: rare
+99-100: legendary
+\`\`\`
+
+If you don't specify a \`Roll:\` directive, the engine infers it
+from the maximum range (\`100\` → \`1d100\`). For other shapes:
+
+\`\`\`text
+Table: reaction
+Type: Lookup
+Roll: 2d6
+2: actively hostile
+3-5: unfriendly
+6-8: indifferent
+9-11: friendly
+12: helpful
+\`\`\`
+
+## Dictionary tables
+
+A **dictionary table** maps named keys to values. You don't roll
+on it — you look up a specific key, usually computed from another
+roll or a prompt. Use \`Type: Dictionary\` and write each item as
+\`key: value\`.
+
+\`\`\`text
+Table: armor_bonus
+Type: Dictionary
+light: +2 AC, no penalty
+medium: +5 AC, -10 ft speed
+heavy: +8 AC, disadvantage on Stealth
+
+Table: equip
+Set: armor_kind=[|light|medium|heavy]
+Wearing {$armor_kind} armor: [#{$armor_kind} armor_bonus]
+\`\`\`
+
+Keys with spaces, hyphens, or punctuation need to be quoted:
+
+\`\`\`text
+Set: rank=Knight Bachelor
+Title bonus: [#"Knight Bachelor" titles]
+
+Table: titles
+Type: Dictionary
+Knight Bachelor: +1 reputation in court
+Knight Commander: +3 reputation, 2 retainers
+\`\`\`
+
+## Prompts
+
+A \`Prompt:\` directive declares an input that appears in the
+codeblock's UI. The user picks one of the options; their choice
+is available as \`{$Prompt1}\` (for the first prompt), \`{$Prompt2}\`,
+and so on.
+
+\`\`\`text
+Prompt: Race {Human|Elf|Dwarf|Halfling} Human
+Prompt: Class {Fighter|Wizard|Cleric|Rogue} Fighter
+
+Table: hero
+[@first_name] the {$Prompt1} {$Prompt2}
+\`\`\`
+
+The dropdown shows the listed options; the value after \`}\` is the
+default. Users can change it in the UI and the codeblock re-rolls
+with the new value.
 
 ## Obsidian wiki-syntax — images and links
 
@@ -253,7 +454,7 @@ reroll on a locked call strips the lock.
 
 > Inline calls don't accept their own \`Use:\` directive — the
 > syntax inside the brackets is the expression body only. Use a
-> \`\`\`randomness\`\`\` codeblock in the same note to bring files
+> \`randomness\` codeblock in the same note to bring files
 > into scope.
 
 ## Escaping
@@ -298,7 +499,7 @@ default if you roll the file directly) is flagged with a small
 Two groups appear in the popup:
 
 - **In-scope tables** (top of the list, normal styling) — tables
-  defined in this note's \`\`\`randomness\`\`\` codeblocks plus
+  defined in this note's \`randomness\` codeblocks plus
   tables imported via their \`Use:\` directives. These insert
   cleanly and roll immediately.
 
@@ -312,12 +513,12 @@ Two groups appear in the popup:
 When you pick an out-of-scope table, the plugin makes the
 minimal edit needed to bring it into scope:
 
-- **If your note already has a \`\`\`randomness\`\`\` codeblock,**
+- **If your note already has a \`randomness\` codeblock,**
   the \`Use:\` line is added to the first codeblock (after any
   existing \`Use:\` lines, before any expressions). No new
   codeblock is created.
 
-- **If your note has no \`\`\`randomness\`\`\` codeblock,**
+- **If your note has no \`randomness\` codeblock,**
   a new one is created at the top of the note (after frontmatter
   if present), containing just \`Use: <path>\`. This codeblock
   renders as a small empty box — it's serving as a scope

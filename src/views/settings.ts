@@ -12,11 +12,13 @@
 
 import {
     App,
+    Notice,
     PluginSettingTab,
     Setting,
     normalizePath,
 } from "obsidian";
 import type RandomnessPlugin from "./main";
+import { EXAMPLE_FILES, EXAMPLES_README } from "../examples";
 
 export interface RandomnessSettings {
     /**
@@ -161,8 +163,92 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         this.plugin.settings.generatorRoot =
                             trimmed === "" ? "" : normalizePath(trimmed);
                         await this.plugin.saveSettings();
+                        // Refresh the panel so the create-folder /
+                        // seed-examples buttons recompute their state
+                        // based on whether the new path exists.
+                        this.display();
                     })
             );
+
+        // ─── Folder setup helpers ──────────────────────────────────
+        //
+        // Two convenience actions that make first-time setup easier:
+        //   - Create the Generator root folder if it doesn't exist yet
+        //   - Seed it with example generators that demonstrate features
+        //
+        // Both depend on the Generator root setting above. If it's
+        // empty we show a disabled state with a hint; if the folder
+        // already exists we say so and offer just the seed-examples
+        // action.
+
+        const rootPath = this.plugin.settings.generatorRoot;
+        const vault = this.plugin.app.vault;
+        const folderExists =
+            rootPath !== "" &&
+            vault.getAbstractFileByPath(rootPath) !== null;
+
+        if (rootPath === "") {
+            // No path configured — show a helpful note instead of a
+            // dead button. This avoids the "what happens if I click
+            // this?" ambiguity.
+            new Setting(containerEl)
+                .setName("Create folder & add examples")
+                .setDesc(
+                    "Type a path in Generator root above first, then " +
+                        "buttons appear here to create the folder and " +
+                        "seed it with example generators."
+                );
+        } else if (!folderExists) {
+            new Setting(containerEl)
+                .setName("Create folder")
+                .setDesc(
+                    `The folder "${rootPath}" doesn't exist yet. Click ` +
+                        "to create it in your vault."
+                )
+                .addButton((btn) =>
+                    btn
+                        .setButtonText("Create folder")
+                        .setCta()
+                        .onClick(async () => {
+                            try {
+                                await vault.createFolder(rootPath);
+                                new Notice(
+                                    `Created folder: ${rootPath}`
+                                );
+                                this.display(); // refresh — folder exists now
+                            } catch (e: any) {
+                                new Notice(
+                                    `Couldn't create folder: ${e?.message ?? e}`
+                                );
+                            }
+                        })
+                );
+        } else {
+            // Folder exists — offer to seed examples. We don't auto-
+            // detect whether examples are already present and skip;
+            // overwriting is fine if the user clicks twice, and
+            // detecting "do these files already match the bundled
+            // versions" is more complexity than it's worth.
+            new Setting(containerEl)
+                .setName("Add example generators")
+                .setDesc(
+                    "Write " +
+                        EXAMPLE_FILES.length +
+                        " example .ipt files and a README into " +
+                        `"${rootPath}". Each example demonstrates a ` +
+                        "feature (basics, sub-tables, prompts, lookup " +
+                        "tables, dictionaries) with heavy comments. " +
+                        "Safe to click multiple times — existing files " +
+                        "with the same names will be overwritten."
+                )
+                .addButton((btn) =>
+                    btn
+                        .setButtonText("Add examples")
+                        .onClick(async () => {
+                            await this.seedExampleGenerators(rootPath);
+                        })
+                );
+        }
 
         new Setting(containerEl)
             .setName("Default formatting")
@@ -320,6 +406,64 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         window.open(submitUrl, "_blank");
                     })
             );
+    }
+
+    /**
+     * Write the bundled example .ipt files plus a README into the
+     * given folder. Called from the "Add examples" button.
+     *
+     * Uses vault.create when the file doesn't exist, vault.modify
+     * when it does — these are the two write paths Obsidian's API
+     * gives us. Showing a Notice for each outcome would be too
+     * chatty (6 files); we show one summary Notice at the end.
+     */
+    private async seedExampleGenerators(folder: string): Promise<void> {
+        const vault = this.plugin.app.vault;
+        let created = 0;
+        let updated = 0;
+        const errors: string[] = [];
+
+        const writeOne = async (filename: string, content: string) => {
+            const path = `${folder}/${filename}`;
+            try {
+                const existing = vault.getAbstractFileByPath(path);
+                if (existing && "stat" in existing) {
+                    // TFile — overwrite via modify
+                    await vault.modify(existing as any, content);
+                    updated++;
+                } else if (existing) {
+                    // Path exists but isn't a file (folder collision)
+                    errors.push(`${filename} (path is not a file)`);
+                } else {
+                    await vault.create(path, content);
+                    created++;
+                }
+            } catch (e: any) {
+                errors.push(`${filename} (${e?.message ?? e})`);
+            }
+        };
+
+        for (const f of EXAMPLE_FILES) {
+            await writeOne(f.filename, f.content);
+        }
+        await writeOne("README.md", EXAMPLES_README);
+
+        const summary: string[] = [];
+        if (created > 0) summary.push(`${created} created`);
+        if (updated > 0) summary.push(`${updated} updated`);
+        if (errors.length > 0) {
+            summary.push(`${errors.length} failed`);
+        }
+        const summaryText = summary.length > 0
+            ? `Examples: ${summary.join(", ")}.`
+            : "Nothing happened.";
+
+        new Notice(summaryText, errors.length > 0 ? 8000 : 4000);
+        if (errors.length > 0) {
+            // Log details to console for diagnosis without spamming UI.
+            // eslint-disable-next-line no-console
+            console.error("Randomness: example seeding errors:", errors);
+        }
     }
 }
 
