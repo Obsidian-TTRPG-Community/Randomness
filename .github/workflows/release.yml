@@ -131,11 +131,25 @@ jobs:
       # Publish. The community-plugin checker requires loose
       # main.js/manifest.json/styles.css attached to the release (not a
       # zip). gh handles "release already exists" via --clobber.
+      #
+      # --verify-tag is critical: without it, gh release create can
+      # silently create a draft release with a placeholder name like
+      # "untagged-<sha>" if it doesn't find the tag in the form it
+      # expects. The actions/checkout above checks out the tag's
+      # commit but doesn't always populate refs/tags/ in a way gh
+      # recognises, so we force gh to verify the tag exists on the
+      # remote before creating.
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
+          # Confirm the tag exists on the remote before doing anything
+          # — fail loudly if not, rather than producing a draft.
+          if ! gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag '${TAG}' does not exist on the remote. Push it first."
+            exit 1
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release ${TAG} exists — updating notes and replacing assets."
             gh release edit "$TAG" \
@@ -144,6 +158,8 @@ jobs:
             gh release upload "$TAG" main.js manifest.json styles.css --clobber
           else
             gh release create "$TAG" \
+              --verify-tag \
+              --target "${{ github.sha }}" \
               --title "Randomness ${TAG}" \
               --notes-file "${{ steps.notes.outputs.notes_file }}" \
               main.js manifest.json styles.css
