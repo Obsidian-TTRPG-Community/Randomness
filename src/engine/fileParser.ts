@@ -33,6 +33,19 @@ const COMMAND_KEYWORDS = [
 
 type CommandKeyword = typeof COMMAND_KEYWORDS[number];
 
+/**
+ * Recognise lines whose value would be polluted by `&` line
+ * continuation. Per the IPP3 manual: "When used at the end of the
+ * line within a table item, the ampersand acts as a line continuation
+ * marker." Continuation is for ITEM lines. Directive lines (Set:,
+ * Define:, Roll:, Type:, Table:, Use:, Prompt:, etc.) terminate at
+ * end-of-line and should not absorb following lines even if they end
+ * with `&`. Files that put `&` at the end of a directive line are
+ * relying on undocumented (and inconsistent) IPP3 behaviour; we
+ * follow the spec.
+ */
+const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable)\s*:/i;
+
 /** Split source into logical lines, applying line continuations (`&` at EOL). */
 function preprocessLines(source: string): { text: string; lineNum: number }[] {
     // Normalise line endings — IPP3 files are typically CRLF (Windows origin)
@@ -47,9 +60,18 @@ function preprocessLines(source: string): { text: string; lineNum: number }[] {
         // Line continuation: `&` at end of line (after trimming trailing whitespace)
         // joins this line with the next, *without* a separator.
         // The `&` is the continuation marker; everything before it is kept.
-        while (i + 1 < rawLines.length && /\&\s*$/.test(current)) {
-            current = current.replace(/\&\s*$/, "") + rawLines[i + 1];
-            i++;
+        // Per the IPP3 spec, continuation applies to item lines only —
+        // directive lines (Set:, Roll:, etc.) terminate at EOL even if
+        // they end with `&`. This matters for community generators
+        // that put `&` after a Set: directive then follow with body
+        // content; without this guard, the body gets sucked into the
+        // Set's value and the table emits empty output.
+        const isDirective = DIRECTIVE_PREFIX.test(current);
+        if (!isDirective) {
+            while (i + 1 < rawLines.length && /\&\s*$/.test(current)) {
+                current = current.replace(/\&\s*$/, "") + rawLines[i + 1];
+                i++;
+            }
         }
         result.push({ text: current, lineNum: startLine });
         i++;

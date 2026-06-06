@@ -132,14 +132,41 @@ class ContentReader {
             // The post-processor downstream sees the string
             // `[[goblin.png]]` and treats it as a wiki-link;
             // everything in between is the engine's normal job.
+            // `[[…]]` disambiguation. Obsidian wiki-links and
+            // image embeds (`[[note]]`, `![[image.png]]`) need to
+            // pass through as literal text so the post-sanitiser
+            // can rewrite them. IPP3 community generators ALSO use
+            // `[[…]]` — as an outer "literal" wrap around a
+            // conditional or expression, like
+            //   Set: X=[[when]{$P}=A[do]X[else]Y[end]]
+            // These two uses look identical syntactically; we tell
+            // them apart by the content. If the content between
+            // `[[` and the next `]]` contains any IPP3 structural
+            // marker — `[when]`, `[do]`, `[else]`, `[end]`, or a
+            // call sigil like `[@`, `[#`, `[$` — we treat the
+            // outer `[` as a regular bracket-expression opener;
+            // the inner content's conditional markers will then
+            // coalesce normally. If no such marker exists, the
+            // `[[…]]` is a wiki-link, so we emit literal `[[`
+            // and let the closing `]]` survive as bare text. The
+            // `{var}` interpolations don't disqualify a wiki-link
+            // — `[[{filename}.png]]` is still a link.
             if (
                 ch === "[" &&
                 this.pos + 1 < this.source.length &&
                 this.source[this.pos + 1] === "["
             ) {
-                textBuf += "[[";
-                this.pos += 2;
-                continue;
+                if (this.looksLikeIpp3Wrap()) {
+                    // Fall through to the regular `[` handler
+                    // below. The outer `[` opens a literal_bracket
+                    // whose text contains `[when]…[end]`; at
+                    // render time that text is re-parsed by the
+                    // evaluator and the conditional coalesces.
+                } else {
+                    textBuf += "[[";
+                    this.pos += 2;
+                    continue;
+                }
             }
 
             if (ch === "[") {
@@ -263,6 +290,51 @@ class ContentReader {
 
         // General expression — assignments, math, function calls, table calls inside {…} for math etc.
         return { type: "expression", source: expressionSource };
+    }
+
+    /**
+     * At a `[[` opener, decide whether this is an Obsidian wiki-link
+     * (default — pass through as literal text) or an IPP3 "wrapped
+     * expression" like `[[when]…[end]]` (parse outer as a regular
+     * bracket so the inner content can re-parse and coalesce its
+     * conditional markers).
+     *
+     * Heuristic: scan forward from the current position looking for
+     * a closing `]]`. Inside that window, if we find any IPP3
+     * structural marker — `[when]`, `[when not]`, `[do]`, `[else]`,
+     * `[end]`, or a call sigil `[@`, `[#`, `[$` — it's a wrapped
+     * expression. Otherwise it's a wiki-link. `{var}` interpolations
+     * don't qualify either way, so `[[{filename}.png]]` stays a link
+     * and `[[when]{$x}=y[do]…[end]]` is recognised as an expression.
+     *
+     * We bound the scan to keep this cheap; community generators
+     * sometimes have very long wrap contents (e.g. nested when
+     * chains spanning a few hundred chars), so we look at up to 4 KB
+     * which is well past anything realistic. If we exhaust that
+     * without finding a closing `]]`, fall back to treating the
+     * input as a wiki-link (safer default).
+     */
+    private looksLikeIpp3Wrap(): boolean {
+        const SCAN_LIMIT = 4096;
+        const start = this.pos + 2; // skip the [[
+        const end = Math.min(start + SCAN_LIMIT, this.source.length);
+        // Find ]] within the window (the matching close for this [[).
+        // We don't care about nested-bracket depth for the disambig
+        // decision — the IPP3 markers we're looking for are
+        // unambiguous, so any occurrence inside the [[ … ]] window
+        // is decisive.
+        let closePos = -1;
+        for (let i = start; i < end - 1; i++) {
+            if (this.source[i] === "]" && this.source[i + 1] === "]") {
+                closePos = i;
+                break;
+            }
+        }
+        if (closePos === -1) return false; // no closer → safe default
+
+        const window = this.source.slice(start, closePos);
+        return /\[(?:when not|when|do|else|end)\]/i.test(window) ||
+            /\[[@#$]/.test(window);
     }
 
     /**

@@ -2,6 +2,75 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.13
+
+### Fixed (IPP3 compatibility)
+Six independent fixes uncovered while loading real community
+generators (`Dungeon_Room_Description.ipt` and
+`Ultimate_Powers_Character_Generator.ipt`). Most community files
+that previously rendered empty or crashed should now render
+correctly.
+
+- **Variable names are now case-insensitive.** `{$Prompt1}`,
+  `{$prompt1}`, and `{$PROMPT1}` all refer to the same value. IPP3
+  is case-insensitive for variable names; we were storing prompts
+  as lowercase and accidentally treating mixed-case references as
+  unset (empty string). Affects user `Set:` variables too — `Set:
+  Foo=x` followed by `{$foo}` now works.
+
+- **Lookup tables without explicit `Roll:` now auto-infer.** IPP3
+  authors commonly omit the `Roll:` directive on lookup tables;
+  the engine is supposed to infer `1d<max-range>` from the items.
+  We required explicit `Roll:` and returned empty otherwise.
+
+- **`[[when]…[end]]` (outer-bracket-wrapped conditional) now
+  evaluates.** When an IPP3 conditional is wrapped in an outer
+  `[…]` (a common idiom in `Set:` values), the engine could
+  either infinite-loop or render empty. The content parser now
+  detects whether `[[…]]` is an Obsidian wiki-link or an IPP3
+  wrapped expression by looking for structural markers (`[when]`,
+  `[do]`, `[else]`, `[end]`, `[@`, `[#`, `[$`) inside the bracket
+  pair. Wiki-links continue to pass through unchanged.
+
+- **`&` line continuation now respects directive boundaries.** Per
+  the IPP3 manual, `&` continuation is for *table item* lines.
+  Some community files put `&` after a `Set:` directive too, which
+  caused the engine to suck following body content into the Set's
+  value and emit nothing. `Set:`, `Define:`, `Roll:`, `Type:`,
+  `Table:`, `Use:`, `Prompt:`, and other directives now terminate
+  at end-of-line; only item lines continue across `&`.
+
+- **Arithmetic on variables now adds numerically.** When two
+  variables hold numeric strings (the form `Set: A=5` produces),
+  expressions like `{{$A}+{$B}}` now compute `8` rather than
+  concatenating to `"53"`. Explicit string literals like `'5'+'3'`
+  still concatenate, preserving documented behaviour.
+
+- **Marker-form literal_bracket no longer infinite-recurses.**
+  A defensive guard in the `literal_bracket` render path that
+  previously triggered on any text starting with `[` now checks
+  for exact marker text (`[when]`, `[when not]`, `[do]`, `[else]`,
+  `[end]`), so genuine wrapped expressions re-parse correctly
+  while stray markers emit as literal text.
+
+### Fixed (UX)
+- **Error messages in `.ipt` views are now readable.** The error
+  bar was painted with red text on a red background, making the
+  message invisible. The bar now uses the normal text colour
+  against a muted background; the red is preserved on the left
+  border and heading so it still reads as an error at a glance.
+
+- **Missing-`Use:` errors are actionable.** Files that depend on
+  `.ipt` files not in the vault now display a hint suggesting the
+  user download the referenced file from the community pack, and
+  noting that Randomness finds files by name anywhere in the
+  vault.
+
+### Tests
+- Added 12 regression tests in `__tests__/integration/ipp3-compat.test.ts`
+  covering each compatibility fix. Total: 969 tests across 38
+  suites, all green.
+
 ## 1.0.12
 
 ### Fixed

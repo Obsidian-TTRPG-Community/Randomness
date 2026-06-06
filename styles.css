@@ -80,14 +80,28 @@
 }
 
 .randomness-error {
-    color: var(--text-error);
-    background: var(--background-modifier-error);
+    /* `--background-modifier-error` is a vivid red in many themes,
+     * and `--text-error` is also red — so red-on-red made the
+     * message invisible (the bar showed but the text didn't).
+     * Use a subdued error background and the normal text colour
+     * so the message is readable regardless of theme. The strong
+     * red is reserved for the left border so the row still reads
+     * as an error at a glance. */
+    color: var(--text-normal);
+    background: var(--background-modifier-error-hover, rgba(var(--background-modifier-error-rgb, 200, 50, 50), 0.15));
     padding: 0.5em 0.75em;
     border-radius: 4px;
     border-left: 3px solid var(--text-error);
 }
 
+.randomness-error > strong {
+    color: var(--text-error);
+    display: block;
+    margin-bottom: 0.25em;
+}
+
 .randomness-error-message {
+    color: var(--text-normal);
     font-family: var(--font-monospace);
     font-size: 0.85em;
     margin-top: 0.25em;

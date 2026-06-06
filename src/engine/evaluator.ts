@@ -62,6 +62,29 @@ const DEFAULT_MAX_RECURSION_DEPTH = 100;
 export class Evaluator {
     private rng: RNG;
     private vars: Map<string, Value> = new Map();
+
+    /**
+     * Variable names are case-insensitive in IPP3 — `{$prompt1}` and
+     * `{$Prompt1}` and `{$PROMPT1}` all refer to the same variable.
+     * All lookups and writes flow through this normaliser so the
+     * underlying Map keys are consistent.
+     */
+    private static varKey(name: string): string {
+        return name.toLowerCase();
+    }
+    private getVar(name: string): Value | undefined {
+        return this.vars.get(Evaluator.varKey(name));
+    }
+    private setVar(name: string, value: Value): void {
+        this.vars.set(Evaluator.varKey(name), value);
+    }
+    private hasVar(name: string): boolean {
+        return this.vars.has(Evaluator.varKey(name));
+    }
+    private deleteVar(name: string): void {
+        this.vars.delete(Evaluator.varKey(name));
+    }
+
     /** Tables visible to this evaluator, keyed by table name (case-insensitive). */
     private tables: Map<string, TableDecl> = new Map();
     /** Cached parsed Node[] per table item, keyed by item identity. */
@@ -107,25 +130,25 @@ export class Evaluator {
 
         // Seed built-in variables
         const now = opts.now ?? new Date();
-        this.vars.set("app", "Randomness");
-        this.vars.set("version", "0.6.0");
-        this.vars.set("os", "browser");
-        this.vars.set("cli", "");
-        this.vars.set("hostlanguage", "en");
-        this.vars.set("date", now.toLocaleDateString());
-        this.vars.set("time", now.toLocaleTimeString());
-        this.vars.set("formatting", this.formatting);
-        this.vars.set("rep", 1);
-        this.vars.set("fullpath", "");
-        this.vars.set("docpath", "");
-        this.vars.set("self", "");
-        this.vars.set("builddate", "");
+        this.setVar("app", "Randomness");
+        this.setVar("version", "0.6.0");
+        this.setVar("os", "browser");
+        this.setVar("cli", "");
+        this.setVar("hostlanguage", "en");
+        this.setVar("date", now.toLocaleDateString());
+        this.setVar("time", now.toLocaleTimeString());
+        this.setVar("formatting", this.formatting);
+        this.setVar("rep", 1);
+        this.setVar("fullpath", "");
+        this.setVar("docpath", "");
+        this.setVar("self", "");
+        this.setVar("builddate", "");
 
         // Seed prompts (use defaults or overrides)
         for (let i = 0; i < file.prompts.length; i++) {
             const p = file.prompts[i];
             const override = opts.promptValues?.[p.label];
-            this.vars.set(`prompt${i + 1}`, override ?? p.defaultValue);
+            this.setVar(`prompt${i + 1}`, override ?? p.defaultValue);
         }
 
         // Apply Use'd files' top-level Sets/Defines
@@ -134,7 +157,7 @@ export class Evaluator {
                 if (a.kind === "define") {
                     this.defines.set(a.name, a.valueSource);
                 } else {
-                    this.vars.set(a.name, this.evalRawText(a.valueSource));
+                    this.setVar(a.name, this.evalRawText(a.valueSource));
                 }
             }
         }
@@ -143,7 +166,7 @@ export class Evaluator {
             if (a.kind === "define") {
                 this.defines.set(a.name, a.valueSource);
             } else {
-                this.vars.set(a.name, this.evalRawText(a.valueSource));
+                this.setVar(a.name, this.evalRawText(a.valueSource));
             }
         }
     }
@@ -178,7 +201,7 @@ export class Evaluator {
         }
         const results: string[] = [];
         for (let i = 0; i < reps; i++) {
-            this.vars.set("rep", i + 1);
+            this.setVar("rep", i + 1);
             this.deckState.clear();
             results.push(this.runTable(main, []));
         }
@@ -243,7 +266,7 @@ export class Evaluator {
             if (a.kind === "define") {
                 this.defines.set(a.name, a.valueSource);
             } else {
-                this.vars.set(a.name, this.evalRawText(a.valueSource));
+                this.setVar(a.name, this.evalRawText(a.valueSource));
             }
         }
         const item = this.pickDictItem(t, key);
@@ -280,8 +303,8 @@ export class Evaluator {
         const savedParams: { name: string; value?: Value }[] = [];
         for (let i = 0; i < params.length; i++) {
             const n = String(i + 1);
-            savedParams.push({ name: n, value: this.vars.get(n) });
-            this.vars.set(n, params[i]);
+            savedParams.push({ name: n, value: this.getVar(n) });
+            this.setVar(n, params[i]);
         }
 
         try {
@@ -294,7 +317,7 @@ export class Evaluator {
                 if (a.kind === "define") {
                     this.defines.set(a.name, a.valueSource);
                 } else {
-                    this.vars.set(a.name, this.evalRawText(a.valueSource));
+                    this.setVar(a.name, this.evalRawText(a.valueSource));
                 }
             }
             // Pick an item
@@ -322,8 +345,8 @@ export class Evaluator {
         } finally {
             // Restore params
             for (const sp of savedParams) {
-                if (sp.value === undefined) this.vars.delete(sp.name);
-                else this.vars.set(sp.name, sp.value);
+                if (sp.value === undefined) this.deleteVar(sp.name);
+                else this.setVar(sp.name, sp.value);
             }
             this.callDepth--;
         }
@@ -382,9 +405,23 @@ export class Evaluator {
             return item ? { item, index: idx } : null;
         }
         if (table.type === "lookup") {
-            // Roll the table's Roll expression, look up the range
-            if (!table.rollExpr) return null;
-            const roll = this.evalRollExpression(table.rollExpr);
+            // Roll the table's Roll expression, look up the range. If no
+            // explicit Roll: directive was given, infer from the highest
+            // lookup-range value (e.g. items going up to 100 → roll
+            // 1d100). This matches IPP3's default behaviour — authors
+            // commonly omit `Roll:` for d% tables.
+            let rollExpr = table.rollExpr;
+            if (!rollExpr) {
+                let maxHi = 0;
+                for (const it of table.items) {
+                    if (it.lookupRange && it.lookupRange[1] > maxHi) {
+                        maxHi = it.lookupRange[1];
+                    }
+                }
+                if (maxHi > 0) rollExpr = `1d${maxHi}`;
+            }
+            if (!rollExpr) return null;
+            const roll = this.evalRollExpression(rollExpr);
             for (const item of table.items) {
                 if (item.lookupRange && roll >= item.lookupRange[0] && roll <= item.lookupRange[1]) {
                     return wrap(item);
@@ -560,7 +597,7 @@ export class Evaluator {
                 return "";
             }
             case "variable": {
-                if (this.vars.has(n.name)) return String(this.vars.get(n.name));
+                if (this.hasVar(n.name)) return String(this.getVar(n.name));
                 const def = this.defines.get(n.name);
                 if (def !== undefined) {
                     // Re-evaluate the define lazily each time it's referenced
@@ -582,10 +619,35 @@ export class Evaluator {
             case "deck_pick": return this.runDeckPickNode(n);
             case "inline_table": return this.runInlineTableNode(n);
             case "literal_bracket": {
-                // The "literal" text may still contain interpolations like {$var}
-                // — re-parse and render before applying filters.
-                const innerNodes = parseContent(n.text);
-                const innerText = this.renderNodes(innerNodes);
+                // Two flavours of literal_bracket reach this path:
+                //
+                // 1. Real literal_bracket — the user wrote `[hello]`
+                //    and `text` is the *inside*, "hello". Re-parsing
+                //    this is correct: it can contain interpolations
+                //    like `{$var}` that still need to render.
+                //
+                // 2. Marker form — the parser emits these as
+                //    transport-only nodes for the conditional
+                //    coalescer (see `[when]`/`[do]`/`[else]`/`[end]`).
+                //    Their `text` field deliberately *retains* the
+                //    outer brackets (e.g. `text: "[do]"`) so the
+                //    coalescer can spot them. The coalescer is
+                //    supposed to consume these before they ever reach
+                //    rendering — but when they're nested inside
+                //    another structure (e.g. a Set:'s value), the
+                //    outer parse can leak them through.
+                //
+                // If we re-parse a marker, `parseContent("[do]")`
+                // returns the same marker node, and we recurse
+                // forever. So: detect markers strictly — text
+                // EXACTLY equals a known marker — and emit them as
+                // literal text. Genuine wrapped expressions like
+                // `text: "[when]…[end]"` (from `[[when]…[end]]`)
+                // still re-parse and coalesce normally.
+                const isMarker = /^\[(?:when not|when|do|else|end)\]$/i.test(n.text);
+                const innerText = isMarker
+                    ? n.text
+                    : this.renderNodes(parseContent(n.text));
                 // IPP3 convention: the literal text inside `[...]`
                 // is trimmed before filters apply. Authors write
                 // `[ this is bold >> Bold]` with a leading space
@@ -676,7 +738,7 @@ export class Evaluator {
             this.filterContext()
         );
         if (n.assignVar) {
-            this.vars.set(n.assignVar, filtered);
+            this.setVar(n.assignVar, filtered);
             if (n.assignQuiet) return "";
         }
         return filtered;
@@ -731,8 +793,8 @@ export class Evaluator {
             const savedParams: { name: string; value?: Value }[] = [];
             for (let i = 0; i < params.length; i++) {
                 const k = String(i + 1);
-                savedParams.push({ name: k, value: this.vars.get(k) });
-                this.vars.set(k, params[i]);
+                savedParams.push({ name: k, value: this.getVar(k) });
+                this.setVar(k, params[i]);
             }
             try {
                 const picked = this.pickItem(table, idx);
@@ -756,14 +818,14 @@ export class Evaluator {
                 }
             } finally {
                 for (const sp of savedParams) {
-                    if (sp.value === undefined) this.vars.delete(sp.name);
-                    else this.vars.set(sp.name, sp.value);
+                    if (sp.value === undefined) this.deleteVar(sp.name);
+                    else this.setVar(sp.name, sp.value);
                 }
             }
         }
         const filtered = applyFilters(result, n.filters, this.filterContext());
         if (n.assignVar) {
-            this.vars.set(n.assignVar, filtered);
+            this.setVar(n.assignVar, filtered);
             if (n.assignQuiet) return "";
         }
         return filtered;
@@ -785,15 +847,15 @@ export class Evaluator {
             const savedParams: { name: string; value?: Value }[] = [];
             for (let j = 0; j < params.length; j++) {
                 const k = String(j + 1);
-                savedParams.push({ name: k, value: this.vars.get(k) });
-                this.vars.set(k, params[j]);
+                savedParams.push({ name: k, value: this.getVar(k) });
+                this.setVar(k, params[j]);
             }
             try {
                 results.push(this.renderNodes(this.parseItem(item)));
             } finally {
                 for (const sp of savedParams) {
-                    if (sp.value === undefined) this.vars.delete(sp.name);
-                    else this.vars.set(sp.name, sp.value);
+                    if (sp.value === undefined) this.deleteVar(sp.name);
+                    else this.setVar(sp.name, sp.value);
                 }
             }
         }
@@ -803,7 +865,7 @@ export class Evaluator {
             this.filterContext()
         );
         if (n.assignVar) {
-            this.vars.set(n.assignVar, filtered);
+            this.setVar(n.assignVar, filtered);
             if (n.assignQuiet) return "";
         }
         return filtered;
@@ -820,17 +882,34 @@ export class Evaluator {
     // ─────────── Context for sub-evaluators ───────────
 
     private exprContext(): ExprContext {
+        // When a variable's stored value looks like a number, return
+        // it AS a number so arithmetic on variables works correctly.
+        // Otherwise `Set: A=5` (which stores the string "5"), followed
+        // by `{$A}+{$B}` would do string concatenation: "5"+"3"="53"
+        // instead of the user's clear intent of 5+3=8. The check is
+        // strict — empty strings, whitespace-only, and partial-number
+        // strings stay as strings.
+        const coerceIfNumeric = (v: Value): Value => {
+            if (typeof v !== "string") return v;
+            const t = v.trim();
+            if (t === "") return v;
+            // /^-?\d+(\.\d+)?$/ catches integers and decimals only.
+            // Hex, exponential, leading+, etc. stay as strings — IPP3
+            // doesn't expect those forms in variable storage.
+            if (/^-?\d+(?:\.\d+)?$/.test(t)) return Number(t);
+            return v;
+        };
         return {
             getVar: (name) => {
-                if (this.vars.has(name)) return this.vars.get(name)!;
+                if (this.hasVar(name)) return coerceIfNumeric(this.getVar(name)!);
                 const def = this.defines.get(name);
                 if (def !== undefined) {
                     // Lazy evaluation: parse the source as content, render, return.
-                    return this.evalRawText(def);
+                    return coerceIfNumeric(this.evalRawText(def));
                 }
                 return "";
             },
-            setVar: (name, value) => { this.vars.set(name, value); },
+            setVar: (name, value) => { this.setVar(name, value); },
             evalEmbeddedCall: (raw) => {
                 // Wrap in [ ] so the content parser sees a complete bracket
                 const nodes = parseContent("[" + raw + "]");

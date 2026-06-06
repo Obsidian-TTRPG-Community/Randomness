@@ -296,8 +296,21 @@ export function resolveBundle(
                     // Missing Use: target — surfaced as an error so the
                     // UI can flag it. (Could be made warning-only via an
                     // option later, but failing loud is the right default.)
+                    // The hint is for the common case where a community
+                    // generator references files (e.g. NBOS names corpora)
+                    // that aren't in the user's vault — they need to
+                    // download those too.
                     throw new ResolveError(
-                        `Use: target not found: '${rawRef}' (referenced from ${fromPath})`,
+                        `Use: target not found: '${rawRef}'\n` +
+                            `Referenced from: ${fromPath}\n\n` +
+                            `This generator depends on another file ` +
+                            `that isn't in your vault. If you got this ` +
+                            `from a community pack, the referenced file ` +
+                            `should have come with it — check the pack ` +
+                            `for it, or download it separately and drop ` +
+                            `it into your vault. Randomness finds files ` +
+                            `by name anywhere in the vault, so the path ` +
+                            `doesn't have to match exactly.`,
                         rawRef
                     );
                 }
