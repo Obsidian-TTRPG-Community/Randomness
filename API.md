@@ -330,6 +330,68 @@ const b = await api.rollUnscoped("Weather", { seed: 12345 });
 // a.result === b.result
 ```
 
+### Storing results in a note's frontmatter
+
+If a roll's result is written into the same note's frontmatter from
+inside a render-time block (a `dataviewjs` codeblock, a Templater
+`<%* ... %>` script that's re-evaluated on render, or a Meta Bind
+button that auto-fires), you can end up in a feedback loop:
+
+1. The block runs and rolls fresh values.
+2. It writes those values to frontmatter via `processFrontMatter` /
+   `tp.file.process_frontmatter` / equivalent.
+3. The write modifies the file.
+4. The renderer sees the file change and re-runs the block.
+5. Goto 1 — and the next roll produces different numbers, so step 2
+   keeps registering as a real change. The note re-rolls forever as
+   long as it's open.
+
+This isn't specific to dice expressions in the result — the loop fires
+whenever a non-idempotent call writes back to the watched file. The
+fix is to make the rolls **idempotent under repeated renders**, so
+step 2's write produces the same value as last time and the file
+isn't actually modified.
+
+Two patterns:
+
+**Seed off a stable input.** If you want "the same NPC every time this
+note renders, but a fresh one when the user clicks a Reroll button",
+seed on something that doesn't change between renders, and bump it
+explicitly when you want a reroll:
+
+```js
+// Tiny string→int hash, good enough for seeding
+const stableSeed = (s) => {
+  let h = 0;
+  for (const c of s) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+  return h;
+};
+
+const noteFile = app.workspace.getActiveFile();
+const fm = app.metadataCache.getFileCache(noteFile)?.frontmatter ?? {};
+const seed = stableSeed(noteFile.path + "|" + (fm.rerollToken ?? "0"));
+
+const r1 = await api.rollUnscoped("Occupation", { seed: seed });
+const r2 = await api.rollUnscoped("Weapons",    { seed: seed + 1 });
+const r3 = await api.rollUnscoped("Armor",      { seed: seed + 2 });
+
+await app.fileManager.processFrontMatter(noteFile, (f) => {
+  f.occupation = r1.result;
+  f.weapons    = r2.result;
+  f.armor      = r3.result;
+});
+```
+
+Repeated renders produce identical values; `processFrontMatter`
+sees no change; no loop. A "Reroll" button just writes a new
+`rerollToken` (e.g. `Date.now()`) and the seed shifts.
+
+**Or, don't write to frontmatter on render at all.** Move the
+`processFrontMatter` calls into a Meta Bind button or Templater
+command the user invokes deliberately. Render-time blocks become
+read-only, the loop has nowhere to start. This is the right pattern
+when you want a fresh roll on every open and only persist on demand.
+
 ### Diagnose a wrong / colliding generator
 
 ```js
