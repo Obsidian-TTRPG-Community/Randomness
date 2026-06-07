@@ -15,6 +15,7 @@ import {
     Notice,
     PluginSettingTab,
     Setting,
+    TFile,
     normalizePath,
 } from "obsidian";
 import type RandomnessPlugin from "./main";
@@ -439,9 +440,13 @@ export class RandomnessSettingsTab extends PluginSettingTab {
             const path = `${folder}/${filename}`;
             try {
                 const existing = vault.getAbstractFileByPath(path);
-                if (existing && "stat" in existing) {
-                    // TFile — overwrite via modify
-                    await vault.modify(existing as any, content);
+                if (existing instanceof TFile) {
+                    // Overwrite via modify. `instanceof TFile`
+                    // narrows the type correctly without an `any`
+                    // cast, and works against both the real
+                    // Obsidian runtime and the test mock (both
+                    // export TFile as a class).
+                    await vault.modify(existing, content);
                     updated++;
                 } else if (existing) {
                     // Path exists but isn't a file (folder collision)

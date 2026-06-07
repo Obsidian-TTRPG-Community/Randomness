@@ -2,6 +2,21 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.17
+
+Follow-up to 1.0.16, clearing the last two warnings from the
+automated review. No behaviour change.
+
+### Fixed
+- **`vault.modify` no longer needs an `as any` cast.** The
+  `seedExampleGenerators` flow narrowed a `TAbstractFile | null`
+  to a `TFile` via duck-typing (`"stat" in existing`), which
+  TypeScript can't follow — so the call site cast through `any`.
+  Switched to `instanceof TFile`, which TypeScript's flow analysis
+  recognises and narrows correctly. Same runtime behaviour;
+  removes both the "unexpected any" and "unsafe argument"
+  warnings.
+
 ## 1.0.16
 
 Cleanup release addressing the warnings flagged by the Obsidian
