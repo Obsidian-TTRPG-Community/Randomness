@@ -384,10 +384,33 @@ export function parseGeneratorFile(source: string): GeneratorFile {
 
         // Not a command — it's a table item
         if (!currentTable) {
-            // Bare content outside a table — IPP3 allows this for "first table"
-            // implicit declarations? No — spec says first Table: declares main.
-            // Bare content outside any table is malformed; tolerate by ignoring.
-            continue;
+            // Orphan item — no preceding `Table:` declaration.
+            //
+            // IPP3 desktop didn't allow this; the spec says the
+            // first `Table:` is the main entry. But Obsidian
+            // codeblocks are convenience-shaped and often want
+            // just a `Use:` line plus a single bare `[@Table]`
+            // call. Forcing every such codeblock to write
+            // `Table: Main` is friction without benefit.
+            //
+            // So when bare items appear before any explicit table,
+            // we synthesise an implicit `__main__` table to hold
+            // them. The leading underscores prevent any chance of
+            // a user-authored Table: __main__ collision (table
+            // names are typically alphabetic). The implicit table
+            // is the FIRST table in file.tables, so the evaluator
+            // picks it up as the main entry naturally.
+            //
+            // Files that already use `Table:` first see no change
+            // — currentTable is set before any item reaches here.
+            currentTable = {
+                name: "__main__",
+                type: "weighted",
+                shuffleTargets: [],
+                inTableSets: [],
+                items: []
+            };
+            inTableHeader = false;
         }
 
         // Once we see an item, we're past the table header

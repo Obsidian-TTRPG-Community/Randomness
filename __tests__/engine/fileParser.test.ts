@@ -328,4 +328,77 @@ describe("fileParser: corpus regression", () => {
         expect(proxy?.items[0].rawContent).toContain("[when]");
         expect(proxy?.items[0].rawContent).toContain("[end]");
     });
+
+    // ── Implicit __main__ table for orphan items ─────────────────
+    //
+    // Codeblocks in notes often have just a `Use:` directive plus
+    // one or two bare `[@Table]` calls — no explicit `Table:` of
+    // their own. Pre-fix, the parser silently dropped those items
+    // and the evaluator returned an empty string. These tests pin
+    // the new behaviour: orphan items become an implicit `__main__`
+    // table that becomes the file's main entry.
+
+    describe("implicit __main__ table for orphan items", () => {
+        test("bare item after Use: becomes implicit main", () => {
+            const f = parseGeneratorFile("Use: Other.ipt\n[@Thing]\n");
+            expect(f.uses).toEqual(["Other.ipt"]);
+            expect(f.tables).toHaveLength(1);
+            expect(f.tables[0].name).toBe("__main__");
+            expect(f.tables[0].items).toHaveLength(1);
+            expect(f.tables[0].items[0].rawContent).toBe("[@Thing]");
+        });
+
+        test("multiple orphan items collect into one implicit main", () => {
+            const src = "Use: X.ipt\nLine one\nLine two\nLine three\n";
+            const f = parseGeneratorFile(src);
+            expect(f.tables).toHaveLength(1);
+            expect(f.tables[0].name).toBe("__main__");
+            expect(f.tables[0].items.map(i => i.rawContent)).toEqual([
+                "Line one",
+                "Line two",
+                "Line three"
+            ]);
+        });
+
+        test("orphan items before explicit Table: still get implicit main", () => {
+            const src = `Use: X.ipt
+[@Thing]
+Table: Other
+foo
+bar
+`;
+            const f = parseGeneratorFile(src);
+            expect(f.tables).toHaveLength(2);
+            // __main__ is first — evaluator picks tables[0]
+            expect(f.tables[0].name).toBe("__main__");
+            expect(f.tables[0].items[0].rawContent).toBe("[@Thing]");
+            // Explicit table preserved
+            expect(f.tables[1].name).toBe("Other");
+            expect(f.tables[1].items).toHaveLength(2);
+        });
+
+        test("file starting with explicit Table: behaves unchanged", () => {
+            // Regression guard: pre-fix behaviour for files that
+            // declare their main table explicitly. No __main__
+            // should be synthesised in this case.
+            const src = `Table: Foo
+one
+two
+
+Table: Bar
+three
+`;
+            const f = parseGeneratorFile(src);
+            expect(f.tables).toHaveLength(2);
+            expect(f.tables[0].name).toBe("Foo");
+            expect(f.tables[1].name).toBe("Bar");
+            expect(f.tables.some(t => t.name === "__main__")).toBe(false);
+        });
+
+        test("Use:-only file (no items) has no implicit main", () => {
+            const f = parseGeneratorFile("Use: X.ipt\n");
+            expect(f.tables).toHaveLength(0);
+            expect(f.uses).toEqual(["X.ipt"]);
+        });
+    });
 });

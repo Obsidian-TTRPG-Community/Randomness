@@ -2,6 +2,39 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.0.18
+
+Bug fix release. Codeblocks that use \`Use:\` to import another
+generator and then call a table directly no longer render silently
+empty.
+
+### Fixed
+- **Codeblocks with \`Use:\` but no explicit \`Table:\` no longer
+  silently produce empty output.** The most common shape of a
+  codeblock — \`Use: foo.ipt\` followed by one or more bare
+  \`[@SomeTable]\` calls — was being parsed as zero tables, and
+  the evaluator returned an empty string with no error.
+  Authoring around this required adding \`Table: Main\` on the
+  line above the call, which was a hidden requirement nowhere
+  in the docs.
+
+  The fix: when the parser encounters orphan items (lines that
+  aren't directives, before any explicit \`Table:\`), it now
+  synthesises an implicit \`__main__\` table to hold them. The
+  evaluator picks this up as the file's main entry and rolls
+  it normally.
+
+  Files that already declare their main table explicitly see no
+  change. The fix is purely additive — it makes previously-broken
+  codeblocks Just Work without affecting anything that was working.
+
+### Tests
+- 5 new parser tests covering the orphan-items cases (bare-after-Use,
+  multiple-orphans, orphans-before-explicit, regression guard for
+  files starting with Table:, degenerate Use:-only file).
+- 4 new integration tests exercising the codeblock-with-Use scenario
+  end-to-end through the evaluator. Total: 984 tests, all green.
+
 ## 1.0.17
 
 Follow-up to 1.0.16, clearing the last two warnings from the
