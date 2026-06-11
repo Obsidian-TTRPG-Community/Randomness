@@ -148,6 +148,8 @@ describe("settings: defaults", () => {
             stableCodeblockSeeds: false,
             browserExpandedPaths: [],
             pinnedTables: [],
+            portraitPackPath: "fantasy_ink_parts_pack",
+            portraitPackUrl: "",
         });
     });
 });
@@ -170,6 +172,8 @@ describe("settings: load merge", () => {
             stableCodeblockSeeds: true,
             browserExpandedPaths: ["Generators", "Generators/names.ipt"],
             pinnedTables: ["Generators/names.ipt::FirstName"],
+            portraitPackPath: "art/pack",
+            portraitPackUrl: "",
         };
         await p.saveSettings();
         await p.loadSettings();
@@ -179,6 +183,8 @@ describe("settings: load merge", () => {
             stableCodeblockSeeds: true,
             browserExpandedPaths: ["Generators", "Generators/names.ipt"],
             pinnedTables: ["Generators/names.ipt::FirstName"],
+            portraitPackPath: "art/pack",
+            portraitPackUrl: "",
         });
     });
 

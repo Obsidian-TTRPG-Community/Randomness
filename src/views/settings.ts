@@ -91,6 +91,20 @@ export interface RandomnessSettings {
      * as `browserExpandedPaths`.
      */
     pinnedTables: string[];
+    /**
+     * Vault-relative folder holding a portrait pack (manifest.json +
+     * layer images). Portrait features gate on a valid pack existing
+     * here. Default points at the standard pack folder name so an
+     * installed pack lights up with zero configuration.
+     */
+    portraitPackPath: string;
+    /**
+     * Base URL the "Install portrait pack" button downloads from; it
+     * must serve manifest.json at its root (e.g. a raw GitHub folder
+     * or unpacked release). Empty hides the install button — packs can
+     * always be installed by copying the folder into the vault.
+     */
+    portraitPackUrl: string;
 }
 
 export const DEFAULT_SETTINGS: RandomnessSettings = {
@@ -99,6 +113,8 @@ export const DEFAULT_SETTINGS: RandomnessSettings = {
     stableCodeblockSeeds: false,
     browserExpandedPaths: [],
     pinnedTables: [],
+    portraitPackPath: "fantasy_ink_parts_pack",
+    portraitPackUrl: "",
 };
 
 /**
@@ -297,6 +313,150 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+        // ─── Portraits ─────────────────────────────────────────
+        //
+        // The portrait compositor (```portrait codeblocks) activates
+        // only when a valid pack folder is found. These settings point
+        // at the pack, surface its status, and offer an in-place
+        // install when a download URL is configured.
+
+        new Setting(containerEl)
+            .setName("Portrait pack folder")
+            .setDesc(
+                "Vault-relative folder containing a portrait pack " +
+                    "(manifest.json + layer images). The portrait " +
+                    "codeblock activates when a valid pack is found here."
+            )
+            .addText((text) =>
+                text
+                    .setPlaceholder("fantasy_ink_parts_pack")
+                    .setValue(this.plugin.settings.portraitPackPath)
+                    .onChange(async (value) => {
+                        const trimmed = value.trim();
+                        this.plugin.settings.portraitPackPath =
+                            trimmed === "" ? "" : normalizePath(trimmed);
+                        await this.plugin.saveSettings();
+                        this.plugin.portraits.invalidate();
+                    })
+            );
+
+        const statusSetting = new Setting(containerEl)
+            .setName("Portrait pack status")
+            .setDesc("Checking…")
+            .addButton((btn) =>
+                btn.setButtonText("Re-check").onClick(() => {
+                    this.plugin.portraits.invalidate();
+                    this.display();
+                })
+            );
+        void (async () => {
+            const packPath = this.plugin.settings.portraitPackPath;
+            if (packPath === "") {
+                statusSetting.setDesc(
+                    "No pack folder configured — portrait features are off."
+                );
+                return;
+            }
+            try {
+                if (!(await this.plugin.portraits.available())) {
+                    statusSetting.setDesc(
+                        `No manifest.json found in "${packPath}" — portrait ` +
+                            "features are off. Copy a pack folder into the " +
+                            "vault (or use the install button below)."
+                    );
+                    return;
+                }
+                const raw = await this.plugin.portraits.manifest();
+                const assets = (raw.assets ?? raw.layers ?? {}) as Record<
+                    string,
+                    unknown[]
+                >;
+                const total = Object.values(assets).reduce(
+                    (a, v) => a + (Array.isArray(v) ? v.length : 0),
+                    0
+                );
+                const packName =
+                    typeof raw.pack === "string" ? raw.pack : packPath;
+                statusSetting.setDesc(
+                    `Pack found: "${packName}" — ` +
+                        `${Object.keys(assets).length} categories, ` +
+                        `${total} parts. Portrait codeblocks are active.`
+                );
+            } catch (e: unknown) {
+                statusSetting.setDesc(
+                    `Pack at "${packPath}" couldn't be read: ` +
+                        errorMessage(e)
+                );
+            }
+        })();
+
+        new Setting(containerEl)
+            .setName("Pack download URL")
+            .setDesc(
+                "Optional. Base URL serving a pack (manifest.json at its " +
+                    "root). When set, an install button appears below. " +
+                    "Leave blank if you copy packs into the vault yourself."
+            )
+            .addText((text) =>
+                text
+                    .setPlaceholder("https://…/fantasy_ink_parts_pack")
+                    .setValue(this.plugin.settings.portraitPackUrl)
+                    .onChange(async (value) => {
+                        this.plugin.settings.portraitPackUrl = value.trim();
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        if (this.plugin.settings.portraitPackUrl !== "") {
+            new Setting(containerEl)
+                .setName("Install portrait pack")
+                .setDesc(
+                    "Download the pack from the URL above into " +
+                        `"${this.plugin.settings.portraitPackPath || "(set a pack folder first)"}". ` +
+                        "A pack is a few hundred small images — this can " +
+                        "take a minute. Existing files are overwritten."
+                )
+                .addButton((btn) =>
+                    btn
+                        .setButtonText("Install")
+                        .setCta()
+                        .onClick(async () => {
+                            const dest =
+                                this.plugin.settings.portraitPackPath;
+                            if (dest === "") {
+                                new Notice(
+                                    "Set a portrait pack folder first."
+                                );
+                                return;
+                            }
+                            btn.setDisabled(true);
+                            try {
+                                // Lazy import — keeps the downloader out
+                                // of the settings module's load graph
+                                // (same pattern as the reference view).
+                                const { installPackFromUrl } = await import(
+                                    "../portrait/service"
+                                );
+                                const n = await installPackFromUrl(
+                                    this.plugin,
+                                    this.plugin.settings.portraitPackUrl,
+                                    dest
+                                );
+                                new Notice(
+                                    `Portrait pack installed: ${n} files.`
+                                );
+                                this.display();
+                            } catch (e: unknown) {
+                                new Notice(
+                                    "Pack install failed: " + errorMessage(e),
+                                    8000
+                                );
+                                btn.setDisabled(false);
+                            }
+                        })
+                );
+        }
 
         // ─── Community generators ──────────────────────────────
         //

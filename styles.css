@@ -592,3 +592,23 @@
 .randomness-suggest-out-of-scope .randomness-suggest-source {
     color: var(--text-faint);
 }
+
+/* ─── Portraits (```portrait codeblocks) ─── */
+.randomness-portrait-bar { margin-bottom: 6px; }
+.randomness-portrait-grid {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;
+}
+.randomness-portrait-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.randomness-portrait-art svg { display: block; width: 100%; height: auto; }
+.randomness-portrait-art {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px; overflow: hidden;
+}
+.randomness-portrait-caption {
+  font-size: var(--font-ui-smaller); color: var(--text-muted);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.randomness-portrait-actions { display: flex; gap: 6px; }
+.randomness-portrait-hint { color: var(--text-muted); font-style: italic; }

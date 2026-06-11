@@ -35,6 +35,8 @@ import {
 import { TableAutocomplete } from "./tableAutocomplete";
 import { createApi, RandomnessAPI } from "../api";
 import { VaultIndex } from "../resolver/vaultIndex";
+import { PortraitService } from "../portrait/service";
+import { buildPortraitProcessor } from "../portrait/codeblock";
 
 export default class RandomnessPlugin extends Plugin {
     settings: RandomnessSettings = DEFAULT_SETTINGS;
@@ -63,6 +65,12 @@ export default class RandomnessPlugin extends Plugin {
      * src/resolver/vaultIndex.ts. Exposed for the API + autocomplete.
      */
     vaultIndex!: VaultIndex;
+    /**
+     * Portrait pack service: pack discovery, manifest + layer loading
+     * for the ```portrait codeblock. The feature self-gates on a pack
+     * being installed (see src/portrait/service.ts).
+     */
+    portraits!: PortraitService;
 
     async onload(): Promise<void> {
         await this.loadSettings();
@@ -71,6 +79,16 @@ export default class RandomnessPlugin extends Plugin {
         this.registerMarkdownCodeBlockProcessor(
             "randomness",
             buildCodeblockProcessor(this)
+        );
+
+        // Portrait compositor. Registered unconditionally; the
+        // processor itself renders a settings pointer when no pack is
+        // installed (gate at render time, so installing a pack doesn't
+        // require a plugin reload).
+        this.portraits = new PortraitService(this);
+        this.registerMarkdownCodeBlockProcessor(
+            "portrait",
+            buildPortraitProcessor(this)
         );
 
         // Register the inline rdm: post-processor.

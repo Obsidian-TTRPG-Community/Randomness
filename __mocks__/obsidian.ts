@@ -529,3 +529,19 @@ export function normalizePath(path: string): string {
         .replace(/\/+/g, "/")
         .replace(/\/+$/, "");
 }
+
+// ─── Portrait-module additions ───
+// Minimal stand-ins so modules importing these names load under jest.
+export function arrayBufferToBase64(buf: ArrayBuffer): string {
+    return Buffer.from(buf).toString("base64");
+}
+export interface RequestUrlResponse {
+    text: string;
+    json: unknown;
+    arrayBuffer: ArrayBuffer;
+}
+export async function requestUrl(_opts: {
+    url: string;
+}): Promise<RequestUrlResponse> {
+    throw new Error("requestUrl is not available in tests — stub it per-test");
+}
