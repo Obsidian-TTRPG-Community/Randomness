@@ -474,6 +474,33 @@ Notes:
   pack's `base_<race>_NN` filenames — ask for a race the pack doesn't
   ship and `roll` throws after `maxTries`.
 - `seed` makes the roll deterministic and ignores constraints.
+- **One person across a whole template:** roll the portrait once, then
+  pass its facts into your text generator as prompts, with the
+  generator falling back to its own rolls when they're empty:
+
+  ```js
+  const keeper = await rnd.portraits.roll();
+  const shop = await rnd.rollUnscoped("TF-ShopByType", {
+    promptValues: {
+      keeperName: keeper.name,
+      keeperRace: keeper.race ?? "",
+      keeperGender: keeper.gender,
+      keeperAge: keeper.age,
+    },
+  });
+  ```
+
+  and in the `.ipt` (prompts are positional — `{$prompt5}` here):
+
+  ```
+  Prompt: keeperName {} 
+  Table: Shopkeeper
+  Set: owner=[when]{$prompt5}=[do][@PersonName][else]{$prompt5}[end]
+  ```
+
+  The portrait, infobox, and rolled prose all describe the same NPC;
+  rolled standalone (no prompts), the generator behaves exactly as
+  before.
 - The recipe is the persistence format: it re-renders byte-identically
   even after the pack gains new parts.
 
