@@ -49,6 +49,7 @@ import {
     FAVOURITES_NAME,
 } from "./pinnedTables";
 import type RandomnessPlugin from "./main";
+import { renderRollerTab, renderBuilderTab } from "../portrait/panel";
 
 export const VIEW_TYPE_BROWSER = "randomness-browser-view";
 
@@ -112,14 +113,78 @@ export class BrowserView extends ItemView {
         // and a content child; we write to the content child.
         const target = this.containerEl.children[1] as HTMLElement;
         clearElement(target);
+
+        // Tab bar: Generators (the original browser) plus the two
+        // portrait tabs. Portrait tabs render lazily on first switch —
+        // they touch plugin.portraits, which must not be a hard
+        // requirement for opening the generator browser.
+        const tabBar = activeDocument.createElement("div");
+        tabBar.className = "randomness-panel-tabs";
+        target.appendChild(tabBar);
+
         const wrap = activeDocument.createElement("div");
         wrap.className = "randomness-browser";
         target.appendChild(wrap);
         this.root = wrap;
 
+        const portraitsEl = activeDocument.createElement("div");
+        target.appendChild(portraitsEl);
+        const builderEl = activeDocument.createElement("div");
+        target.appendChild(builderEl);
+
+        this.tabPanels = {
+            generators: wrap,
+            portraits: portraitsEl,
+            builder: builderEl,
+        };
+        this.tabButtons = {};
+        const defs: ["generators" | "portraits" | "builder", string][] = [
+            ["generators", "Generators"],
+            ["portraits", "Portraits"],
+            ["builder", "Builder"],
+        ];
+        for (const [id, label] of defs) {
+            const btn = activeDocument.createElement("button");
+            btn.className = "randomness-panel-tab";
+            btn.textContent = label;
+            btn.addEventListener("click", () => this.showTab(id));
+            tabBar.appendChild(btn);
+            this.tabButtons[id] = btn;
+        }
+        this.showTab("generators");
+
         // Run initial discovery in the background; the UI shows a
         // "scanning..." placeholder until it completes.
         await this.refresh();
+    }
+
+    /** Tab content panels (generators is this.root). */
+    private tabPanels: {
+        generators: HTMLElement;
+        portraits: HTMLElement;
+        builder: HTMLElement;
+    } | null = null;
+    private tabButtons: Partial<Record<string, HTMLElement>> = {};
+    /** Portrait tabs render on first activation only. */
+    private portraitTabsRendered = { portraits: false, builder: false };
+
+    /** Switch the visible tab. Public so commands can deep-link. */
+    showTab(id: "generators" | "portraits" | "builder"): void {
+        const panels = this.tabPanels;
+        if (!panels) return;
+        for (const key of ["generators", "portraits", "builder"] as const) {
+            panels[key].style.display = key === id ? "" : "none";
+            const btn = this.tabButtons[key];
+            if (btn) btn.classList.toggle("is-active", key === id);
+        }
+        if (id === "portraits" && !this.portraitTabsRendered.portraits) {
+            this.portraitTabsRendered.portraits = true;
+            renderRollerTab(this.plugin, panels.portraits);
+        }
+        if (id === "builder" && !this.portraitTabsRendered.builder) {
+            this.portraitTabsRendered.builder = true;
+            renderBuilderTab(this.plugin, panels.builder);
+        }
     }
 
     async onClose(): Promise<void> {
@@ -1122,6 +1187,29 @@ export function registerBrowserView(plugin: RandomnessPlugin): void {
         name: "Open generator browser",
         callback: () => void activateBrowserView(plugin),
     });
+
+    plugin.addCommand({
+        id: "open-portrait-roller",
+        name: "Open portrait roller",
+        callback: () => void activateBrowserTab(plugin, "portraits"),
+    });
+
+    plugin.addCommand({
+        id: "open-portrait-builder",
+        name: "Open portrait builder",
+        callback: () => void activateBrowserTab(plugin, "builder"),
+    });
+}
+
+/** Open the browser view and switch it to a specific tab. */
+async function activateBrowserTab(
+    plugin: RandomnessPlugin,
+    tab: "generators" | "portraits" | "builder"
+): Promise<void> {
+    await activateBrowserView(plugin);
+    const leaf = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_BROWSER)[0];
+    const view = leaf?.view;
+    if (view instanceof BrowserView) view.showTab(tab);
 }
 
 /**

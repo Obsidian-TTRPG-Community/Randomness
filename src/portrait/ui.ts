@@ -1,0 +1,41 @@
+/** Tiny shared DOM helpers for the portrait modules. */
+
+import { setIcon } from "obsidian";
+
+export function clearElement(el: HTMLElement): void {
+    while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+export function makeChildDiv(
+    parent: HTMLElement,
+    className?: string
+): HTMLDivElement {
+    const div = activeDocument.createElement("div");
+    if (className) div.className = className;
+    parent.appendChild(div);
+    return div;
+}
+
+/**
+ * Icon button overlaid on portrait art. `corner` places it; the art
+ * container is position:relative (styles.css).
+ */
+export function overlayIconButton(
+    parent: HTMLElement,
+    icon: string,
+    title: string,
+    corner: "top-left" | "top-right",
+    onClick: () => void
+): HTMLButtonElement {
+    const btn = activeDocument.createElement("button");
+    btn.className =
+        "randomness-portrait-iconbtn randomness-portrait-iconbtn-" + corner;
+    setIcon(btn, icon);
+    btn.title = title;
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onClick();
+    });
+    parent.appendChild(btn);
+    return btn;
+}

@@ -37,7 +37,7 @@ import { createApi, RandomnessAPI } from "../api";
 import { VaultIndex } from "../resolver/vaultIndex";
 import { PortraitService } from "../portrait/service";
 import { buildPortraitProcessor } from "../portrait/codeblock";
-import { registerPortraitView } from "../portrait/view";
+import { buildPortraitInlineProcessor } from "../portrait/inline";
 
 export default class RandomnessPlugin extends Plugin {
     settings: RandomnessSettings = DEFAULT_SETTINGS;
@@ -91,7 +91,9 @@ export default class RandomnessPlugin extends Plugin {
             "portrait",
             buildPortraitProcessor(this)
         );
-        registerPortraitView(this);
+        this.registerMarkdownPostProcessor(
+            buildPortraitInlineProcessor(this)
+        );
 
         // Register the inline rdm: post-processor.
         this.registerMarkdownPostProcessor(buildInlineProcessor(this));

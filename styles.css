@@ -633,3 +633,51 @@
 }
 .randomness-portrait-pane-controls input[type="number"] { width: 64px; }
 .randomness-portrait-pane .randomness-portrait-grid { gap: 8px; }
+
+/* panel tabs (generator browser: Generators / Portraits / Builder) */
+.randomness-panel-tabs {
+  display: flex; gap: 4px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 6px;
+}
+.randomness-panel-tab {
+  background: transparent; border: none; cursor: pointer;
+  padding: 4px 10px; border-radius: 6px; color: var(--text-muted);
+}
+.randomness-panel-tab.is-active {
+  background: var(--background-modifier-hover); color: var(--text-normal);
+  font-weight: 600;
+}
+
+/* overlay icon buttons (PNG top-left, lock/copy top-right) */
+.randomness-portrait-iconbtn {
+  position: absolute; top: 4px;
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  border-radius: 6px; border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary); color: var(--text-muted);
+  opacity: 0; transition: opacity 120ms ease; cursor: pointer;
+}
+.randomness-portrait-iconbtn-top-left { left: 4px; }
+.randomness-portrait-iconbtn-top-right { right: 4px; }
+.randomness-portrait-art:hover .randomness-portrait-iconbtn { opacity: 0.9; }
+.randomness-portrait-iconbtn:hover { color: var(--text-normal); opacity: 1; }
+
+/* inline portraits */
+.randomness-portrait-inline {
+  display: inline-block; vertical-align: middle; line-height: 0;
+}
+.randomness-portrait-inline svg { width: 100%; height: auto; display: block; }
+
+/* builder tab */
+.randomness-portrait-builder { display: flex; gap: 12px; flex-wrap: wrap; }
+.randomness-portrait-builder-form {
+  display: flex; flex-direction: column; gap: 6px; min-width: 220px; flex: 1;
+}
+.randomness-portrait-builder-row {
+  display: flex; gap: 6px; align-items: center;
+}
+.randomness-portrait-builder-row label {
+  width: 110px; font-size: var(--font-ui-smaller); color: var(--text-muted);
+}
+.randomness-portrait-builder-row select { flex: 1; min-width: 0; }

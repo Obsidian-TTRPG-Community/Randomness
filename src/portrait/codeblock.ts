@@ -25,11 +25,12 @@ import {
     MarkdownRenderChild,
     Notice,
     TFile,
-    setIcon,
 } from "obsidian";
 import type RandomnessPlugin from "../views/main";
 import { composePack, composeFromRecipe, Composed, PortraitRecipe } from "./pack";
 import { saveComposedPng } from "./png";
+import { nameFor } from "./names";
+import { overlayIconButton } from "./ui";
 
 export interface PortraitBlockParams {
     pack: string;
@@ -181,7 +182,7 @@ class PortraitCodeblockChild extends MarkdownRenderChild {
             if (this.unloaded) return;
             clearElement(this.containerEl);
             const grid = makeChildDiv(this.containerEl, "randomness-portrait-grid");
-            this.renderTile(grid, composed, params, true);
+            this.renderTile(grid, composed, params, true, manifest);
             return;
         }
 
@@ -212,7 +213,7 @@ class PortraitCodeblockChild extends MarkdownRenderChild {
 
         const grid = makeChildDiv(this.containerEl, "randomness-portrait-grid");
         for (const composed of composedAll) {
-            this.renderTile(grid, composed, params, false);
+            this.renderTile(grid, composed, params, false, manifest);
         }
     }
 
@@ -220,7 +221,8 @@ class PortraitCodeblockChild extends MarkdownRenderChild {
         grid: HTMLElement,
         composed: Composed,
         params: PortraitBlockParams,
-        locked: boolean
+        locked: boolean,
+        manifestRaw: unknown
     ): void {
         const tile = makeChildDiv(grid, "randomness-portrait-tile");
         const art = makeChildDiv(tile, "randomness-portrait-art");
@@ -229,37 +231,50 @@ class PortraitCodeblockChild extends MarkdownRenderChild {
         // same trust level as the pack itself (user-installed files).
         if (composed.svg.startsWith("<svg")) art.innerHTML = composed.svg;
 
-        // Lock/unlock icon, overlaid top-right of the art. The icon
-        // shows the ACTION: closed lock on rollable tiles ("freeze
-        // this one"), open lock on a locked tile ("roll again").
-        const lockBtn = activeDocument.createElement("button");
-        lockBtn.className = "randomness-portrait-lockbtn";
-        setIcon(lockBtn, locked ? "unlock" : "lock");
-        lockBtn.title = locked
-            ? "Unlock: remove the stored recipe and roll again"
-            : "Lock: set in stone — store this exact portrait's recipe in the block";
-        lockBtn.addEventListener("click", () => {
-            void (locked
-                ? this.rewriteBody(unlockedBlockBody(this.source), "Portrait unlocked.")
-                : this.rewriteBody(
-                      lockedBlockBody(this.source, composed.recipe),
-                      "Portrait locked."
-                  ));
-        });
-        art.appendChild(lockBtn);
+        // PNG icon, top-left: save next to the note and replace this
+        // block with the ![[embed]].
+        overlayIconButton(
+            art,
+            "image-down",
+            "Save as PNG next to the note and replace this block with the image embed",
+            "top-left",
+            () => void this.savePngAndReplace(composed, locked)
+        );
 
+        // Lock/unlock icon, top-right. Shows the ACTION: closed lock
+        // on rollable tiles ("freeze this one"), open lock on a locked
+        // tile ("roll again").
+        overlayIconButton(
+            art,
+            locked ? "unlock" : "lock",
+            locked
+                ? "Unlock: remove the stored recipe and roll again"
+                : "Lock: set in stone — store this exact portrait's recipe in the block",
+            "top-right",
+            () => {
+                void (locked
+                    ? this.rewriteBody(
+                          unlockedBlockBody(this.source),
+                          "Portrait unlocked."
+                      )
+                    : this.rewriteBody(
+                          lockedBlockBody(this.source, composed.recipe),
+                          "Portrait locked."
+                      ));
+            }
+        );
+
+        // Caption: a race/gender-appropriate name rolled through the
+        // Randomness engine, deterministic per seed. Seed in tooltip.
         const caption = makeChildDiv(tile, "randomness-portrait-caption");
-        caption.textContent = locked ? "locked" : composed.seed;
-
-        const actions = makeChildDiv(tile, "randomness-portrait-actions");
-        const pngBtn = activeDocument.createElement("button");
-        pngBtn.textContent = "PNG";
-        pngBtn.title =
-            "Save as PNG next to the note and replace this block with the image embed";
-        pngBtn.addEventListener("click", () => {
-            void this.savePngAndReplace(composed, locked);
-        });
-        actions.appendChild(pngBtn);
+        let label = locked ? "locked" : composed.seed;
+        try {
+            label = nameFor(composed.recipe, manifestRaw);
+        } catch {
+            // names must never break rendering — keep the fallback
+        }
+        caption.textContent = label;
+        caption.title = `seed: ${composed.seed}` + (locked ? " (locked)" : "");
     }
 
     /**
