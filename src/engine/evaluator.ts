@@ -143,11 +143,18 @@ export class Evaluator {
         this.setVar("self", "");
         this.setVar("builddate", "");
 
-        // Seed prompts (use defaults or overrides)
+        // Seed prompts (use defaults or overrides). Each prompt seeds
+        // its positional var ({$prompt1}…) and — when the label is a
+        // plain identifier — a var named after the label itself
+        // ({$keeperName}), so generators can reference prompts
+        // position-independently. Table-level Set: lines run later and
+        // can still overwrite either form.
         for (let i = 0; i < file.prompts.length; i++) {
             const p = file.prompts[i];
             const override = opts.promptValues?.[p.label];
-            this.setVar(`prompt${i + 1}`, override ?? p.defaultValue);
+            const value = override ?? p.defaultValue;
+            this.setVar(`prompt${i + 1}`, value);
+            if (/^[A-Za-z_]\w*$/.test(p.label)) this.setVar(p.label, value);
         }
 
         // Apply Use'd files' top-level Sets/Defines

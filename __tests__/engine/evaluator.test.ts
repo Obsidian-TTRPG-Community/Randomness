@@ -437,3 +437,29 @@ describe("Evaluator: [#table] current-index pick (no leading token)", () => {
         expect(run(source, { seed: 1 })).toBe("third");
     });
 });
+
+describe("prompts seed label-named variables", () => {
+    const { parseFileSource } = require("../../src/resolver/fileResolver");
+    const src = [
+        "Prompt: keeperName {} ",
+        "Prompt: two words {} fallback",
+        "",
+        "Table: Main",
+        "({$keeperName}|{$prompt1}|{$prompt2})",
+    ].join("\n");
+
+    test("identifier labels become vars; positional still works", () => {
+        const f = parseFileSource("t.ipt", src);
+        const out = new Evaluator(f, [], {
+            promptValues: { keeperName: "Tizzy" },
+        }).run();
+        expect(out).toBe("(Tizzy|Tizzy|fallback)");
+    });
+
+    test("empty override falls back to default; non-identifier labels skipped", () => {
+        const f = parseFileSource("t.ipt", src);
+        const out = new Evaluator(f, [], {}).run();
+        // {$keeperName} default is empty; "two words" only via prompt2
+        expect(out).toBe("(||fallback)");
+    });
+});
