@@ -1,4 +1,4 @@
-import { parsePortraitParams, lockedBlockBody } from "../../src/portrait/codeblock";
+import { parsePortraitParams, lockedBlockBody, unlockedBlockBody } from "../../src/portrait/codeblock";
 import { PortraitRecipe } from "../../src/portrait/pack";
 
 describe("portrait codeblock: parsePortraitParams", () => {
@@ -68,5 +68,29 @@ describe("portrait codeblock: lockedBlockBody", () => {
         const p = parsePortraitParams(body, "d");
         expect(p.size).toBe(512);
         expect(JSON.parse(p.recipe ?? "")).toEqual(recipe);
+    });
+});
+
+describe("portrait codeblock: unlockedBlockBody", () => {
+    test("drops recipe, keeps everything else", () => {
+        const body = unlockedBlockBody(
+            'pack: art/pack\nsize: 256\nrecipe: {"v":1}'
+        );
+        expect(body).toBe("pack: art/pack\nsize: 256");
+    });
+
+    test("lock then unlock round-trips pack/size", () => {
+        const recipe = { v: 1, seed: "s", parts: {}, flip: {}, jitter: {} };
+        const locked = lockedBlockBody(
+            "pack: p\nseed: bob\nsize: 128",
+            recipe as never
+        );
+        const unlocked = unlockedBlockBody(locked);
+        expect(unlocked).toBe("pack: p\nsize: 128");
+        // seed/count intentionally not restored — the roll is fresh.
+    });
+
+    test("recipe-only block unlocks to empty body", () => {
+        expect(unlockedBlockBody('recipe: {"v":1}')).toBe("");
     });
 });

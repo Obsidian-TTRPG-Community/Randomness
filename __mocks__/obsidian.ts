@@ -545,3 +545,7 @@ export async function requestUrl(_opts: {
 }): Promise<RequestUrlResponse> {
     throw new Error("requestUrl is not available in tests — stub it per-test");
 }
+
+export function setIcon(el: HTMLElement, iconId: string): void {
+    el.setAttribute("data-icon", iconId);
+}

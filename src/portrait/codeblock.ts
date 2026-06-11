@@ -9,10 +9,12 @@
  *   recipe: <PortraitRecipe JSON>        locked portrait — renders exactly
  *                                        this, no roll controls
  *
- * Unlocked blocks render a grid with a Reroll control; each tile offers
- * Lock (rewrites this block's body to `recipe: {…}` — the set-in-stone
- * state, drift-proof via composeFromRecipe) and PNG (rasterises the
- * portrait and saves it next to the note).
+ * Unlocked blocks render a grid with a Reroll control. Each tile has a
+ * lock icon overlaid top-right of the art (lock = rewrite this block's
+ * body to `recipe: {…}`, the set-in-stone state; on a locked block the
+ * icon flips to unlock = remove the recipe line and roll again) and a
+ * PNG action that saves the image next to the note and REPLACES the
+ * whole block with an `![[file.png]]` embed.
  *
  * Gating: if no pack manifest is found at the resolved pack path the
  * block renders a pointer to Settings → Randomness instead of UI.
@@ -23,10 +25,11 @@ import {
     MarkdownRenderChild,
     Notice,
     TFile,
-    normalizePath,
+    setIcon,
 } from "obsidian";
 import type RandomnessPlugin from "../views/main";
 import { composePack, composeFromRecipe, Composed, PortraitRecipe } from "./pack";
+import { saveComposedPng } from "./png";
 
 export interface PortraitBlockParams {
     pack: string;
@@ -78,6 +81,21 @@ export function lockedBlockBody(source: string, recipe: PortraitRecipe): string 
         if (key === "pack" || key === "size") kept.push(line.trimEnd());
     }
     kept.push(`recipe: ${JSON.stringify(recipe)}`);
+    return kept.join("\n");
+}
+
+/**
+ * Inverse of lockedBlockBody: drop the recipe line, keep pack/size —
+ * the block becomes rollable again. Pure — tested directly.
+ */
+export function unlockedBlockBody(source: string): string {
+    const kept: string[] = [];
+    for (const line of source.split("\n")) {
+        const i = line.indexOf(":");
+        if (i < 1) continue;
+        const key = line.slice(0, i).trim().toLowerCase();
+        if (key !== "recipe") kept.push(line.trimEnd());
+    }
     return kept.join("\n");
 }
 
@@ -211,113 +229,125 @@ class PortraitCodeblockChild extends MarkdownRenderChild {
         // same trust level as the pack itself (user-installed files).
         if (composed.svg.startsWith("<svg")) art.innerHTML = composed.svg;
 
+        // Lock/unlock icon, overlaid top-right of the art. The icon
+        // shows the ACTION: closed lock on rollable tiles ("freeze
+        // this one"), open lock on a locked tile ("roll again").
+        const lockBtn = activeDocument.createElement("button");
+        lockBtn.className = "randomness-portrait-lockbtn";
+        setIcon(lockBtn, locked ? "unlock" : "lock");
+        lockBtn.title = locked
+            ? "Unlock: remove the stored recipe and roll again"
+            : "Lock: set in stone — store this exact portrait's recipe in the block";
+        lockBtn.addEventListener("click", () => {
+            void (locked
+                ? this.rewriteBody(unlockedBlockBody(this.source), "Portrait unlocked.")
+                : this.rewriteBody(
+                      lockedBlockBody(this.source, composed.recipe),
+                      "Portrait locked."
+                  ));
+        });
+        art.appendChild(lockBtn);
+
         const caption = makeChildDiv(tile, "randomness-portrait-caption");
         caption.textContent = locked ? "locked" : composed.seed;
 
         const actions = makeChildDiv(tile, "randomness-portrait-actions");
-        if (!locked) {
-            const lockBtn = activeDocument.createElement("button");
-            lockBtn.textContent = "Lock";
-            lockBtn.title =
-                "Set in stone: store this exact portrait's recipe in the block";
-            lockBtn.addEventListener("click", () => {
-                void this.lockBlock(composed.recipe);
-            });
-            actions.appendChild(lockBtn);
-        }
         const pngBtn = activeDocument.createElement("button");
         pngBtn.textContent = "PNG";
-        pngBtn.title = "Save this portrait as a PNG next to the note";
+        pngBtn.title =
+            "Save as PNG next to the note and replace this block with the image embed";
         pngBtn.addEventListener("click", () => {
-            void this.savePng(composed);
+            void this.savePngAndReplace(composed, locked);
         });
         actions.appendChild(pngBtn);
     }
 
     /**
-     * Rewrite this block's body to the locked form. Uses the section
-     * info to find the fenced block in the note and vault.process for
-     * an atomic read-modify-write. If the note changed underneath us
-     * (section info stale), we bail with a Notice rather than guess.
+     * Rewrite this block's BODY (fence lines kept). Used by lock and
+     * unlock. Uses section info + vault.process for an atomic
+     * read-modify-write; bails with a Notice if the note shifted.
      */
-    private async lockBlock(recipe: PortraitRecipe): Promise<void> {
-        const info = this.ctx.getSectionInfo(this.containerEl);
-        const af = this.plugin.app.vault.getAbstractFileByPath(
-            this.ctx.sourcePath
-        );
-        if (!info || !(af instanceof TFile)) {
-            new Notice("Portrait: couldn't locate this block in the note.");
-            return;
-        }
-        const newBody = lockedBlockBody(this.source, recipe);
-        await this.plugin.app.vault.process(af, (data) => {
-            const lines = data.split("\n");
-            // Fence sanity: the recorded start line must still open a
-            // ```portrait fence. Otherwise the note shifted — bail.
-            const fence = lines[info.lineStart];
-            if (fence === undefined || !/^\s*```+\s*portrait\b/.test(fence)) {
-                new Notice("Portrait: note changed — lock skipped, reroll first.");
-                return data;
-            }
-            lines.splice(
-                info.lineStart + 1,
-                info.lineEnd - info.lineStart - 1,
-                ...newBody.split("\n")
-            );
-            return lines.join("\n");
+    private async rewriteBody(newBody: string, notice: string): Promise<void> {
+        const replaced = await this.withBlockLines((lines, start, end) => {
+            const body = newBody === "" ? [] : newBody.split("\n");
+            lines.splice(start + 1, end - start - 1, ...body);
+            return lines;
         });
-        new Notice("Portrait locked.");
+        if (replaced) new Notice(notice);
     }
 
-    /** Rasterise the composed SVG and save it next to the note. */
-    private async savePng(composed: Composed): Promise<void> {
+    /**
+     * Save the PNG next to the note, then replace the WHOLE block with
+     * an ![[embed]]. A locked block's recipe is preserved in an
+     * invisible %% comment %% after the embed so the portrait can be
+     * reconstructed later if wanted.
+     */
+    private async savePngAndReplace(
+        composed: Composed,
+        locked: boolean
+    ): Promise<void> {
         try {
-            const vb = /viewBox="([^"]+)"/.exec(composed.svg);
-            const dims = vb ? vb[1].split(/\s+/).map(Number) : [0, 0, 1024, 1024];
-            const w = dims[2] || 1024;
-            const h = dims[3] || 1024;
-            const img = new Image();
-            const loadedPromise = new Promise<void>((res, rej) => {
-                img.onload = () => res();
-                img.onerror = () => rej(new Error("svg rasterise failed"));
-            });
-            img.src =
-                "data:image/svg+xml;charset=utf-8," +
-                encodeURIComponent(composed.svg);
-            await loadedPromise;
-            const canvas = activeDocument.createElement("canvas");
-            canvas.width = w;
-            canvas.height = h;
-            const cx = canvas.getContext("2d");
-            if (!cx) throw new Error("no canvas context");
-            cx.drawImage(img, 0, 0, w, h);
-            const blob = await new Promise<Blob>((res, rej) =>
-                canvas.toBlob(
-                    (b) => (b ? res(b) : rej(new Error("toBlob failed"))),
-                    "image/png"
-                )
+            const path = await saveComposedPng(
+                this.plugin,
+                composed,
+                dirOf(this.ctx.sourcePath)
             );
-            const dir = dirOf(this.ctx.sourcePath);
-            const stem = `portrait-${composed.seed || "locked"}`;
-            let path = normalizePath(dir === "" ? `${stem}.png` : `${dir}/${stem}.png`);
-            let n = 1;
-            while (await this.plugin.app.vault.adapter.exists(path)) {
-                path = normalizePath(
-                    dir === "" ? `${stem}-${n}.png` : `${dir}/${stem}-${n}.png`
+            const name = path.split("/").pop() ?? path;
+            const replacement = [`![[${name}]]`];
+            if (locked) {
+                replacement.push(
+                    `%% portrait recipe: ${JSON.stringify(composed.recipe)} %%`
                 );
-                n++;
             }
-            await this.plugin.app.vault.createBinary(
-                path,
-                await blob.arrayBuffer()
+            const replaced = await this.withBlockLines((lines, start, end) => {
+                lines.splice(start, end - start + 1, ...replacement);
+                return lines;
+            });
+            new Notice(
+                replaced
+                    ? `Portrait saved + embedded: ${name}`
+                    : `Portrait saved: ${path} (block not replaced — note changed)`
             );
-            new Notice(`Portrait saved: ${path}`);
         } catch (err) {
             new Notice(
                 "Portrait: PNG export failed — " +
                     (err instanceof Error ? err.message : String(err))
             );
         }
+    }
+
+    /**
+     * Shared block-edit plumbing: locate this block via section info,
+     * verify the fence still opens a ```portrait block, hand the note's
+     * lines to `edit` (start/end are the fence lines, inclusive), write
+     * back atomically. Returns false (plus a Notice) when the block
+     * can't be safely located.
+     */
+    private async withBlockLines(
+        edit: (lines: string[], start: number, end: number) => string[]
+    ): Promise<boolean> {
+        const info = this.ctx.getSectionInfo(this.containerEl);
+        const af = this.plugin.app.vault.getAbstractFileByPath(
+            this.ctx.sourcePath
+        );
+        if (!info || !(af instanceof TFile)) {
+            new Notice("Portrait: couldn't locate this block in the note.");
+            return false;
+        }
+        let ok = true;
+        await this.plugin.app.vault.process(af, (data) => {
+            const lines = data.split("\n");
+            const fence = lines[info.lineStart];
+            if (fence === undefined || !/^\s*```+\s*portrait\b/.test(fence)) {
+                ok = false;
+                return data;
+            }
+            return edit(lines, info.lineStart, info.lineEnd).join("\n");
+        });
+        if (!ok) {
+            new Notice("Portrait: note changed — action skipped, reroll first.");
+        }
+        return ok;
     }
 }
 

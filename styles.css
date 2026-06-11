@@ -612,3 +612,24 @@
 }
 .randomness-portrait-actions { display: flex; gap: 6px; }
 .randomness-portrait-hint { color: var(--text-muted); font-style: italic; }
+
+/* lock/unlock overlay (top-right of the art) */
+.randomness-portrait-art { position: relative; }
+.randomness-portrait-lockbtn {
+  position: absolute; top: 4px; right: 4px;
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  border-radius: 6px; border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary); color: var(--text-muted);
+  opacity: 0; transition: opacity 120ms ease;
+  cursor: pointer;
+}
+.randomness-portrait-art:hover .randomness-portrait-lockbtn { opacity: 0.9; }
+.randomness-portrait-lockbtn:hover { color: var(--text-normal); opacity: 1; }
+
+/* roller pane */
+.randomness-portrait-pane-controls {
+  display: flex; gap: 8px; margin-bottom: 8px; align-items: center;
+}
+.randomness-portrait-pane-controls input[type="number"] { width: 64px; }
+.randomness-portrait-pane .randomness-portrait-grid { gap: 8px; }
