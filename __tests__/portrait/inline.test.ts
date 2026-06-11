@@ -1,7 +1,13 @@
 import {
     parseInlinePortrait,
+    lockedInlineText,
+    unlockedInlineText,
     INLINE_DEFAULT_SIZE,
 } from "../../src/portrait/inline";
+import {
+    portraitBlockSnippet,
+    portraitInlineSnippet,
+} from "../../src/portrait/ui";
 
 describe("portrait inline: parseInlinePortrait", () => {
     test("non-portrait spans return null", () => {
@@ -42,5 +48,59 @@ describe("portrait inline: parseInlinePortrait", () => {
         expect(p?.size).toBe(96);
         expect(p?.recipe).toBe(json);
         expect(JSON.parse(p?.recipe ?? "")).toHaveProperty("seed", "a b");
+    });
+});
+
+describe("portrait inline: lock/unlock text rewrites", () => {
+    const json = '{"v":1,"seed":"x","parts":{"base":1}}';
+
+    test("lock keeps non-default pack/size, drops seed", () => {
+        const t = lockedInlineText(
+            "portrait: bob size=96 pack=art/x", "default_pack", json
+        );
+        expect(t).toBe(`portrait: pack=art/x size=96 recipe=${json}`);
+        expect(t).not.toContain("bob");
+    });
+
+    test("lock of a bare span is minimal", () => {
+        expect(lockedInlineText("portrait:", "d", json)).toBe(
+            `portrait: recipe=${json}`
+        );
+    });
+
+    test("default-valued pack/size are not carried", () => {
+        const t = lockedInlineText(
+            `portrait: size=${INLINE_DEFAULT_SIZE} pack=d`, "d", json
+        );
+        expect(t).toBe(`portrait: recipe=${json}`);
+    });
+
+    test("unlock drops recipe and seed, keeps pack/size", () => {
+        const locked = `portrait: size=96 recipe=${json}`;
+        expect(unlockedInlineText(locked, "d")).toBe("portrait: size=96");
+    });
+
+    test("lock/unlock round-trip", () => {
+        const locked = lockedInlineText("portrait: 200", "d", json);
+        const unlocked = unlockedInlineText(locked, "d");
+        expect(unlocked).toBe("portrait: size=200");
+        const p = parseInlinePortrait(unlocked, "d");
+        expect(p?.size).toBe(200);
+        expect(p?.recipe).toBeUndefined();
+    });
+});
+
+describe("portrait snippets", () => {
+    const json = '{"v":1}';
+    test("block snippet is a valid portrait codeblock", () => {
+        expect(portraitBlockSnippet(json)).toBe(
+            "```portrait\nrecipe: " + json + "\n```"
+        );
+    });
+    test("inline snippet round-trips through the parser", () => {
+        const t = portraitInlineSnippet(json);
+        expect(t.startsWith("`portrait:")).toBe(true);
+        const p = parseInlinePortrait(t.slice(1, -1), "d");
+        expect(p?.recipe).toBe(json);
     });
 });

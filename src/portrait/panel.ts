@@ -27,7 +27,13 @@ import {
 } from "./pack";
 import { saveComposedPng } from "./png";
 import { nameFor } from "./names";
-import { clearElement, makeChildDiv, overlayIconButton } from "./ui";
+import {
+    clearElement,
+    makeChildDiv,
+    overlayIconButton,
+    portraitBlockSnippet,
+    portraitInlineSnippet,
+} from "./ui";
 
 /** Vault folder pane exports land in (created on demand). */
 const PANE_PNG_FOLDER = "Portraits";
@@ -50,10 +56,16 @@ async function pngToClipboard(
     }
 }
 
-function copyRecipe(recipe: PortraitRecipe): void {
+function copyBlock(recipe: PortraitRecipe): void {
     void navigator.clipboard
-        .writeText(JSON.stringify(recipe))
-        .then(() => new Notice("Portrait recipe copied."));
+        .writeText(portraitBlockSnippet(JSON.stringify(recipe)))
+        .then(() => new Notice("```portrait block copied — paste into a note."));
+}
+
+function copyInline(recipe: PortraitRecipe): void {
+    void navigator.clipboard
+        .writeText(portraitInlineSnippet(JSON.stringify(recipe)))
+        .then(() => new Notice("Inline `portrait:` span copied — paste into a line."));
 }
 
 function renderTile(
@@ -78,9 +90,17 @@ function renderTile(
     overlayIconButton(
         art,
         "copy",
-        "Copy this portrait's recipe JSON (paste as `recipe:` to pin it)",
+        "Copy as a ```portrait code-block (locked to this exact portrait)",
         "top-right",
-        () => copyRecipe(composed.recipe)
+        () => copyBlock(composed.recipe)
+    );
+    overlayIconButton(
+        art,
+        "code",
+        "Copy as an inline `portrait:` span (for infoboxes)",
+        "bottom-right",
+        () => copyInline(composed.recipe),
+        true
     );
 
     const caption = makeChildDiv(tile, "randomness-portrait-caption");
@@ -183,7 +203,8 @@ function optionLabel(cat: string, file: string): string {
 
 export function renderBuilderTab(
     plugin: RandomnessPlugin,
-    container: HTMLElement
+    container: HTMLElement,
+    initial?: PortraitRecipe
 ): void {
     clearElement(container);
     container.classList.add("randomness-portrait-pane");
@@ -194,10 +215,26 @@ export function renderBuilderTab(
         const man = normalizeManifest(manifestRaw);
         const load = plugin.portraits.loader();
 
-        // Start from a random roll so every control has a sane value.
-        let recipe: PortraitRecipe = (
-            await composePack(manifestRaw, load)
-        ).recipe;
+        // Start from the given recipe, or a random roll so every
+        // control has a sane value.
+        let recipe: PortraitRecipe =
+            initial ?? (await composePack(manifestRaw, load)).recipe;
+
+        // Roll fresh recipes until one matches the wanted gender —
+        // gender is derived from the seed hash, and gendered gating
+        // (facial hair) happens at ROLL time, so editing the field in
+        // place would leave e.g. a beard on a female portrait. A
+        // constrained reroll keeps every roll rule honest. ~2 tries
+        // expected; the cap is paranoia, not a real ceiling.
+        const rollWithGender = async (
+            g: "male" | "female"
+        ): Promise<PortraitRecipe> => {
+            for (let i = 0; i < 80; i++) {
+                const r = (await composePack(manifestRaw, load)).recipe;
+                if (r.gender === g) return r;
+            }
+            return recipe; // statistically unreachable
+        };
 
         clearElement(container);
         const wrap = makeChildDiv(container, "randomness-portrait-builder");
@@ -228,9 +265,17 @@ export function renderBuilderTab(
                 overlayIconButton(
                     art,
                     "copy",
-                    "Copy the recipe JSON (paste as `recipe:` to pin it)",
+                    "Copy as a ```portrait code-block (locked to this exact portrait)",
                     "top-right",
-                    () => copyRecipe(recipe)
+                    () => copyBlock(recipe)
+                );
+                overlayIconButton(
+                    art,
+                    "code",
+                    "Copy as an inline `portrait:` span (for infoboxes)",
+                    "bottom-right",
+                    () => copyInline(recipe),
+                    true
                 );
                 try {
                     caption.textContent = nameFor(recipe, manifestRaw);
@@ -275,14 +320,20 @@ export function renderBuilderTab(
             return s;
         };
 
-        // Axes: gender, age, skin tone.
+        // Axes: gender, age, skin tone. Gender REROLLS (see above)
+        // and rebuilds the whole form; age/skin re-render in place.
         const axes = row("gender / age / skin");
         select(
             axes,
             [["male", "male"], ["female", "female"]],
             recipe.gender ?? "male",
             (v) => {
-                recipe.gender = v as PortraitRecipe["gender"];
+                void (async () => {
+                    const rolled = await rollWithGender(
+                        v === "female" ? "female" : "male"
+                    );
+                    renderBuilderTab(plugin, container, rolled);
+                })();
             }
         );
         select(
@@ -329,8 +380,8 @@ export function renderBuilderTab(
         rerollBtn.title = "Replace everything with a fresh random roll";
         rerollBtn.addEventListener("click", () => {
             void (async () => {
-                recipe = (await composePack(manifestRaw, load)).recipe;
-                renderBuilderTab(plugin, container); // rebuild controls
+                const rolled = (await composePack(manifestRaw, load)).recipe;
+                renderBuilderTab(plugin, container, rolled);
             })();
         });
         footer.appendChild(rerollBtn);

@@ -24,12 +24,14 @@ export function overlayIconButton(
     parent: HTMLElement,
     icon: string,
     title: string,
-    corner: "top-left" | "top-right",
-    onClick: () => void
+    corner: "top-left" | "top-right" | "bottom-left" | "bottom-right",
+    onClick: () => void,
+    small = false
 ): HTMLButtonElement {
     const btn = activeDocument.createElement("button");
     btn.className =
-        "randomness-portrait-iconbtn randomness-portrait-iconbtn-" + corner;
+        "randomness-portrait-iconbtn randomness-portrait-iconbtn-" + corner +
+        (small ? " randomness-portrait-iconbtn-small" : "");
     setIcon(btn, icon);
     btn.title = title;
     btn.addEventListener("click", (e) => {
@@ -38,4 +40,13 @@ export function overlayIconButton(
     });
     parent.appendChild(btn);
     return btn;
+}
+
+/** Snippet builders for "copy as…" actions (pure; tested). */
+export function portraitBlockSnippet(recipeJson: string): string {
+    return "```portrait\nrecipe: " + recipeJson + "\n```";
+}
+
+export function portraitInlineSnippet(recipeJson: string): string {
+    return "`portrait: recipe=" + recipeJson + "`";
 }

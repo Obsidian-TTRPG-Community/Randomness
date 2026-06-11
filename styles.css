@@ -681,3 +681,12 @@
   width: 110px; font-size: var(--font-ui-smaller); color: var(--text-muted);
 }
 .randomness-portrait-builder-row select { flex: 1; min-width: 0; }
+
+/* small overlay icons (inline spans + bottom corners) */
+.randomness-portrait-iconbtn-bottom-left { bottom: 4px; left: 4px; top: auto; }
+.randomness-portrait-iconbtn-bottom-right { bottom: 4px; right: 4px; top: auto; }
+.randomness-portrait-iconbtn-small { width: 20px; height: 20px; }
+.randomness-portrait-iconbtn-small svg { width: 13px; height: 13px; }
+.randomness-portrait-inline { position: relative; }
+.randomness-portrait-inline .randomness-portrait-iconbtn { opacity: 0; }
+.randomness-portrait-inline:hover .randomness-portrait-iconbtn { opacity: 0.9; }
