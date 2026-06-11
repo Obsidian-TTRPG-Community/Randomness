@@ -377,6 +377,49 @@ export async function composePack(
   const groups = cfg.coherenceGroups ?? manifest.coherenceGroups ?? DEFAULT_COHERENCE;
   const weights = cfg.weights ?? manifest.weights;
 
+  /* Gender-lean weighting (meta.genderLean): art tagged "masc"/"fem"
+   * (suffix "!" = strong) is down-weighted when it contradicts the
+   * rolled gender and up-weighted when it matches, so a female roll
+   * stops drawing male-pattern balding and a male roll stops drawing
+   * off-shoulder gowns. gender is a pure hash of the seed (no RNG
+   * draw), so computing it up here is stream-safe. Every lean-aware
+   * pick consumes exactly one draw (weightedPick mirrors rng.pick),
+   * so packs WITHOUT tags keep byte-identical selection. Packs that
+   * ADD tags re-roll seeded (non-recipe) portraits — locked recipes
+   * are unaffected. Multipliers tunable via meta.genderLean.multipliers. */
+  const gender = genderFor(usedSeed);
+  const leanCfg = (manifest.meta?.genderLean ?? {}) as {
+    files?: Record<string, string>;
+    multipliers?: { same?: number; opposite?: number; strongOpposite?: number };
+  };
+  const leanFiles = leanCfg.files ?? {};
+  const hasLean = Object.keys(leanFiles).length > 0;
+  const LEAN_SAME = leanCfg.multipliers?.same ?? 1.6;
+  const LEAN_OPP = leanCfg.multipliers?.opposite ?? 0.12;
+  const LEAN_OPP_STRONG = leanCfg.multipliers?.strongOpposite ?? 0;
+  const leanMult = (file: string): number => {
+    let tag = leanFiles[file];
+    if (tag === undefined) {
+      // forgiving key forms: basename and stem (no extension)
+      const base = file.includes("/") ? file.slice(file.lastIndexOf("/") + 1) : file;
+      tag = leanFiles[base] ?? leanFiles[base.replace(/\.(png|jpe?g|webp|svg)$/i, "")];
+    }
+    if (!tag) return 1;
+    const strong = tag.endsWith("!");
+    const t = strong ? tag.slice(0, -1) : tag;
+    const same = (t === "masc" && gender === "male") || (t === "fem" && gender === "female");
+    if (same) return LEAN_SAME;
+    return strong ? LEAN_OPP_STRONG : LEAN_OPP;
+  };
+  /* merged manifest weights x gender lean; undefined when nothing to do
+   * (weightedPick then falls back to plain rng.pick — zero drift). */
+  const effWeights = (files: string[]): Record<string, number> | undefined => {
+    if (!hasLean) return weights;
+    const out: Record<string, number> = {};
+    for (const f of files) out[f] = Math.max(0, weights?.[f] ?? 1) * leanMult(f);
+    return out;
+  };
+
   const chosen: Record<string, string> = {};
   const skip = new Set<string>();
   const skipReason: Record<string, string> = {};
@@ -397,11 +440,24 @@ export async function composePack(
       const primary = cats[0];
       const styles = [...new Set(layers[primary].map((f) => styleToken(primary, f)))];
       if (!styles.length) continue;
-      const style = rng.pick(styles);
-      chosen[primary] = rng.pick(layers[primary].filter((f) => styleToken(primary, f) === style));
+      let style: string;
+      if (hasLean) {
+        // style weight = summed lean-adjusted weight of its variants
+        const sw: Record<string, number> = {};
+        for (const st of styles) {
+          sw[st] = layers[primary]
+            .filter((f) => styleToken(primary, f) === st)
+            .reduce((a, f) => a + Math.max(0, weights?.[f] ?? 1) * leanMult(f), 0);
+        }
+        style = weightedPick(rng, styles, sw);
+      } else {
+        style = rng.pick(styles);
+      }
+      const variants = layers[primary].filter((f) => styleToken(primary, f) === style);
+      chosen[primary] = weightedPick(rng, variants, effWeights(variants));
       for (const c of cats.slice(1)) {
         const matches = layers[c].filter((f) => styleToken(c, f) === style);
-        if (matches.length) chosen[c] = rng.pick(matches);
+        if (matches.length) chosen[c] = weightedPick(rng, matches, effWeights(matches));
         else { skip.add(c); skipReason[c] = "coherence: no matching style"; }
       }
     } else {
@@ -420,7 +476,7 @@ export async function composePack(
   // base picked FIRST so suppression triggers (headwear) can avoid incompatible pairs
   // (e.g. long elf/goblin ears vs hats whose baked hair occupies the ear zone)
   if (layers["base"]?.length && !chosen["base"] && !skip.has("base")) {
-    chosen["base"] = weightedPick(rng, layers["base"], weights);
+    chosen["base"] = weightedPick(rng, layers["base"], effWeights(layers["base"]));
   }
   const incompatPairs: string[][] = (manifest.meta?.incompatible ?? []) as string[][];
   const conflicts = (a: string, b: string) =>
@@ -435,7 +491,7 @@ export async function composePack(
     const taken = Object.values(chosen);
     const cands = layers[trig].filter((f) => !taken.some((c) => conflicts(f, c)));
     if (!cands.length) { skip.add(trig); skipReason[trig] = "no variant compatible with picks (meta.incompatible)"; continue; }
-    const file = chosen[trig] ?? weightedPick(rng, cands, weights);
+    const file = chosen[trig] ?? weightedPick(rng, cands, effWeights(cands));
     chosen[trig] = file;
     const rules = suppression[trig] || {};
     const sup = rules[styleToken(trig, file)] ?? rules["*"] ?? [];
@@ -448,7 +504,6 @@ export async function composePack(
     if (!exclude.has(c) && !order.includes(c)) order.push(c);
   }
 
-  const gender = genderFor(usedSeed);
   const age = ageFor(usedSeed, manifest.meta?.age);
   const picks: { cat: string; file: string }[] = [];
   for (const cat of order) {
@@ -464,7 +519,8 @@ export async function composePack(
       if (cat in optional && rng.float() > optional[cat]) { skipReason[cat] = "optional: not rolled"; continue; }
       const taken = Object.values(chosen);
       const pool = layers[cat].filter((f) => !taken.some((c) => conflicts(f, c)));
-      file = weightedPick(rng, pool.length ? pool : layers[cat], weights);
+      const fromPool = pool.length ? pool : layers[cat];
+      file = weightedPick(rng, fromPool, effWeights(fromPool));
     }
     chosen[cat] = file;
     picks.push({ cat, file });

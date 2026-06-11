@@ -148,3 +148,96 @@ describe("portrait: recolorSkinPixels", () => {
         expect([d[0], d[1], d[2]]).toEqual([245, 205, 165]);
     });
 });
+
+describe("portrait: gender-lean weighting (meta.genderLean)", () => {
+    const PXLOAD = async () => PX;
+    const leanManifest = {
+        canvas: { width: 64, height: 64 },
+        layerOrder: ["base", "hair_back", "clothing", "hair_front"],
+        assets: {
+            base: ["base_01.png"],
+            hair_back: [
+                "hair_back_01.png", "hair_back_02.png",
+                "hair_back_03.png", "hair_back_04.png",
+            ],
+            hair_front: [
+                "hair_front_01.png", "hair_front_02.png",
+                "hair_front_03.png", "hair_front_04.png",
+            ],
+            clothing: ["clothing_01.png", "clothing_02.png"],
+        },
+        coherenceGroups: [
+            { categories: ["hair_front", "hair_back"], by: "style" },
+        ],
+        meta: {
+            genderLean: {
+                files: {
+                    "hair_back_01.png": "masc!",   // balding — never on women
+                    "hair_back_02.png": "fem",
+                    "hair_front_01.png": "masc!",
+                    "hair_front_02.png": "fem",
+                    "clothing_02.png": "fem!",      // gown — never on men
+                },
+            },
+        },
+    };
+
+    test("strong tags never cross gender; soft tags are rare", async () => {
+        let fem = 0, femBalding = 0, maleGown = 0, maleFemHair = 0, males = 0;
+        for (let i = 0; i < 400; i++) {
+            const { recipe, parts } = await composePack(
+                leanManifest, PXLOAD, `lean${i}`
+            );
+            if (recipe.gender === "female") {
+                fem++;
+                if (parts.hair_back === "hair_back_01.png") femBalding++;
+            } else {
+                males++;
+                if (parts.clothing === "clothing_02.png") maleGown++;
+                if (parts.hair_back === "hair_back_02.png") maleFemHair++;
+            }
+        }
+        expect(fem).toBeGreaterThan(100);
+        expect(femBalding).toBe(0);              // masc! blocked for women
+        expect(maleGown).toBe(0);                // fem! blocked for men
+        // soft fem tag on men: ~0.12/(0.12+1.6+2) ≈ 3% of male rolls
+        expect(maleFemHair / males).toBeLessThan(0.12);
+    });
+
+    test("matching tags are favoured", async () => {
+        let fem = 0, femFemHair = 0;
+        for (let i = 0; i < 400; i++) {
+            const { recipe, parts } = await composePack(
+                leanManifest, PXLOAD, `fav${i}`
+            );
+            if (recipe.gender !== "female") continue;
+            fem++;
+            if (parts.hair_back === "hair_back_02.png") femFemHair++;
+        }
+        // fem hair weight 1.6 of (1.6 + 1 + 1) ≈ 44% of female rolls
+        expect(femFemHair / fem).toBeGreaterThan(0.3);
+    });
+
+    test("untagged manifests keep byte-identical selection", async () => {
+        const untagged = JSON.parse(JSON.stringify(leanManifest));
+        delete untagged.meta;
+        const emptyTags = JSON.parse(JSON.stringify(leanManifest));
+        emptyTags.meta = { genderLean: { files: {} } };
+        for (let i = 0; i < 60; i++) {
+            const a = await composePack(untagged, PXLOAD, `reg${i}`);
+            const b = await composePack(emptyTags, PXLOAD, `reg${i}`);
+            expect(b.recipe).toEqual(a.recipe);
+            expect(b.svg).toBe(a.svg);
+        }
+    });
+
+    test("determinism and recipe round-trip hold with tags", async () => {
+        for (let i = 0; i < 40; i++) {
+            const a = await composePack(leanManifest, PXLOAD, `det2${i}`);
+            const b = await composePack(leanManifest, PXLOAD, `det2${i}`);
+            expect(b.recipe).toEqual(a.recipe);
+            const r = await composeFromRecipe(a.recipe, leanManifest, PXLOAD);
+            expect(r.svg).toBe(a.svg);
+        }
+    });
+});
