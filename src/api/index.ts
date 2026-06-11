@@ -34,12 +34,13 @@ import { collectTablesFromBundle } from "../views/tableAutocomplete";
 import { Evaluator } from "../engine/evaluator";
 import { dirname } from "../resolver/fileResolver";
 import type RandomnessPlugin from "../views/main";
+import { createPortraitApi, PortraitAPI } from "../portrait/api";
 
 /**
  * Semantic version of the API surface, independent of the plugin
  * version. Bump on any change to the public contract below.
  */
-export const API_VERSION = "1.0.0" as const;
+export const API_VERSION = "1.1.0" as const;
 
 /** Options accepted by roll / rollExpression. */
 export interface RollOptions {
@@ -179,6 +180,14 @@ export interface RandomnessAPI {
      * Returns an unsubscribe function.
      */
     onRoll(callback: RollEventListener): () => void;
+
+    /**
+     * Portrait compositor surface (roll/render/savePng/snippets,
+     * constrained rolls for templates). Methods throw when no
+     * portrait pack is installed — check `portraits.available()`
+     * first. Added in API 1.1.0; see src/portrait/api.ts.
+     */
+    readonly portraits: PortraitAPI;
 }
 
 /**
@@ -586,5 +595,6 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         tables,
         tablesWithSources,
         onRoll,
+        portraits: createPortraitApi(plugin),
     };
 }

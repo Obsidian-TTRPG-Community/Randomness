@@ -47,6 +47,10 @@ export function portraitBlockSnippet(recipeJson: string): string {
     return "```portrait\nrecipe: " + recipeJson + "\n```";
 }
 
-export function portraitInlineSnippet(recipeJson: string): string {
-    return "`portrait: recipe=" + recipeJson + "`";
+export function portraitInlineSnippet(
+    recipeJson: string,
+    size?: number
+): string {
+    const sz = size !== undefined ? `size=${size} ` : "";
+    return "`portrait: " + sz + "recipe=" + recipeJson + "`";
 }

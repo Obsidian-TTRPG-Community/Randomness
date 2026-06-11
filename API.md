@@ -11,7 +11,7 @@ const result = await api.roll("VillainName");
 console.log(result.result); // -> "Mordred the Pale"
 ```
 
-- **API version:** `1.0.0` (read `api.version`)
+- **API version:** `1.1.0` (read `api.version`)
 - The API is stable within a major version. New methods may be added
   in minor versions; breaking changes bump the major.
 
@@ -27,6 +27,7 @@ console.log(result.result); // -> "Mordred the Pale"
 | `tables(callerNotePath?)` | List table names visible from a note's scope. |
 | `tablesWithSources(callerNotePath?)` | List tables with their source files and scope flag. |
 | `onRoll(callback)` | Subscribe to every roll attempt. Returns an unsubscribe fn. |
+| `portraits.*` | Portrait compositor: roll/render/savePng/snippets (see below). |
 | `version` | The API version string. |
 
 All roll methods are `async` and return a `Promise<RollResult>`.
@@ -400,6 +401,81 @@ console.table(
   all.filter((t) => t.name === "Inn").map((t) => ({ file: t.filePath }))
 );
 ```
+
+
+---
+
+## Portraits (`api.portraits`, since 1.1.0)
+
+When a portrait pack is installed (Settings → Randomness), the API can
+roll layered character portraits — built for **Templater** templates
+that stamp out NPC notes. Every method throws when no pack is
+installed, so check `available()` first.
+
+| Method | Purpose |
+| --- | --- |
+| `available(pack?)` | `true` when a pack manifest is installed. |
+| `roll(opts?)` | Roll a portrait. `opts`: `seed`, `pack`, and constraints `gender`, `race`, `age` (rerolls until matched; `maxTries` caps it, default 400). |
+| `render(recipe, opts?)` | Re-render an exact recipe (drift-proof). |
+| `savePng(portraitOrRecipe, opts?)` | Write a PNG into the vault (default folder `Portraits/`); returns the vault path. |
+| `name(recipe, pack?)` | The portrait's deterministic display name. |
+| `blockSnippet(recipe)` | Ready-to-paste ` ```portrait ` codeblock pinned to the recipe. |
+| `inlineSnippet(recipe, size?)` | Ready-to-paste inline `` `portrait:` `` span. |
+
+`roll`/`render` resolve to a **PortraitResult**:
+
+```ts
+{
+  recipe,   // serializable PortraitRecipe — persist this
+  svg,      // rendered SVG markup
+  seed,     // the rolled seed
+  name,     // engine-rolled, race/gender-appropriate name
+  race,     // race token from the base layer (e.g. "elf") or null
+  gender,   // "male" | "female"
+  age,      // "young" | "adult" | "old"
+}
+```
+
+### Templater example — an NPC note in one template
+
+```js
+<%*
+const rnd = app.plugins.plugins["randomness"].api;
+if (!(await rnd.portraits.available())) {
+  tR += "_No portrait pack installed._";
+} else {
+  // Constrained roll: a female elf, any age.
+  const p = await rnd.portraits.roll({ gender: "female", race: "elf" });
+
+  // Live, drift-proof portrait pinned in the note:
+  tR += rnd.portraits.inlineSnippet(p.recipe, 160) + "\n\n";
+  tR += `# ${p.name}\n`;
+  tR += `**Race:** ${p.race} · **Age:** ${p.age}\n\n`;
+
+  // Mix with table rolls from your own generators:
+  const job = await rnd.rollUnscoped("Occupation");
+  tR += `**Occupation:** ${job.result}\n`;
+
+  // Prefer a permanent image file instead of a live span?
+  // const path = await rnd.portraits.savePng(p);
+  // tR += `![[${path.split("/").pop()}]]\n`;
+
+  // Keep the recipe in frontmatter for later re-rendering:
+  // tR = `---\nportrait: '${JSON.stringify(p.recipe)}'\n---\n` + tR;
+}
+%>
+```
+
+Notes:
+
+- **Constrained rolls reroll until they match.** Gendered gating
+  (facial hair, etc.) happens at roll time, so the API never edits a
+  recipe in place to meet a constraint. Race tokens come from the
+  pack's `base_<race>_NN` filenames — ask for a race the pack doesn't
+  ship and `roll` throws after `maxTries`.
+- `seed` makes the roll deterministic and ignores constraints.
+- The recipe is the persistence format: it re-renders byte-identically
+  even after the pack gains new parts.
 
 ---
 
