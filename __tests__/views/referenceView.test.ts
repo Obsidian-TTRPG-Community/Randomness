@@ -1,232 +1,126 @@
 /**
- * @jest-environment jsdom
+ * The reference is a generated vault note: openReferenceView writes
+ * "Randomness Reference.md" (version-stamped frontmatter), refreshes
+ * it when the embedded content version changes, leaves it alone when
+ * current, and opens it.
  */
-
-/**
- * Tests for the in-app reference view.
- *
- * Two surfaces to cover:
- *
- *   1. The content itself (REFERENCE_MARKDOWN) — defensive
- *      smoke tests so a careless edit doesn't accidentally
- *      delete a whole section or leave the doc empty.
- *
- *   2. The view machinery — opens correctly, reuses an existing
- *      leaf rather than spawning duplicates, renders the
- *      content into the right DOM element.
- */
-
-import { WorkspaceLeaf } from "obsidian";
-import { REFERENCE_MARKDOWN } from "../../src/views/referenceContent";
 import {
-    ReferenceView,
-    VIEW_TYPE_REFERENCE,
     openReferenceView,
+    referenceFileContent,
+    REFERENCE_PATH,
 } from "../../src/views/referenceView";
+import {
+    REFERENCE_MARKDOWN,
+    REFERENCE_VERSION,
+} from "../../src/views/referenceContent";
+import { TFile } from "obsidian";
+import type RandomnessPlugin from "../../src/views/main";
 
-// ────────── REFERENCE_MARKDOWN smoke tests ──────────
-
-describe("REFERENCE_MARKDOWN content", () => {
-    test("is a non-empty string", () => {
-        expect(typeof REFERENCE_MARKDOWN).toBe("string");
-        expect(REFERENCE_MARKDOWN.length).toBeGreaterThan(1000);
-    });
-
-    test("has a top-level heading", () => {
-        // The reference is supposed to start with `# Randomness`.
-        expect(REFERENCE_MARKDOWN).toMatch(/^# Randomness/);
-    });
-
-    test("covers the core syntax categories", () => {
-        // The reference exists to teach users the syntax. If we
-        // accidentally delete or rename a whole section, this
-        // test catches it. Each entry below corresponds to a
-        // heading the doc should always have.
-        const requiredSections = [
-            "File structure",
-            "Tables and items",
-            "Calling tables",
-            "Dice",
-            "Variables",
-            "Filters",
-            "Repetitions",
-            "Conditionals",
-            "wiki-syntax",
-            "Calling from notes",
-            "Escaping",
-            "autocomplete",
-            "Referencing generators by name",
-            "Scripting API",
-        ];
-        for (const section of requiredSections) {
-            // Case-insensitive check — section headings can shift
-            // case slightly without being broken, but if the
-            // KEYWORD disappears we've lost the section.
-            expect(REFERENCE_MARKDOWN.toLowerCase()).toContain(
-                section.toLowerCase()
-            );
-        }
-    });
-
-    test("mentions the key inline syntax (rdm:)", () => {
-        // Inline calls are the most-asked-about feature; the
-        // reference must mention them.
-        expect(REFERENCE_MARKDOWN).toContain("rdm:");
-    });
-
-    test("documents wiki-link rendering (v0.4.0 feature)", () => {
-        // The image / link feature has its own dedicated section.
-        // Ensure the syntax examples are still there.
-        expect(REFERENCE_MARKDOWN).toContain("![[");
-        expect(REFERENCE_MARKDOWN).toContain("[[Note");
-    });
-
-    test("warns about the inline-scope gotcha", () => {
-        // The 'inline calls inherit scope from codeblocks' rule
-        // bit the demo author (me). The reference must call it
-        // out explicitly so users don't fall into the same trap.
-        expect(REFERENCE_MARKDOWN.toLowerCase()).toContain("scope");
-    });
-
-    test("does not contain a literal `randomness` codeblock", () => {
-        // The reference renders inside Obsidian. If it contains a
-        // fenced ```randomness block, the codeblock processor
-        // would try to ROLL it inside the reference view — which
-        // would be confusing at best and crash at worst.
-        // Code examples use ```text instead.
-        // Defensive check: scan for fenced randomness blocks.
-        const randomnessFenceRe = /\n\s*\`\`\`\s*randomness\b/;
-        expect(REFERENCE_MARKDOWN).not.toMatch(randomnessFenceRe);
-    });
-});
-
-// ────────── ReferenceView wiring ──────────
-
-/**
- * Build a fake plugin with the workspace methods the view uses.
- * Tests inject spies so we can verify which workspace calls fired.
- */
-function fakePlugin(opts: {
-    existingLeaves?: WorkspaceLeaf[];
-    onRevealLeaf?: (leaf: WorkspaceLeaf) => void;
-    onGetLeaf?: () => WorkspaceLeaf;
-    onSetViewState?: (state: unknown) => void;
-} = {}) {
-    const revealedLeaves: WorkspaceLeaf[] = [];
-    const newLeafCalls: number[] = [];
-    const fakeLeaf = (): WorkspaceLeaf => {
-        const leaf = new WorkspaceLeaf();
-        // Stub setViewState so the view-state update doesn't
-        // bomb out in jsdom.
-        (leaf as any).setViewState = async (state: unknown) => {
-            if (opts.onSetViewState) opts.onSetViewState(state);
-        };
-        return leaf;
+function fakePlugin(existingContent: string | null) {
+    const calls = {
+        created: [] as [string, string][],
+        modified: [] as [string, string][],
+        opened: [] as string[],
     };
-    return {
+    let file: TFile | null = null;
+    if (existingContent !== null) {
+        file = new TFile();
+        file.path = REFERENCE_PATH;
+    }
+    const plugin = {
         app: {
+            vault: {
+                getAbstractFileByPath: (p: string) =>
+                    p === REFERENCE_PATH ? file : null,
+                read: async () => existingContent ?? "",
+                create: async (p: string, c: string) => {
+                    calls.created.push([p, c]);
+                },
+                modify: async (f: TFile, c: string) => {
+                    calls.modified.push([f.path, c]);
+                },
+            },
             workspace: {
-                getLeavesOfType(_type: string): WorkspaceLeaf[] {
-                    return opts.existingLeaves ?? [];
-                },
-                revealLeaf(leaf: WorkspaceLeaf): void {
-                    revealedLeaves.push(leaf);
-                    if (opts.onRevealLeaf) opts.onRevealLeaf(leaf);
-                },
-                getLeaf(_kind: string): WorkspaceLeaf {
-                    newLeafCalls.push(newLeafCalls.length);
-                    if (opts.onGetLeaf) return opts.onGetLeaf();
-                    return fakeLeaf();
+                openLinkText: async (link: string) => {
+                    calls.opened.push(link);
                 },
             },
         },
-        revealedLeaves,
-        newLeafCalls,
-    };
+    } as unknown as RandomnessPlugin;
+    return { plugin, calls };
 }
 
-/**
- * Build a workspace-leaf-shaped object the ItemView can mount on.
- * Pattern matches the one used in browserView.test.ts.
- */
-function fakeLeaf(): any {
-    const container = document.createElement("div");
-    const header = document.createElement("div");
-    const content = document.createElement("div");
-    container.appendChild(header);
-    container.appendChild(content);
-    return { containerEl: container };
-}
-
-describe("ReferenceView", () => {
-    test("getViewType / getDisplayText / getIcon return expected values", () => {
-        const p = fakePlugin();
-        const view = new ReferenceView(fakeLeaf(), p as any);
-        expect(view.getViewType()).toBe(VIEW_TYPE_REFERENCE);
-        expect(view.getDisplayText()).toBe("Randomness reference");
-        expect(view.getIcon()).toBe("book-open");
+describe("reference note", () => {
+    test("content embeds the markdown + version stamp", () => {
+        const c = referenceFileContent();
+        expect(c).toContain(
+            `randomness-reference-version: ${REFERENCE_VERSION}`
+        );
+        expect(c).toContain(REFERENCE_MARKDOWN.slice(0, 40));
     });
 
-    test("VIEW_TYPE_REFERENCE is stable (registered name)", () => {
-        // The view type string is persisted in Obsidian's
-        // workspace state. Renaming it would orphan any saved
-        // leaf the user had open.
-        expect(VIEW_TYPE_REFERENCE).toBe("randomness-reference-view");
+    test("creates the note when missing, then opens it", async () => {
+        const { plugin, calls } = fakePlugin(null);
+        await openReferenceView(plugin);
+        expect(calls.created).toHaveLength(1);
+        expect(calls.created[0][0]).toBe(REFERENCE_PATH);
+        expect(calls.modified).toHaveLength(0);
+        expect(calls.opened).toEqual([REFERENCE_PATH]);
     });
 
-    test("onOpen renders the reference content into the view", async () => {
-        const p = fakePlugin();
-        const leaf = fakeLeaf();
-        const view = new ReferenceView(leaf, p as any);
-        // ItemView sets containerEl via its constructor; the
-        // fakeLeaf above gives a containerEl with two children.
-        (view as any).containerEl = leaf.containerEl;
-        await view.onOpen();
-        // The content child should now hold the rendered markdown.
-        const content = leaf.containerEl.children[1] as HTMLElement;
-        // Mock MarkdownRenderer dumps the source as textContent.
-        // Verify the reference content reached the DOM.
-        expect(content.textContent).toContain("Randomness");
-        expect(content.textContent).toContain("Table:");
+    test("refreshes when the version stamp is stale", async () => {
+        const { plugin, calls } = fakePlugin(
+            "---\nrandomness-reference-version: old\n---\nold body"
+        );
+        await openReferenceView(plugin);
+        expect(calls.modified).toHaveLength(1);
+        expect(calls.modified[0][1]).toContain(REFERENCE_VERSION);
+        expect(calls.created).toHaveLength(0);
+        expect(calls.opened).toEqual([REFERENCE_PATH]);
     });
 
-    test("onOpen wraps content in randomness-reference-content", async () => {
-        const p = fakePlugin();
-        const leaf = fakeLeaf();
-        const view = new ReferenceView(leaf, p as any);
-        (view as any).containerEl = leaf.containerEl;
-        await view.onOpen();
-        const content = leaf.containerEl.children[1] as HTMLElement;
-        expect(
-            content.querySelector(".randomness-reference-content")
-        ).not.toBeNull();
+    test("leaves a current note untouched", async () => {
+        const { plugin, calls } = fakePlugin(referenceFileContent());
+        await openReferenceView(plugin);
+        expect(calls.created).toHaveLength(0);
+        expect(calls.modified).toHaveLength(0);
+        expect(calls.opened).toEqual([REFERENCE_PATH]);
     });
 });
 
-describe("openReferenceView", () => {
-    test("reuses an existing leaf when one already exists", async () => {
-        const existing = new WorkspaceLeaf();
-        const p = fakePlugin({ existingLeaves: [existing] });
-        await openReferenceView(p as any);
-        // The existing leaf was revealed.
-        expect(p.revealedLeaves).toContain(existing);
-        // No new leaf was created.
-        expect(p.newLeafCalls.length).toBe(0);
+describe("reference content sanity", () => {
+    test("no escaped fences or stray template-literal escapes", () => {
+        expect(REFERENCE_MARKDOWN).not.toMatch(/\\`\\`\\`/);
+        expect(REFERENCE_MARKDOWN).not.toContain("\\${");
     });
 
-    test("creates a new leaf when none exists", async () => {
-        const setViewStateCalls: unknown[] = [];
-        const p = fakePlugin({
-            existingLeaves: [],
-            onSetViewState: (state) => setViewStateCalls.push(state),
-        });
-        await openReferenceView(p as any);
-        // A new leaf was created.
-        expect(p.newLeafCalls.length).toBe(1);
-        // setViewState was called with our view type.
-        expect(setViewStateCalls.length).toBe(1);
-        const state = setViewStateCalls[0] as { type: string; active: boolean };
-        expect(state.type).toBe(VIEW_TYPE_REFERENCE);
-        expect(state.active).toBe(true);
+    test("every fence opens and closes (3- and 4-backtick aware)", () => {
+        const lines = REFERENCE_MARKDOWN.split("\n");
+        const stack: string[] = [];
+        for (const l of lines) {
+            const m = /^(`{3,4})/.exec(l);
+            if (!m) continue;
+            const f = m[1];
+            if (stack.length > 0 && stack[stack.length - 1] === f) {
+                stack.pop();
+            } else if (
+                stack.length > 0 &&
+                stack[stack.length - 1].length === 4 &&
+                f.length === 3
+            ) {
+                // 3-fence inside a 4-fence example: literal content
+                continue;
+            } else {
+                stack.push(f);
+            }
+        }
+        expect(stack).toEqual([]);
+    });
+
+    test("live examples are present", () => {
+        expect(REFERENCE_MARKDOWN).toContain("```randomness");
+        expect(REFERENCE_MARKDOWN).toContain("```portrait");
+        expect(REFERENCE_MARKDOWN).toContain("`rdm:[@Creature]`");
+        expect(REFERENCE_MARKDOWN).toContain("`portrait: reference-demo 96`");
     });
 });

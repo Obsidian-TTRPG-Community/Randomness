@@ -27,11 +27,7 @@ import {
 } from "./lockingService";
 import { registerIptView } from "./iptView";
 import { registerBrowserView } from "./browserView";
-import {
-    ReferenceView,
-    VIEW_TYPE_REFERENCE,
-    openReferenceView,
-} from "./referenceView";
+import { openReferenceView } from "./referenceView";
 import { TableAutocomplete } from "./tableAutocomplete";
 import { createApi, RandomnessAPI } from "../api";
 import { VaultIndex } from "../resolver/vaultIndex";
@@ -103,16 +99,6 @@ export default class RandomnessPlugin extends Plugin {
 
         // Register the right-sidebar generator browser pane.
         registerBrowserView(this);
-
-        // Register the reference / help pane. A read-only view
-        // listing the IPP3 syntax + the plugin's specific
-        // extensions (wiki-links, inline rdm:, codeblock scope).
-        // Accessed via a button in the settings tab and via the
-        // "Open reference" command.
-        this.registerView(
-            VIEW_TYPE_REFERENCE,
-            (leaf) => new ReferenceView(leaf, this)
-        );
 
         // Register the inline rdm:[@/#/! table-name autocomplete.
         // Fires when the user is mid-keystroke inside a `rdm:`
