@@ -292,8 +292,14 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         // silently overrides it for self-hosted packs), then the
         // Fantasy Hub generators + templates which use them.
 
-        const packPath =
-            this.plugin.settings.portraitPackPath || "fantasy_ink_parts_pack";
+        // Everything the plugin installs lives under the user's
+        // Generator root — installs stay grouped where the user chose.
+        // A pack that's ALREADY installed keeps working wherever its
+        // configured path points (e.g. older root-level installs);
+        // fresh installs land under <root>/fantasy_ink_parts_pack and
+        // the setting records the location.
+        const contentRoot = this.plugin.settings.generatorRoot || "Generators";
+        let packPath = `${contentRoot}/fantasy_ink_parts_pack`;
 
         const packSetting = new Setting(containerEl)
             .setName("Install Fantasy Portrait Pack")
@@ -303,9 +309,16 @@ export class RandomnessSettingsTab extends PluginSettingTab {
             let installed = false;
             let detail = "";
             try {
-                installed = await this.plugin.portraits.available();
+                const configured = this.plugin.settings.portraitPackPath;
+                if (
+                    configured &&
+                    (await this.plugin.portraits.available(configured))
+                ) {
+                    packPath = configured;
+                }
+                installed = await this.plugin.portraits.available(packPath);
                 if (installed) {
-                    const raw = await this.plugin.portraits.manifest();
+                    const raw = await this.plugin.portraits.manifest(packPath);
                     const assets = (raw.assets ?? raw.layers ?? {}) as Record<
                         string,
                         unknown[]
@@ -343,13 +356,15 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                             const url =
                                 this.plugin.settings.portraitPackUrl ||
                                 OFFICIAL_PACK_URL;
-                            this.plugin.settings.portraitPackPath = packPath;
-                            await this.plugin.saveSettings();
                             const n = await installPackFromUrl(
                                 this.plugin,
                                 url,
                                 packPath
                             );
+                            // Record where the pack actually lives so
+                            // detection/loading follow it from now on.
+                            this.plugin.settings.portraitPackPath = packPath;
+                            await this.plugin.saveSettings();
                             new Notice(
                                 `Portrait pack installed: ${n} files. ` +
                                     "Portraits are now active.",
