@@ -394,9 +394,11 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Pack download URL")
             .setDesc(
-                "Optional. Base URL serving a pack (manifest.json at its " +
-                    "root). When set, an install button appears below. " +
-                    "Leave blank if you copy packs into the vault yourself."
+                "Optional. Either a direct link to a pack release .zip " +
+                    "(recommended — e.g. a GitHub release asset) or a base " +
+                    "URL serving manifest.json + assets. When set, an " +
+                    "install button appears below. Leave blank if you copy " +
+                    "packs into the vault yourself."
             )
             .addText((text) =>
                 text

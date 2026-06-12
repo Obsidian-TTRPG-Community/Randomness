@@ -14,6 +14,7 @@
  */
 
 import { normalizePath, requestUrl, arrayBufferToBase64, Notice } from "obsidian";
+import { unzipSync } from "fflate";
 import type RandomnessPlugin from "../views/main";
 import { normalizeManifest, LoadFile } from "./pack";
 
@@ -104,6 +105,19 @@ export async function installPackFromUrl(
     baseUrl: string,
     destFolder: string
 ): Promise<number> {
+    // Release-asset zips (the recommended distribution: one ~100MB
+    // file on a GitHub release) take the unzip path; bare URLs are
+    // treated as a hosted folder serving manifest.json + assets.
+    if (/\.zip(\?|$)/i.test(baseUrl)) {
+        const res = await requestUrl({ url: baseUrl });
+        const n = await installPackFromZipBytes(
+            plugin,
+            new Uint8Array(res.arrayBuffer),
+            destFolder
+        );
+        plugin.portraits.invalidate();
+        return n;
+    }
     const base = baseUrl.replace(/\/+$/, "");
     const dest = normalizePath(destFolder);
     const adapter = plugin.app.vault.adapter;
@@ -143,5 +157,68 @@ export async function installPackFromUrl(
         }
     }
     plugin.portraits.invalidate();
+    return written;
+}
+
+/**
+ * Unpack a pack zip into the vault. Exported separately so tests can
+ * exercise it with in-memory zip bytes (no network). The zip may have
+ * everything at its root or under a single top-level folder (the
+ * GitHub-typical layout) — the folder prefix is stripped so the
+ * manifest always lands at <dest>/manifest.json. Backup folders
+ * (entries whose path contains a "_"-prefixed segment) are skipped.
+ */
+export async function installPackFromZipBytes(
+    plugin: RandomnessPlugin,
+    bytes: Uint8Array,
+    destFolder: string
+): Promise<number> {
+    const dest = normalizePath(destFolder);
+    const adapter = plugin.app.vault.adapter;
+    const entries = unzipSync(bytes);
+    const paths = Object.keys(entries).filter(
+        (p) => !p.endsWith("/") && entries[p].length > 0
+    );
+
+    // Locate manifest.json; derive the prefix to strip.
+    const manifestEntry = paths
+        .filter((p) => p.split("/").pop() === "manifest.json")
+        .sort((a, b) => a.length - b.length)[0];
+    if (!manifestEntry) {
+        throw new Error("zip contains no manifest.json — not a portrait pack");
+    }
+    const prefix = manifestEntry.slice(0, manifestEntry.length - "manifest.json".length);
+
+    const ensureFolder = async (folder: string): Promise<void> => {
+        if (folder === "" || folder === dest.slice(0, -1)) return;
+        if (await adapter.exists(folder)) return;
+        const parent = folder.includes("/")
+            ? folder.slice(0, folder.lastIndexOf("/"))
+            : "";
+        if (parent !== "") await ensureFolder(parent);
+        await adapter.mkdir(folder);
+    };
+    await ensureFolder(dest);
+
+    let written = 0;
+    for (const p of paths) {
+        if (!p.startsWith(prefix)) continue;
+        const rel = p.slice(prefix.length);
+        if (rel === "" || rel.includes("..")) continue;
+        // skip backup/scratch folders (_base_backup_…, etc.)
+        if (rel.split("/").some((seg) => seg.startsWith("_"))) continue;
+        const target = normalizePath(`${dest}/${rel}`);
+        const folder = target.slice(0, target.lastIndexOf("/"));
+        await ensureFolder(folder);
+        const data = entries[p];
+        await adapter.writeBinary(
+            target,
+            data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+        );
+        written++;
+        if (written % 50 === 0) {
+            new Notice(`Portrait pack: ${written}/${paths.length} files…`, 2000);
+        }
+    }
     return written;
 }
