@@ -821,6 +821,10 @@ Everything installed. Two template sets shipped:
    temple and barracks note arrives with a named, portraited keeper
    and coherent rolled text.
 
+(Town Forge 1.0.4+ also carries this template set itself \u2014 its
+settings have a **Create place templates** button that writes them
+into whatever folder it's pointed at. Same templates either way.)
+
 Crests on castles and guilds? Install
 [Heraldry Weaver](obsidian://show-plugin?id=heraldry-weaver).
 
