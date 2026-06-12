@@ -43,9 +43,14 @@ drivers:
 - **`townforge-templates/`** — for [Town Forge](obsidian://show-plugin?id=town-forge):
   these use `{{name}}` / `{{town}}` / `{{subtype}}` / `{{size}}`
   placeholders and never prompt, so Town Forge can stamp a whole town
-  of keyed location notes in one go. Point **Town Forge → Template
-  folder** at the installed `townforge-templates` folder (use forward
-  slashes, e.g. `Generators/fantasy-hub/townforge-templates`).
+  of keyed location notes in one go. Two settings make this work:
+  1. **Town Forge → Template folder** → the installed
+     `townforge-templates` folder (forward slashes, e.g.
+     `Generators/fantasy-hub/townforge-templates`).
+  2. **Templater → "Trigger Templater on new file creation"** → ON —
+     Town Forge creates the notes; this is what makes Templater run
+     the template code inside them. (Fresh Templater installs have it
+     off.)
 
 Don't point Town Forge at `templates/` — those prompt interactively
 and roll their own names, which fights Town Forge's own naming.
