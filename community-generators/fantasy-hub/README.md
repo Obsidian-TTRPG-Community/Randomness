@@ -32,6 +32,24 @@ can see (or set the root to it).
   ````
 - **API:** `await api.rollUnscoped("TF-Tavern", { promptValues: { town: "Havenash" } })`
 
+## Using with Town Forge
+
+Two template sets ship in this bundle — same locations, different
+drivers:
+
+- **`templates/`** — standalone: trigger one in an empty note, it asks
+  for the town and size and rolls everything else. No other plugin
+  needed (besides Templater).
+- **`townforge-templates/`** — for [Town Forge](obsidian://show-plugin?id=town-forge):
+  these use `{{name}}` / `{{town}}` / `{{subtype}}` / `{{size}}`
+  placeholders and never prompt, so Town Forge can stamp a whole town
+  of keyed location notes in one go. Point **Town Forge → Template
+  folder** at the installed `townforge-templates` folder (use forward
+  slashes, e.g. `Generators/fantasy-hub/townforge-templates`).
+
+Don't point Town Forge at `templates/` — those prompt interactively
+and roll their own names, which fights Town Forge's own naming.
+
 ## One person across the whole note
 
 Every place generator accepts optional prompts (`keeperName`,
