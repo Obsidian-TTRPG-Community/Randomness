@@ -59,7 +59,10 @@ export async function installContentBundle(
               )
             : normalizePath(`${dests.generatorsDest}/${rel}`);
         await ensureFolder(target.slice(0, target.lastIndexOf("/")));
-        const res = await requestUrl({ url: `${base}/${rel}` });
+        // Encode each path segment — bundle filenames may contain
+        // spaces ("Thief Guild.md") and raw URLs must be %-escaped.
+        const relUrl = rel.split("/").map(encodeURIComponent).join("/");
+        const res = await requestUrl({ url: `${base}/${relUrl}` });
         await adapter.write(target, res.text);
         written++;
         if (written % 10 === 0) {

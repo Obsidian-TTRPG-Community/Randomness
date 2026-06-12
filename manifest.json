@@ -1,9 +1,9 @@
 {
-  "id": "randomness",
-  "name": "Randomness",
-  "version": "1.0.18",
-  "minAppVersion": "1.7.2",
-  "description": "Random table generator for TTRPG and creative writing. Compatible with the Inspiration Pad Pro 3 (IPP3) syntax. Roll inline, lock results, browse generators in a sidebar.",
-  "author": "Josh",
-  "isDesktopOnly": false
+	"id": "randomness",
+	"name": "Randomness",
+	"version": "1.1.0",
+	"minAppVersion": "1.7.2",
+	"description": "Random table generator for TTRPG and creative writing. Compatible with the Inspiration Pad Pro 3 (IPP3) syntax. Roll inline, lock results, browse generators in a sidebar.",
+	"author": "Josh",
+	"isDesktopOnly": false
 }
