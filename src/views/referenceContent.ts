@@ -746,13 +746,16 @@ and branch on the surface they need.
   derived from their position so re-rendering the same note
   doesn't shuffle results. Useful for "this codeblock should
   stay consistent until I edit it".
-- **Portrait pack folder / status / download URL** — where the
-  portrait pack lives, whether one was found (with part counts),
-  and an optional URL for one-click pack install. Portrait
-  features activate only when a pack is present.
-- **Install Fantasy Hub content** — downloads the showcase bundle
-  (town generators + standalone Templater templates with portrait
-  NPCs) into your generator root.
+- **Install Fantasy Portrait Pack** — one click: downloads the
+  official art pack (~60 MB) into your vault and switches every
+  portrait feature on. Portraits stay off until a pack is
+  installed. (Self-hosting? Set \`portraitPackUrl\` in the
+  plugin's data.json — there's deliberately no UI for it.)
+- **Install Fantasy Hub content** — the showcase bundle: town
+  generators into your generator root, ready-to-run Templater
+  templates into your Templater folder. Wants the portrait pack
+  first; pairs well with Town Forge and Heraldry Weaver (buttons
+  link to both).
 
 ## More
 

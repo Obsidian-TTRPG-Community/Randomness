@@ -279,186 +279,190 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                 );
         }
 
-        new Setting(containerEl)
-            .setName("Default formatting")
-            .setDesc(
-                "How bold/italic/underline filters render when a generator " +
-                    "doesn't specify a Formatting: directive."
-            )
-            .addDropdown((dd) =>
-                dd
-                    .addOption("html", "HTML (rich)")
-                    .addOption("text", "Plain text")
-                    .setValue(this.plugin.settings.defaultFormatting)
-                    .onChange(async (value) => {
-                        this.plugin.settings.defaultFormatting =
-                            value === "text" ? "text" : "html";
-                        await this.plugin.saveSettings();
-                    })
-            );
 
-        new Setting(containerEl)
-            .setName("Stable codeblock seeds")
-            .setDesc(
-                "When on, codeblocks render the same result across reloads " +
-                    "until you reroll. When off, every render is independent. " +
-                    "The Lock action (when available) is the stronger choice " +
-                    "for preserving a specific result."
-            )
-            .addToggle((toggle) =>
-                toggle
-                    .setValue(this.plugin.settings.stableCodeblockSeeds)
-                    .onChange(async (value) => {
-                        this.plugin.settings.stableCodeblockSeeds = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
-
-        // ─── Portraits ─────────────────────────────────────────
+        // ─── Starter content ───────────────────────────────────
         //
-        // The portrait compositor (```portrait codeblocks) activates
-        // only when a valid pack folder is found. These settings point
-        // at the pack, surface its status, and offer an in-place
-        // install when a download URL is configured.
+        // One simple flow, in order: portraits first (a single click
+        // — official pack URL is built in; data.json's portraitPackUrl
+        // silently overrides it for self-hosted packs), then the
+        // Fantasy Hub generators + templates which use them.
 
-        new Setting(containerEl)
-            .setName("Portrait pack folder")
-            .setDesc(
-                "Vault-relative folder containing a portrait pack " +
-                    "(manifest.json + layer images). The portrait " +
-                    "codeblock activates when a valid pack is found here."
-            )
-            .addText((text) =>
-                text
-                    .setPlaceholder("fantasy_ink_parts_pack")
-                    .setValue(this.plugin.settings.portraitPackPath)
-                    .onChange(async (value) => {
-                        const trimmed = value.trim();
-                        this.plugin.settings.portraitPackPath =
-                            trimmed === "" ? "" : normalizePath(trimmed);
-                        await this.plugin.saveSettings();
-                        this.plugin.portraits.invalidate();
+        const packPath =
+            this.plugin.settings.portraitPackPath || "fantasy_ink_parts_pack";
+
+        const packSetting = new Setting(containerEl)
+            .setName("Install Fantasy Portrait Pack")
+            .setDesc("Checking…");
+        void (async () => {
+            if (!this.plugin.portraits) return;
+            let installed = false;
+            let detail = "";
+            try {
+                installed = await this.plugin.portraits.available();
+                if (installed) {
+                    const raw = await this.plugin.portraits.manifest();
+                    const assets = (raw.assets ?? raw.layers ?? {}) as Record<
+                        string,
+                        unknown[]
+                    >;
+                    const total = Object.values(assets).reduce(
+                        (a, v) => a + (Array.isArray(v) ? v.length : 0),
+                        0
+                    );
+                    detail = `${Object.keys(assets).length} categories, ${total} parts`;
+                }
+            } catch {
+                installed = false;
+            }
+            packSetting.setDesc(
+                installed
+                    ? `Installed ✓ (${detail}, in "${packPath}") — portrait ` +
+                          "codeblocks, inline portraits, the roller and the " +
+                          "builder are active."
+                    : "Rollable character portraits: seeded faces with names, " +
+                          "used by codeblocks, inline spans, the roller pane " +
+                          "and templates. One click — downloads the art " +
+                          `(~60 MB) into "${packPath}" and switches the ` +
+                          "portrait features on."
+            );
+            packSetting.addButton((btn) =>
+                btn
+                    .setButtonText(installed ? "Reinstall" : "Install")
+                    .setCta()
+                    .onClick(async () => {
+                        btn.setDisabled(true);
+                        btn.setButtonText("Installing…");
+                        try {
+                            const { installPackFromUrl, OFFICIAL_PACK_URL } =
+                                await import("../portrait/service");
+                            const url =
+                                this.plugin.settings.portraitPackUrl ||
+                                OFFICIAL_PACK_URL;
+                            this.plugin.settings.portraitPackPath = packPath;
+                            await this.plugin.saveSettings();
+                            const n = await installPackFromUrl(
+                                this.plugin,
+                                url,
+                                packPath
+                            );
+                            new Notice(
+                                `Portrait pack installed: ${n} files. ` +
+                                    "Portraits are now active.",
+                                8000
+                            );
+                            this.display();
+                        } catch (e: unknown) {
+                            new Notice(
+                                "Pack install failed: " + errorMessage(e),
+                                8000
+                            );
+                            btn.setDisabled(false);
+                            btn.setButtonText(installed ? "Reinstall" : "Install");
+                        }
                     })
             );
-
-        const statusSetting = new Setting(containerEl)
-            .setName("Portrait pack status")
-            .setDesc("Checking…")
-            .addButton((btn) =>
-                btn.setButtonText("Re-check").onClick(() => {
-                    this.plugin.portraits.invalidate();
-                    this.display();
-                })
-            );
-        void (async () => {
-            const packPath = this.plugin.settings.portraitPackPath;
-            if (packPath === "") {
-                statusSetting.setDesc(
-                    "No pack folder configured — portrait features are off."
-                );
-                return;
-            }
-            try {
-                if (!(await this.plugin.portraits.available())) {
-                    statusSetting.setDesc(
-                        `No manifest.json found in "${packPath}" — portrait ` +
-                            "features are off. Copy a pack folder into the " +
-                            "vault (or use the install button below)."
-                    );
-                    return;
-                }
-                const raw = await this.plugin.portraits.manifest();
-                const assets = (raw.assets ?? raw.layers ?? {}) as Record<
-                    string,
-                    unknown[]
-                >;
-                const total = Object.values(assets).reduce(
-                    (a, v) => a + (Array.isArray(v) ? v.length : 0),
-                    0
-                );
-                const packName =
-                    typeof raw.pack === "string" ? raw.pack : packPath;
-                statusSetting.setDesc(
-                    `Pack found: "${packName}" — ` +
-                        `${Object.keys(assets).length} categories, ` +
-                        `${total} parts. Portrait codeblocks are active.`
-                );
-            } catch (e: unknown) {
-                statusSetting.setDesc(
-                    `Pack at "${packPath}" couldn't be read: ` +
-                        errorMessage(e)
-                );
-            }
         })();
 
-        new Setting(containerEl)
-            .setName("Pack download URL")
-            .setDesc(
-                "Optional. Either a direct link to a pack release .zip " +
-                    "(recommended — e.g. a GitHub release asset) or a base " +
-                    "URL serving manifest.json + assets. When set, an " +
-                    "install button appears below. Leave blank if you copy " +
-                    "packs into the vault yourself."
+        const FANTASY_HUB_URL =
+            "https://raw.githubusercontent.com/Obsidian-TTRPG-Community/" +
+            "Randomness/main/community-generators/fantasy-hub";
+
+        const hubSetting = new Setting(containerEl)
+            .setName("Install Fantasy Hub content")
+            .setDesc("Checking…");
+        hubSetting
+            .addExtraButton((b) =>
+                b
+                    .setIcon("castle")
+                    .setTooltip("Get Town Forge (community plugins)")
+                    .onClick(() => {
+                        window.open("obsidian://show-plugin?id=town-forge");
+                    })
             )
-            .addText((text) =>
-                text
-                    .setPlaceholder("https://…/fantasy_ink_parts_pack")
-                    .setValue(this.plugin.settings.portraitPackUrl)
-                    .onChange(async (value) => {
-                        this.plugin.settings.portraitPackUrl = value.trim();
-                        await this.plugin.saveSettings();
+            .addExtraButton((b) =>
+                b
+                    .setIcon("shield")
+                    .setTooltip("Get Heraldry Weaver (community plugins)")
+                    .onClick(() => {
+                        window.open(
+                            "obsidian://show-plugin?id=heraldry-weaver"
+                        );
                     })
             );
+        void (async () => {
+            if (!this.plugin.portraits) return;
+            const packReady = await this.plugin.portraits
+                .available()
+                .catch(() => false);
 
-        if (this.plugin.settings.portraitPackUrl !== "") {
-            new Setting(containerEl)
-                .setName("Install portrait pack")
-                .setDesc(
-                    "Download the pack from the URL above into " +
-                        `"${this.plugin.settings.portraitPackPath || "(set a pack folder first)"}". ` +
-                        "A pack is a few hundred small images — this can " +
-                        "take a minute. Existing files are overwritten."
-                )
-                .addButton((btn) =>
-                    btn
-                        .setButtonText("Install")
-                        .setCta()
-                        .onClick(async () => {
-                            const dest =
-                                this.plugin.settings.portraitPackPath;
-                            if (dest === "") {
-                                new Notice(
-                                    "Set a portrait pack folder first."
-                                );
-                                return;
-                            }
-                            btn.setDisabled(true);
-                            try {
-                                // Lazy import — keeps the downloader out
-                                // of the settings module's load graph
-                                // (same pattern as the reference view).
-                                const { installPackFromUrl } = await import(
-                                    "../portrait/service"
-                                );
-                                const n = await installPackFromUrl(
-                                    this.plugin,
-                                    this.plugin.settings.portraitPackUrl,
-                                    dest
-                                );
-                                new Notice(
-                                    `Portrait pack installed: ${n} files.`
-                                );
-                                this.display();
-                            } catch (e: unknown) {
-                                new Notice(
-                                    "Pack install failed: " + errorMessage(e),
-                                    8000
-                                );
-                                btn.setDisabled(false);
-                            }
-                        })
-                );
-        }
+            // Templates belong in the user's Templater folder when one
+            // is configured; generators go under the generator root.
+            const templaterFolder = (
+                this.plugin.app as unknown as {
+                    plugins?: {
+                        plugins?: Record<
+                            string,
+                            { settings?: { templates_folder?: string } }
+                        >;
+                    };
+                }
+            ).plugins?.plugins?.["templater-obsidian"]?.settings
+                ?.templates_folder;
+            const root = this.plugin.settings.generatorRoot || "Generators";
+            const generatorsDest = `${root}/fantasy-hub`;
+            const templatesDest = templaterFolder
+                ? `${templaterFolder}/Fantasy Hub`
+                : `${generatorsDest}/templates`;
+
+            hubSetting.setDesc(
+                (packReady
+                    ? ""
+                    : "Install the Fantasy Portrait Pack above first. ") +
+                    "A town's worth of generators (five stocked shop types, " +
+                    "tavern, inn, temple, castle, guild and more) plus " +
+                    "one-click Templater templates that build whole " +
+                    `location notes with portrait NPCs. Generators install ` +
+                    `to "${generatorsDest}", templates to "${templatesDest}". ` +
+                    "Works great with Town Forge (stamp whole towns) and " +
+                    "Heraldry Weaver (crests) — the buttons here open them " +
+                    "in Community plugins."
+            );
+            hubSetting.addButton((btn) =>
+                btn
+                    .setButtonText("Install")
+                    .setCta()
+                    .setDisabled(!packReady)
+                    .onClick(async () => {
+                        btn.setDisabled(true);
+                        btn.setButtonText("Installing…");
+                        try {
+                            const { installContentBundle } = await import(
+                                "../contentInstaller"
+                            );
+                            const n = await installContentBundle(
+                                this.plugin,
+                                FANTASY_HUB_URL,
+                                { generatorsDest, templatesDest }
+                            );
+                            new Notice(
+                                `Fantasy Hub installed: ${n} files. ` +
+                                    `Templates are in "${templatesDest}".`,
+                                10000
+                            );
+                            this.display();
+                        } catch (e: unknown) {
+                            new Notice(
+                                "Fantasy Hub install failed: " +
+                                    errorMessage(e),
+                                8000
+                            );
+                            btn.setDisabled(false);
+                            btn.setButtonText("Install");
+                        }
+                    })
+            );
+        })();
+
 
         // ─── Community generators ──────────────────────────────
         //
@@ -488,63 +492,6 @@ export class RandomnessSettingsTab extends PluginSettingTab {
             "https://github.com/Obsidian-TTRPG-Community/Randomness/" +
             "tree/main/community-generators";
 
-        // ─── Fantasy Hub starter content ───────────────────────
-        //
-        // The showcase bundle: shop/place generators + standalone
-        // Templater templates with portrait-NPC infoboxes. Lives in
-        // community-generators/fantasy-hub in the repo; the button
-        // fetches it from there so the plugin bundle stays small
-        // (the PF2e item lists alone are ~1.4 MB of text).
-
-        const FANTASY_HUB_URL =
-            "https://raw.githubusercontent.com/Obsidian-TTRPG-Community/" +
-            "Randomness/main/community-generators/fantasy-hub";
-
-        new Setting(containerEl)
-            .setName("Install Fantasy Hub content")
-            .setDesc(
-                "A town's worth of generators (five shop types with full " +
-                    "stock lists, tavern, inn, temple, castle, guild and " +
-                    "more) plus one-click Templater templates that build " +
-                    "whole location notes — with portrait NPCs when a " +
-                    "pack is installed. ~50 text files, downloaded from " +
-                    "the Randomness GitHub repo into your vault."
-            )
-            .addButton((btn) =>
-                btn
-                    .setButtonText("Install")
-                    .setCta()
-                    .onClick(async () => {
-                        const root =
-                            this.plugin.settings.generatorRoot || "Generators";
-                        const dest = `${root}/fantasy-hub`;
-                        btn.setDisabled(true);
-                        try {
-                            const { installContentBundle } = await import(
-                                "../contentInstaller"
-                            );
-                            const n = await installContentBundle(
-                                this.plugin,
-                                FANTASY_HUB_URL,
-                                dest
-                            );
-                            new Notice(
-                                `Fantasy Hub installed: ${n} files in "${dest}". ` +
-                                    "Templates are in its templates/ subfolder — " +
-                                    "point Templater there (or copy them out).",
-                                10000
-                            );
-                        } catch (e: unknown) {
-                            new Notice(
-                                "Fantasy Hub install failed: " +
-                                    errorMessage(e),
-                                8000
-                            );
-                        } finally {
-                            btn.setDisabled(false);
-                        }
-                    })
-            );
 
         new Setting(containerEl)
             .setName("Browse community generators")
@@ -637,6 +584,43 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     .setButtonText("Open submission form")
                     .onClick(() => {
                         window.open(submitUrl, "_blank");
+                    })
+            );
+
+        // ─── Behaviour ──────────────────────────────────────────
+
+        new Setting(containerEl)
+            .setName("Default formatting")
+            .setDesc(
+                "How bold/italic/underline filters render when a generator " +
+                    "doesn't specify a Formatting: directive."
+            )
+            .addDropdown((dd) =>
+                dd
+                    .addOption("html", "HTML (rich)")
+                    .addOption("text", "Plain text")
+                    .setValue(this.plugin.settings.defaultFormatting)
+                    .onChange(async (value) => {
+                        this.plugin.settings.defaultFormatting =
+                            value === "text" ? "text" : "html";
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Stable codeblock seeds")
+            .setDesc(
+                "When on, codeblocks render the same result across reloads " +
+                    "until you reroll. When off, every render is independent. " +
+                    "The Lock action (when available) is the stronger choice " +
+                    "for preserving a specific result."
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.stableCodeblockSeeds)
+                    .onChange(async (value) => {
+                        this.plugin.settings.stableCodeblockSeeds = value;
+                        await this.plugin.saveSettings();
                     })
             );
     }

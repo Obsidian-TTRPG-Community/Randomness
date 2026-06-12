@@ -21,6 +21,15 @@ import { normalizeManifest, LoadFile } from "./pack";
 /** Raw manifest type — the engine's normalizeManifest handles shape. */
 type RawManifest = Record<string, unknown>;
 
+/**
+ * Official portrait pack release asset. The settings "Install Fantasy
+ * Portrait Pack" button uses this; a `portraitPackUrl` value in
+ * data.json (no UI) overrides it for self-hosted packs.
+ */
+export const OFFICIAL_PACK_URL =
+    "https://github.com/Obsidian-TTRPG-Community/Randomness/releases/" +
+    "download/portrait-pack-v1.0.0/fantasy-ink-parts-pack-v1.0.0.zip";
+
 export class PortraitService {
     /**
      * Caches live for the plugin lifetime, invalidated when the pack

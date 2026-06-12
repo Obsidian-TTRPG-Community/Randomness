@@ -18,13 +18,19 @@ interface ContentIndex {
     files: string[];
 }
 
+export interface BundleDestinations {
+    /** Where generator files (and bundle docs) land. */
+    generatorsDest: string;
+    /** Where files under templates/ land (e.g. the Templater folder). */
+    templatesDest: string;
+}
+
 export async function installContentBundle(
     plugin: RandomnessPlugin,
     baseUrl: string,
-    destFolder: string
+    dests: BundleDestinations
 ): Promise<number> {
     const base = baseUrl.replace(/\/+$/, "");
-    const dest = normalizePath(destFolder);
     const adapter = plugin.app.vault.adapter;
 
     const index = JSON.parse(
@@ -45,9 +51,13 @@ export async function installContentBundle(
 
     let written = 0;
     for (const rel of index.files) {
-        // Path hygiene: stay inside dest, no escapes.
+        // Path hygiene: stay inside the destinations, no escapes.
         if (rel.includes("..") || rel.startsWith("/")) continue;
-        const target = normalizePath(`${dest}/${rel}`);
+        const target = rel.startsWith("templates/")
+            ? normalizePath(
+                  `${dests.templatesDest}/${rel.slice("templates/".length)}`
+              )
+            : normalizePath(`${dests.generatorsDest}/${rel}`);
         await ensureFolder(target.slice(0, target.lastIndexOf("/")));
         const res = await requestUrl({ url: `${base}/${rel}` });
         await adapter.write(target, res.text);

@@ -447,6 +447,25 @@ export class Setting {
         cb(new ButtonComponent());
         return this;
     }
+    addExtraButton(cb: (button: ExtraButtonComponent) => void): this {
+        cb(new ExtraButtonComponent());
+        return this;
+    }
+}
+
+/** Minimal ExtraButtonComponent mock (icon-only side buttons). */
+export class ExtraButtonComponent {
+    onClickHandler: (() => void) | null = null;
+    setIcon(_icon: string): this {
+        return this;
+    }
+    setTooltip(_tip: string): this {
+        return this;
+    }
+    onClick(handler: () => void): this {
+        this.onClickHandler = handler;
+        return this;
+    }
 }
 
 /**
