@@ -417,17 +417,15 @@ export class RandomnessSettingsTab extends PluginSettingTab {
 
             // Templates belong in the user's Templater folder when one
             // is configured; generators go under the generator root.
-            const templaterFolder = (
-                this.plugin.app as unknown as {
-                    plugins?: {
-                        plugins?: Record<
-                            string,
-                            { settings?: { templates_folder?: string } }
-                        >;
-                    };
-                }
-            ).plugins?.plugins?.["templater-obsidian"]?.settings
-                ?.templates_folder;
+            // Detection reads the live plugin OR its data.json — the
+            // live path silently fails when Templater is disabled at
+            // install time (seen in clean-vault testing).
+            const { readPluginSetting } = await import("../contentInstaller");
+            const templaterFolder = (await readPluginSetting(
+                this.plugin,
+                "templater-obsidian",
+                "templates_folder"
+            )) as string | undefined;
             const root = this.plugin.settings.generatorRoot || "Generators";
             const generatorsDest = `${root}/fantasy-hub`;
             const templatesDest = templaterFolder
@@ -464,9 +462,22 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                                 FANTASY_HUB_URL,
                                 { generatorsDest, templatesDest }
                             );
+                            const { finishFantasyHubSetup } = await import(
+                                "../contentInstaller"
+                            );
+                            const setup = await finishFantasyHubSetup(
+                                this.plugin,
+                                { generatorsDest, templatesDest }
+                            );
+                            const tfMsg =
+                                setup.townForge === "configured"
+                                    ? "Town Forge is pointed at the new templates."
+                                    : setup.townForge === "configured-disabled"
+                                      ? "Town Forge (currently disabled) is pre-configured."
+                                      : "";
                             new Notice(
-                                `Fantasy Hub installed: ${n} files. ` +
-                                    `Templates are in "${templatesDest}".`,
+                                `Fantasy Hub installed: ${n} files. ${tfMsg} ` +
+                                    "The Start Here note has the rest.",
                                 10000
                             );
                             this.display();
