@@ -486,6 +486,64 @@ export class RandomnessSettingsTab extends PluginSettingTab {
             "https://github.com/Obsidian-TTRPG-Community/Randomness/" +
             "tree/main/community-generators";
 
+        // ─── Fantasy Hub starter content ───────────────────────
+        //
+        // The showcase bundle: shop/place generators + standalone
+        // Templater templates with portrait-NPC infoboxes. Lives in
+        // community-generators/fantasy-hub in the repo; the button
+        // fetches it from there so the plugin bundle stays small
+        // (the PF2e item lists alone are ~1.4 MB of text).
+
+        const FANTASY_HUB_URL =
+            "https://raw.githubusercontent.com/Obsidian-TTRPG-Community/" +
+            "Randomness/main/community-generators/fantasy-hub";
+
+        new Setting(containerEl)
+            .setName("Install Fantasy Hub content")
+            .setDesc(
+                "A town's worth of generators (five shop types with full " +
+                    "stock lists, tavern, inn, temple, castle, guild and " +
+                    "more) plus one-click Templater templates that build " +
+                    "whole location notes — with portrait NPCs when a " +
+                    "pack is installed. ~50 text files, downloaded from " +
+                    "the Randomness GitHub repo into your vault."
+            )
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Install")
+                    .setCta()
+                    .onClick(async () => {
+                        const root =
+                            this.plugin.settings.generatorRoot || "Generators";
+                        const dest = `${root}/fantasy-hub`;
+                        btn.setDisabled(true);
+                        try {
+                            const { installContentBundle } = await import(
+                                "../contentInstaller"
+                            );
+                            const n = await installContentBundle(
+                                this.plugin,
+                                FANTASY_HUB_URL,
+                                dest
+                            );
+                            new Notice(
+                                `Fantasy Hub installed: ${n} files in "${dest}". ` +
+                                    "Templates are in its templates/ subfolder — " +
+                                    "point Templater there (or copy them out).",
+                                10000
+                            );
+                        } catch (e: unknown) {
+                            new Notice(
+                                "Fantasy Hub install failed: " +
+                                    errorMessage(e),
+                                8000
+                            );
+                        } finally {
+                            btn.setDisabled(false);
+                        }
+                    })
+            );
+
         new Setting(containerEl)
             .setName("Browse community generators")
             .setDesc(
