@@ -1,9 +1,9 @@
-// place-counts.ipt
+// place-counts.rdm
 // =====================================================================
 // Settlement-size-aware counts for the non-shop "place" generators that
 // describe a COUNTABLE collection: a market's stalls, a barracks'
 // garrison, a guild's membership. Mirrors the philosophy of
-// stock-count.ipt (shops) but with curves appropriate to each place
+// stock-count.rdm (shops) but with curves appropriate to each place
 // type — a garrison scales far more steeply than a shop's shelf.
 //
 // Entry tables (each takes a Town Forge size tier as its one param):

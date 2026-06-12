@@ -1,4 +1,4 @@
-// place-guild.ipt
+// place-guild.rdm
 // =====================================================================
 // A guild, organised by CATEGORY (craft, religious, military, criminal,
 // arcane, civic). Each category spans a moral SLANT — good, murky, or
@@ -27,7 +27,7 @@
 //   prompt3 shopName- a name to use instead of rolling one ("" = roll)
 //   prompt4 slant   - "good" | "murky" | "dark" | "any" (default any)
 //
-// Reuses people.ipt + prices.ipt. Dues/fees/cuts in COPPER
+// Reuses people.rdm + prices.rdm. Dues/fees/cuts in COPPER
 // (1 gp = 100 cp), flavourful suggestions marked (~).
 //
 // DESIGN: category is set first (sets {cat} + a category label and a
@@ -37,9 +37,9 @@
 // coherently. The hook pool is shared and always a little murky.
 
 Title: Guild
-Use: people.ipt
-Use: prices.ipt
-Use: place-counts.ipt
+Use: people.rdm
+Use: prices.rdm
+Use: place-counts.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} guild

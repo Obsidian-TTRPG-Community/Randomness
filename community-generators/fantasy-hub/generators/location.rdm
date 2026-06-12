@@ -1,4 +1,4 @@
-// location.ipt
+// location.rdm
 // =====================================================================
 // Umbrella picker for ALL settlement locations. Roll [@TF-Location]
 // for a random location of any kind (a shop, an inn, a temple, a
@@ -17,7 +17,7 @@
 // USAGE
 //   API / Templater:   await api.rollUnscoped("TF-Location", {promptValues:{...}})
 //   In-note codeblock: ```randomness
-//                      Use: location.ipt
+//                      Use: location.rdm
 //                      [@TF-Location]
 //                      ```
 //
@@ -26,21 +26,21 @@
 // individual files: 1=town, 2=shopType, 3=shopName).
 
 Title: Location
-Use: shop.ipt
-Use: place-inn.ipt
-Use: place-stable.ipt
-Use: place-market.ipt
-Use: place-temple.ipt
-Use: place-castle.ipt
-Use: place-barracks.ipt
-Use: place-dock.ipt
-Use: place-mill.ipt
-Use: place-farm.ipt
-Use: place-guild.ipt
-Use: place-tavern.ipt
-Use: place-tower.ipt
-Use: place-undertaker.ipt
-Use: place-manor.ipt
+Use: shop.rdm
+Use: place-inn.rdm
+Use: place-stable.rdm
+Use: place-market.rdm
+Use: place-temple.rdm
+Use: place-castle.rdm
+Use: place-barracks.rdm
+Use: place-dock.rdm
+Use: place-mill.rdm
+Use: place-farm.rdm
+Use: place-guild.rdm
+Use: place-tavern.rdm
+Use: place-tower.rdm
+Use: place-undertaker.rdm
+Use: place-manor.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} location

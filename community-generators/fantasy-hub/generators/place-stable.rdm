@@ -1,7 +1,7 @@
-// place-stable.ipt
+// place-stable.rdm
 // =====================================================================
-// A PF2e stable / livery. Reuses people.ipt (stablemaster + customer)
-// and prices.ipt. Gives a GM: the stablemaster, the mounts and tack
+// A PF2e stable / livery. Reuses people.rdm (stablemaster + customer)
+// and prices.rdm. Gives a GM: the stablemaster, the mounts and tack
 // for sale or hire with PF2e prices, the state of the yard, a customer,
 // and a hook.
 //
@@ -14,8 +14,8 @@
 // Core Rulebook where confident; (~) marks approximations to verify.
 
 Title: Stable
-Use: people.ipt
-Use: prices.ipt
+Use: people.rdm
+Use: prices.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} stable

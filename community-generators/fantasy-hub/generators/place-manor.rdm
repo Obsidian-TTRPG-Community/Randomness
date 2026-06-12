@@ -1,4 +1,4 @@
-// place-manor.ipt
+// place-manor.rdm
 // =====================================================================
 // A noble's (or wealthy family's) manor house — a household and its
 // intrigues. Smaller and more domestic than a castle: no garrison or
@@ -10,10 +10,10 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt. No prices.
+// Reuses people.rdm. No prices.
 
 Title: Manor
-Use: people.ipt
+Use: people.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} manor

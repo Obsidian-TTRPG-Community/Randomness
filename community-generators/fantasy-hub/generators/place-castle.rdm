@@ -1,4 +1,4 @@
-// place-castle.ipt
+// place-castle.rdm
 // =====================================================================
 // A castle / keep / fortified seat of power. Purely institutional —
 // NO commerce, no priced stock. A GM gets: the ruler and their
@@ -11,11 +11,11 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt for the ruler and court figures. No prices.ipt —
+// Reuses people.rdm for the ruler and court figures. No prices.rdm —
 // you don't shop at a castle.
 
 Title: Castle
-Use: people.ipt
+Use: people.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} castle

@@ -26,6 +26,7 @@
  * the caller's folder before falling back to the index's first.
  */
 
+import { isGeneratorPath } from "../generatorFormat";
 import { parseFileSource } from "../resolver/fileResolver";
 
 /** Minimal vault surface the index needs. Keeps it testable. */
@@ -86,7 +87,7 @@ export class VaultIndex {
             .getFiles()
             .filter(
                 (f) =>
-                    f.path.toLowerCase().endsWith(".ipt") &&
+                    isGeneratorPath(f.path) &&
                     underRoot(f.path, root)
             );
 

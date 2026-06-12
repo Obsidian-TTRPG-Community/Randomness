@@ -1,4 +1,4 @@
-// place-dock.ipt
+// place-dock.rdm
 // =====================================================================
 // A dock / harbour / wharf — a working waterfront. Overseer
 // (harbourmaster), the ships and cargo moving through, the dockhands,
@@ -9,11 +9,11 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt. No priced stock (it's a working dock, not a
+// Reuses people.rdm. No priced stock (it's a working dock, not a
 // market), though cargo is described.
 
 Title: Dock
-Use: people.ipt
+Use: people.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} dock

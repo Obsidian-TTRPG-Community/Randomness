@@ -1,7 +1,7 @@
-// place-inn.ipt
+// place-inn.rdm
 // =====================================================================
-// A PF2e inn / tavern. Reuses people.ipt (innkeeper + patron) and
-// prices.ipt (coin math + markup). Built to give a GM something to
+// A PF2e inn / tavern. Reuses people.rdm (innkeeper + patron) and
+// prices.rdm (coin math + markup). Built to give a GM something to
 // run with: the innkeeper, lodging/food/drink with PF2e prices, the
 // atmosphere of the common room, a patron present, and a rumour or
 // bit of trouble hanging in the air.
@@ -19,8 +19,8 @@
 // VERIFY against your sources if exact prices matter at your table.
 
 Title: Inn
-Use: people.ipt
-Use: prices.ipt
+Use: people.rdm
+Use: prices.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} inn

@@ -72,7 +72,7 @@ See `CONTRIBUTING.md` at the repo root for the full guidelines.
 - Original content, or content you have permission to share, under
   a license that lets others use and adapt it (CC0 / CC-BY /
   MIT-style work well for tables).
-- IPP3-syntax `.ipt` files that work with the released version of
+- Randomness generator files (`.rdm`, or legacy `.ipt`) that work with the released version of
   Randomness (no patches required).
 - A `README.md` that explains what the generator does, a sample
   output or two, and the license.

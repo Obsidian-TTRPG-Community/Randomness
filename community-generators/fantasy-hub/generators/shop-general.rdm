@@ -1,8 +1,8 @@
-// shop-general.ipt
+// shop-general.rdm
 // =====================================================================
 // A PF2e general goods store: adventuring sundries, basic gear,
-// consumables. Reuses people.ipt (owner) and customers.ipt
-// (browser), and prices.ipt (coin math + markup).
+// consumables. Reuses people.rdm (owner) and customers.rdm
+// (browser), and prices.rdm (coin math + markup).
 //
 // Entry table:
 //   [@GeneralShop]  - a full shop block: name, owner, markup note,
@@ -15,11 +15,11 @@
 // prices matter at your table — flagged inline with (~).
 
 Title: General Shop
-Use: people.ipt
-Use: customers.ipt
-Use: prices.ipt
-Use: stock-count.ipt
-Use: items-general.ipt
+Use: people.rdm
+Use: customers.rdm
+Use: prices.rdm
+Use: stock-count.rdm
+Use: items-general.rdm
 
 // Optional inputs from a caller (e.g. Town Forge via the API's
 // promptValues). All have defaults so the file still works standalone

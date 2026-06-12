@@ -1,16 +1,18 @@
 # Randomness
 
-An [Obsidian](https://obsidian.md) plugin for IPP3-compatible random generators.
+An [Obsidian](https://obsidian.md) plugin for random generators — tables,
+dice, NPC portraits, and whole-location templates. Generators are plain-text
+`.rdm` files; legacy `.ipt` files load identically.
 
 Roll on tables inline with `` `rdm:[@Names]` ``, embed full generators in
 ````randomness```` codeblocks, and re-use existing `.ipt` files from twenty
-years of the [Inspiration Pad](https://nbos.com/products/inspiration-pad)
+years of the Inspiration Pad
 ecosystem.
 
 ## Features
 
 - **`randomness` codeblocks** — embed a generator directly in a note. Rolls
-  every render; supports the full IPP3 grammar including weighted tables,
+  every render; supports the full grammar including weighted tables,
   lookup tables, deck picks, conditionals, dice, expressions, and 21 filters.
 - **Inline `rdm:` calls** — one-shot rolls scattered through your prose.
   Preview first, then click 🔒 to commit the result as
@@ -41,7 +43,7 @@ ecosystem.
   Open via the dice ribbon icon or the "Open generator browser"
   command.
 - **Existing `.ipt` files work as-is.** The engine survives the full
-  AddCommas/Random-Treasure-CR1-CR30 stress test from the NBOS corpus.
+  AddCommas/Random-Treasure-CR1-CR30 community stress-test corpus.
 - **JavaScript API** — roll generators from other plugins or Templater
   scripts via `app.plugins.plugins["randomness"].api`. Scoped and
   unscoped rolls, prompt overrides, deterministic seeds, and a roll
@@ -79,7 +81,7 @@ Greenhollow
 Renders to one of "Riverbend", "Stonewatch", or "Greenhollow", chosen at
 random each time the codeblock renders.
 
-Use the full IPP3 grammar — multiple tables, weighted entries, lookup
+Use the full grammar — multiple tables, weighted entries, lookup
 tables, `Set:`/`Define:`, prompts, conditionals, dice expressions, filters,
 the lot:
 
@@ -243,12 +245,12 @@ strangers.
 
 This plugin is MIT-licensed (see [LICENSE](LICENSE)).
 
-The IPP3 (Inspiration Pad Pro 3) grammar and file format are the work of
-[NBOS Software](https://nbos.com). Their Inspiration Pad ecosystem is the
-reason a generator written in 2008 still rolls today; this plugin aims to
-be a faithful, modern execution environment for that work, not a
-replacement for it. Use the original tools where they fit your workflow
-better — and consider supporting NBOS.
+**Lineage.** The `.rdm` format grew out of the Inspiration Pad Pro 3
+(`.ipt`) grammar by [NBOS Software](https://nbos.com) — credit where it's
+due, and `.ipt` files still load identically so generators written in
+2008 keep rolling today. Randomness has since grown well past the
+original grammar (portraits, prompt variables, locked rolls, note
+scoping, a scripting API) and `.rdm` is its native format going forward.
 
 Generator content (`.ipt` files) from the wider community remains the
 copyright of its original authors and is governed by whatever licenses
@@ -271,7 +273,7 @@ npm run dev         # watch mode
 
 Architecture in three layers:
 
-- **Engine** (`src/engine/`) — pure IPP3 evaluator. AST, parsers,
+- **Engine** (`src/engine/`) — pure generator evaluator. AST, parsers,
   expression evaluator with seedable PRNG, 21 filters, recursion guard.
 - **Resolver** (`src/resolver/`) — `Use:` graph traversal,
   markdown-codeblock extraction, inline scope assembly. Synchronous;

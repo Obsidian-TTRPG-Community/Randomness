@@ -154,7 +154,7 @@ export interface RandomnessAPI {
 
     /**
      * Roll a named table found ANYWHERE in the vault, ignoring
-     * note scope. Searches every `.ipt` file (under the generator
+     * note scope. Searches every generator file (`.rdm`/`.ipt`; under the generator
      * root if one is configured) for a table with this name,
      * loads that file plus its `Use:` graph, and rolls it.
      *

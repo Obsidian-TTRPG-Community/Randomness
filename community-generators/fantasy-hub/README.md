@@ -1,7 +1,7 @@
 # Fantasy Hub — shops, places & NPCs
 
 A complete town's worth of content for **Randomness**, and the showcase
-for what the engine can do: 33 generator files (five fully-stocked shop
+for what the engine can do: 33 generator files (`.rdm`) (five fully-stocked shop
 types with PF2e price lists, plus barracks, castle, dock, farm, inn,
 manor, market, mill, stable, tavern, temple, thieves' guild, mage tower
 and undertaker) and 15 one-click **Templater templates** that build a
@@ -26,7 +26,7 @@ can see (or set the root to it).
 - **Codeblocks / inline, no Templater:**
   ````
   ```randomness
-  Use: shops/shop.ipt
+  Use: shop.rdm
   [@FantasyShop]
   ```
   ````

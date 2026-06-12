@@ -1,6 +1,6 @@
-// customers.ipt
+// customers.rdm
 // =====================================================================
-// "Someone currently shopping." Reuses people.ipt for the person,
+// "Someone currently shopping." Reuses people.rdm for the person,
 // then wraps them in a shopping-specific activity. Imported by the
 // shop files.
 //
@@ -8,7 +8,7 @@
 //   [@Customer]  - "<Person> is here, <activity>."
 
 Title: Customers
-Use: people.ipt
+Use: people.rdm
 
 Table: Customer
 Set: cust=[when]{$custName}=[do][@PersonName][else]{$custName}[end]

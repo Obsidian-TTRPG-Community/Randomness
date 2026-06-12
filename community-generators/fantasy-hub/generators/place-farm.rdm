@@ -1,4 +1,4 @@
-// place-farm.ipt
+// place-farm.rdm
 // =====================================================================
 // A farm / homestead. The farmer, what's grown or raised, the land
 // and its state, the household and hands, current activity, and a
@@ -10,10 +10,10 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt. No prices.
+// Reuses people.rdm. No prices.
 
 Title: Farm
-Use: people.ipt
+Use: people.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} farm

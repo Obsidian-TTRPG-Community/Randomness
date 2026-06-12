@@ -205,3 +205,37 @@ describe("resolveUsePath: step-5 bare-filename fallback", () => {
         expect(resolved).toBeNull();
     });
 });
+
+describe("native .rdm extension", () => {
+    const { isGeneratorPath } = require("../../src/generatorFormat");
+
+    test("isGeneratorPath accepts .rdm and .ipt, case-insensitive", () => {
+        expect(isGeneratorPath("Generators/names.rdm")).toBe(true);
+        expect(isGeneratorPath("Generators/NAMES.RDM")).toBe(true);
+        expect(isGeneratorPath("Generators/names.ipt")).toBe(true);
+        expect(isGeneratorPath("Generators/names.md")).toBe(false);
+        expect(isGeneratorPath("names.rdm.bak")).toBe(false);
+    });
+
+    test("vault index picks up .rdm files (bare-name + table lookup)", async () => {
+        const files: Record<string, string> = {
+            "Gens/heroes.rdm": "Table: Hero\nbrave knight\nsly rogue",
+            "Gens/old.ipt": "Table: Relic\nrusty crown",
+        };
+        const index = new VaultIndex(
+            {
+                getFiles: () =>
+                    Object.keys(files).map((path) => ({ path })),
+                read: async (p: string) => files[p],
+            },
+            () => ""
+        );
+        await index.prewarm();
+        expect(index.resolveBasename("heroes.rdm", "")).toBe(
+            "Gens/heroes.rdm"
+        );
+        expect(index.resolveTable("Hero")).toEqual(["Gens/heroes.rdm"]);
+        // legacy .ipt still indexed alongside
+        expect(index.resolveTable("Relic")).toEqual(["Gens/old.ipt"]);
+    });
+});

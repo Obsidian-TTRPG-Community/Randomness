@@ -6,14 +6,14 @@ Pathfinder 2e. Drop this whole `shops` folder anywhere in your vault.
 ## Roll a random shop
 
 ```randomness
-Use: shop.ipt
+Use: shop.rdm
 [@TF-Shop]
 ```
 
 ## Roll a specific shop type
 
 ```randomness
-Use: shop.ipt
+Use: shop.rdm
 [@TF-WeaponShop]
 ```
 
@@ -23,13 +23,13 @@ Swap `[@TF-WeaponShop]` for any of: `[@TF-GeneralShop]`, `[@TF-WeaponShop]`,
 ## Roll just a person (the reusable NPC generator)
 
 ```randomness
-Use: people.ipt
+Use: people.rdm
 [@Person]
 ```
 
 ## Inline rolls
 
-Once a `randomness` codeblock above has imported `shop.ipt`, you can
+Once a `randomness` codeblock above has imported `shop.rdm`, you can
 roll inline anywhere in this note: a passing merchant is
 `rdm:[@Person]`, and the market square holds `rdm:[@TF-Shop]`.
 
@@ -83,14 +83,14 @@ the name and town passed in.
 
 ## How it's organised
 
-- **people.ipt** — reusable NPC generator (names, PF2e ancestries,
+- **people.rdm** — reusable NPC generator (names, PF2e ancestries,
   personalities). Imported by every shop for owners and customers.
-- **customers.ipt** — "someone currently shopping," reuses people.ipt.
-- **prices.ipt** — PF2e coin formatting (cp/sp/gp) + a markup/discount
+- **customers.rdm** — "someone currently shopping," reuses people.rdm.
+- **prices.rdm** — PF2e coin formatting (cp/sp/gp) + a markup/discount
   system so the same shop reads a little differently each roll.
-- **shop-general / -weapon / -armor / -alchemy / -magic.ipt** — the
+- **shop-general / -weapon / -armor / -alchemy / -magic.rdm** — the
   five shop types. Each imports people, customers, and prices.
-- **shop.ipt** — picks a random shop type; imports all five.
+- **shop.rdm** — picks a random shop type; imports all five.
 
 ## A note on prices
 
@@ -123,7 +123,7 @@ shopName) so Town Forge drives them identically. Call each via
 - `TF-Mill` — miller, the works, the hands
 - `TF-Farm` — farmer, the land, the household
 
-**Umbrella picker** (in `location.ipt`):
+**Umbrella picker** (in `location.rdm`):
 - `TF-Location` — a random location of ANY type (shop or otherwise)
 - `TF-Place` — a random NON-shop location
 

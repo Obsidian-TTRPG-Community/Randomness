@@ -229,7 +229,7 @@ await api.rollUnscoped("TF-Inn", {
 
 ## Dictionary tables
 
-IPP3 supports **dictionary** tables — named lookups rather than random
+The generator format supports **dictionary** tables — named lookups rather than random
 draws. Each entry has a key and a value; you don't roll them, you pick
 one by key.
 
@@ -252,7 +252,7 @@ const r = await api.rollUnscoped("SkillML", { dictKey: "Inept" });
 // r.result is a string like "37" (1d20+29 evaluated)
 ```
 
-Equivalent to writing the IPP3 pick expression directly:
+Equivalent to writing the pick expression directly:
 
 ```js
 const r = await api.rollExpression("[#Inept SkillML]");
@@ -286,7 +286,7 @@ const r = await api.rollUnscoped("Occupation", {
 });
 ```
 
-In raw IPP3 source, the bare `[#key Table]` form whitespace-splits the
+In raw generator source, the bare `[#key Table]` form whitespace-splits the
 key, so a multi-word key has to be **quoted**:
 
 ```
@@ -304,7 +304,7 @@ way as any other table item, so dice, variables, and nested rolls all
 work inside dictionary entries.
 
 **Unknown keys** return an empty string rather than throwing — match
-the behaviour of `[#bogus Table]` in IPP3. If you need a default,
+the behaviour of `[#bogus Table]` in generator source. If you need a default,
 test for an empty result on the caller side.
 
 ---

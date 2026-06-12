@@ -1,15 +1,15 @@
-// shop-armor.ipt
+// shop-armor.rdm
 // =====================================================================
 // A PF2e armorer. Reuses people, customers, prices.
 // Entry table: [@ArmorShop]
 // Prices in COPPER (1 gp = 100 cp), PF2e Core armor tables; (~) approx.
 
 Title: Armor Shop
-Use: people.ipt
-Use: customers.ipt
-Use: prices.ipt
-Use: stock-count.ipt
-Use: items-armor.ipt
+Use: people.rdm
+Use: customers.rdm
+Use: prices.rdm
+Use: stock-count.rdm
+Use: items-armor.rdm
 
 // Optional inputs from a caller (e.g. Town Forge via the API's
 // promptValues). Defaults keep the file working standalone.

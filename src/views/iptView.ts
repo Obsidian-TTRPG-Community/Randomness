@@ -280,10 +280,10 @@ export function registerIptView(plugin: RandomnessPlugin): void {
         (leaf: WorkspaceLeaf) => new IptView(leaf, plugin)
     );
     try {
-        plugin.registerExtensions(["ipt"], VIEW_TYPE_IPT);
+        plugin.registerExtensions(["rdm", "ipt"], VIEW_TYPE_IPT);
     } catch (err) {
         console.warn(
-            "Randomness: could not register .ipt extension — another " +
+            "Randomness: could not register the .rdm/.ipt extensions — another " +
                 "plugin may already own it. The plugin will still work " +
                 "for codeblocks and inline calls; only the .ipt file " +
                 "view is affected.",

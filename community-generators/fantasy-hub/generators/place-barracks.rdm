@@ -1,4 +1,4 @@
-// place-barracks.ipt
+// place-barracks.rdm
 // =====================================================================
 // A barracks / guardhouse — the town's armed force at home. A working
 // site, not a shop: commander, the unit and its strength, readiness
@@ -9,11 +9,11 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt. No prices.
+// Reuses people.rdm. No prices.
 
 Title: Barracks
-Use: people.ipt
-Use: place-counts.ipt
+Use: people.rdm
+Use: place-counts.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} barracks

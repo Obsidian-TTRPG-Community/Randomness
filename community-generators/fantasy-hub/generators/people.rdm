@@ -1,4 +1,4 @@
-// people.ipt
+// people.rdm
 // =====================================================================
 // Reusable PF2e NPC generator. Rolls a person: name, ancestry,
 // a one-line description, and a personality beat. Designed to be

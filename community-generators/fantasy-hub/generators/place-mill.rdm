@@ -1,4 +1,4 @@
-// place-mill.ipt
+// place-mill.rdm
 // =====================================================================
 // A mill — water, wind, or beast-driven. The miller, what's milled,
 // the works and its condition, the hands, current activity, and a
@@ -10,10 +10,10 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt. No prices.
+// Reuses people.rdm. No prices.
 
 Title: Mill
-Use: people.ipt
+Use: people.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} mill

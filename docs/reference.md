@@ -15,7 +15,7 @@ something running:
 1. Open **Settings → Randomness**.
 2. Type a folder name in **Generator root** (e.g. `Generators`).
 3. Click **Create folder**, then **Add examples**. This drops
-   five small `.ipt` files into the folder, each demonstrating
+   five small `.rdm` files into the folder, each demonstrating
    a different feature with heavy comments.
 4. Open a note and add a fenced codeblock with the language tag
    `randomness` containing a table call like `[@TavernName]`,
@@ -30,8 +30,10 @@ examples (and by any community generator you'd pick up).
 
 ## File structure
 
-Generators live in `.ipt` files (or fenced `randomness`
-codeblocks inside notes). Each file starts with optional
+Generators live in `.rdm` files (or fenced `randomness`
+codeblocks inside notes). Files with the older `.ipt` extension
+are read exactly the same way — existing generator libraries
+keep working without changes; new files should use `.rdm`. Each file starts with optional
 directives, then one or more tables.
 
 ```text
@@ -56,7 +58,7 @@ Directives recognised:
   `<i>` etc. `text` makes them use plain-text equivalents.
 - **MaxReps:** default repetition count when the caller doesn't
   specify (see "Repetitions" below).
-- **Use:** import another `.ipt` file's tables into this one's
+- **Use:** import another `.rdm` file's tables into this one's
   scope. Path is resolved relative to this file's folder, then
   to the configured Generator Root, then as a vault-absolute
   path.
@@ -298,7 +300,7 @@ Tier: {$tier}
 ```
 
 The outer `[…]` here is *not* an Obsidian wiki-link — Randomness
-recognises it as an IPP3 expression wrap because the content
+recognises it as an expression wrap because the content
 contains `[when]/[do]/[end]`. Plain `[[note name]]` still passes
 through as a wiki-link.
 
@@ -429,12 +431,12 @@ Two ways to use a generator from a regular markdown note.
 
 ````text
 ```randomness
-Use: my-generator.ipt
+Use: my-generator.rdm
 [@encounter]
 ```
 ````
 
-The codeblock both rolls AND brings `my-generator.ipt` into
+The codeblock both rolls AND brings `my-generator.rdm` into
 the note's scope so inline calls below can reference its tables.
 
 **Live** — this codeblock defines a table, and the inline call in
@@ -480,7 +482,7 @@ Use `\` to escape special characters:
 
 ## Browser pane
 
-The right-sidebar browser shows every `.ipt` file under the
+The right-sidebar browser shows every `.rdm` file under the
 configured Generator Root (or the whole vault if no root is set).
 Click **Roll** next to any table to see its output in the result
 panel; click 📋 to copy the inline **rdm:** syntax for pasting
@@ -549,10 +551,10 @@ no-op — no duplicate lines.
 (Added in v0.6.0.)
 
 You don't have to manage full paths. Randomness keeps an index of
-every `.ipt` file in your vault (or under the Generator Root, if
+every `.rdm` file in your vault (or under the Generator Root, if
 set), so you can reference generators two ways:
 
-- **By bare filename in a `Use:` line.** Write `Use: Names.ipt`
+- **By bare filename in a `Use:` line.** Write `Use: Names.rdm`
   (no folder path) and Randomness finds that file wherever it
   lives. Explicit paths still work and always take precedence — the
   bare-filename lookup is only a fallback when a path isn't given.
@@ -565,7 +567,7 @@ alphabetically and logs a one-time console note. To force a
 specific file, use its full path.
 
 The index refreshes automatically when you add, rename, move, or
-edit `.ipt` files. If it ever seems out of date (e.g. after a sync
+edit `.rdm` files. If it ever seems out of date (e.g. after a sync
 dropped files in while Obsidian was closed), run the **"Rebuild
 generator index"** command.
 
@@ -650,7 +652,7 @@ Install) ships fifteen working examples.
 Two ways to "roll a random note" (an encounter, an NPC, a rumour
 note) depend on where you're rolling from.
 
-**From a generator (.ipt)** — make a table of wiki-links; rolling
+**From a generator (.rdm)** — make a table of wiki-links; rolling
 it yields a clickable link (see the wiki-syntax section above):
 
 ```text
@@ -721,7 +723,7 @@ generator anywhere in your vault without needing a `Use:` line.
   the table.
 - `rollUnscoped(tableName, opts?)` — roll a named table found
   ANYWHERE in the vault, ignoring note scope. Searches every
-  `.ipt` file (under the generator root if set), loads the
+  `.rdm` file (under the generator root if set), loads the
   defining file plus its `Use:` graph, and rolls. Best for
   scripting and template-generated notes, where you want to roll
   a generator without first wiring up a note's scope. Pass
@@ -782,7 +784,8 @@ and branch on the surface they need.
 ## More
 
 - Project: [github.com/obsidian-ttrpg-community/randomness](https://github.com/obsidian-ttrpg-community/randomness)
-- The full IPP3 spec (the syntax this engine implements): NBOS
-  Software's `Inspiration Pad Pro 3` help file.
+- Generators are plain-text `.rdm` files; the older `.ipt`
+  extension is read identically, so community generator
+  libraries written for other tools load as-is.
 - File a bug: open an issue on the GitHub repo with a minimal
-  reproducing `.ipt` file if you can.
+  reproducing `.rdm` file if you can.

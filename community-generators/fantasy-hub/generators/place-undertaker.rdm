@@ -1,4 +1,4 @@
-// place-undertaker.ipt
+// place-undertaker.rdm
 // =====================================================================
 // An undertaker, mortuary, or graveyard — the death trades. Quietly
 // one of the most hook-rich locations in any settlement: bodies pass
@@ -11,12 +11,12 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt + prices.ipt. Funeral service prices in COPPER
+// Reuses people.rdm + prices.rdm. Funeral service prices in COPPER
 // (1 gp = 100 cp), suggestions marked (~).
 
 Title: Undertaker
-Use: people.ipt
-Use: prices.ipt
+Use: people.rdm
+Use: prices.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} undertaker

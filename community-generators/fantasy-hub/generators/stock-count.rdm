@@ -1,4 +1,4 @@
-// stock-count.ipt
+// stock-count.rdm
 // =====================================================================
 // Settlement-size-aware stock counts. A shop's inventory length should
 // scale with the settlement: a hamlet barely stocks anything, a

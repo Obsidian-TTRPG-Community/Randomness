@@ -1,4 +1,4 @@
-// shop-magic.ipt
+// shop-magic.rdm
 // =====================================================================
 // A PF2e magic shop: scrolls, wands, talismans, minor wondrous items.
 // Reuses people, customers, prices. Entry table: [@MagicShop]
@@ -7,11 +7,11 @@
 // approximations — magic-item prices vary a lot by level, so VERIFY.
 
 Title: Magic Shop
-Use: people.ipt
-Use: customers.ipt
-Use: prices.ipt
-Use: stock-count.ipt
-Use: items-magic.ipt
+Use: people.rdm
+Use: customers.rdm
+Use: prices.rdm
+Use: stock-count.rdm
+Use: items-magic.rdm
 
 // Optional inputs from a caller (e.g. Town Forge via the API's
 // promptValues). Defaults keep the file working standalone.

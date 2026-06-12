@@ -1,4 +1,4 @@
-// place-tower.ipt
+// place-tower.rdm
 // =====================================================================
 // A wizard's tower — the home and workshop of a lone arcane
 // practitioner. Distinct from the arcane GUILD: this is one mage (and
@@ -11,12 +11,12 @@
 // Inputs (optional, via API promptValues):
 //   prompt1 town  /  prompt2 shopType (display)  /  prompt3 shopName
 //
-// Reuses people.ipt. No prices (a wizard is not a shop — though they
+// Reuses people.rdm. No prices (a wizard is not a shop — though they
 // may bargain). PF2e flavour: the magical tradition is one of the
 // four (arcane/divine/occult/primal) where it fits.
 
 Title: Tower
-Use: people.ipt
+Use: people.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} tower

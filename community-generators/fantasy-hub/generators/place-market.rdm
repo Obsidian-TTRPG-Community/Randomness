@@ -1,4 +1,4 @@
-// place-market.ipt
+// place-market.rdm
 // =====================================================================
 // A PF2e open-air market / bazaar. Unlike the shops (one proprietor,
 // one inventory), a market is a COLLECTION of stalls. This rolls a
@@ -6,7 +6,7 @@
 // each with its own keeper, wares, and a line of flavour — plus the
 // life of the square and a hook.
 //
-// Reuses people.ipt (stall-keepers, a shopper) and prices.ipt. Each
+// Reuses people.rdm (stall-keepers, a shopper) and prices.rdm. Each
 // stall is rendered COMPACTLY (one line of wares, not a full shop
 // block) so a 5-stall market stays readable.
 //
@@ -20,9 +20,9 @@
 // precisely), marked (~). Verify if exact prices matter.
 
 Title: Market
-Use: people.ipt
-Use: prices.ipt
-Use: place-counts.ipt
+Use: people.rdm
+Use: prices.rdm
+Use: place-counts.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} market

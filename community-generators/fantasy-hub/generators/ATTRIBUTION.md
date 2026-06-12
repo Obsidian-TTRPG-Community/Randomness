@@ -1,7 +1,7 @@
 # Attribution — PF2e Item Data
 
 The item generators in this bundle whose names begin with `PF2e` (and
-the `items-*.ipt` files) are generated from the **Foundry VTT pf2e
+the `items-*.rdm` files) are generated from the **Foundry VTT pf2e
 system** data: https://github.com/foundryvtt/pf2e
 
 Pathfinder Second Edition game content — item names, prices, and

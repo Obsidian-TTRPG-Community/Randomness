@@ -21,7 +21,7 @@
  */
 
 export interface ExampleFile {
-    /** Filename relative to the Generator Root (e.g. "01-greetings.ipt") */
+    /** Filename relative to the Generator Root (e.g. "01-greetings.rdm") */
     filename: string;
     /** File contents */
     content: string;
@@ -30,7 +30,7 @@ export interface ExampleFile {
 }
 
 const GREETINGS = `\
-// 01-greetings.ipt
+// 01-greetings.rdm
 // =================================================================
 // The simplest possible generator: one table, a handful of items.
 // Roll this file and you'll get one of the listed greetings.
@@ -60,7 +60,7 @@ May the wind be at your back.
 `;
 
 const TAVERN = `\
-// 02-tavern.ipt
+// 02-tavern.rdm
 // =================================================================
 // Tables can call other tables. This is the most important pattern
 // in the language — small tables compose into rich output.
@@ -106,7 +106,7 @@ Crow
 `;
 
 const MONSTER = `\
-// 03-monster.ipt
+// 03-monster.rdm
 // =================================================================
 // Variables, prompts, dice, and inline tables.
 //
@@ -150,7 +150,7 @@ gnoll
 `;
 
 const SHOP = `\
-// 04-shop.ipt
+// 04-shop.rdm
 // =================================================================
 // Lookup tables, conditionals, and repetitions.
 //
@@ -237,7 +237,7 @@ deck of many things
 `;
 
 const TREASURE = `\
-// 05-treasure-dictionary.ipt
+// 05-treasure-dictionary.rdm
 // =================================================================
 // Dictionary tables and the [#key Table] pick syntax.
 //
@@ -299,27 +299,27 @@ Legendary: 2 major + 1 artifact (subject to GM approval)
 
 export const EXAMPLE_FILES: ExampleFile[] = [
     {
-        filename: "01-greetings.ipt",
+        filename: "01-greetings.rdm",
         content: GREETINGS,
         description: "The absolute basics: one table, multiple items.",
     },
     {
-        filename: "02-tavern.ipt",
+        filename: "02-tavern.rdm",
         content: TAVERN,
         description: "Tables calling other tables — compose small parts into rich output.",
     },
     {
-        filename: "03-monster.ipt",
+        filename: "03-monster.rdm",
         content: MONSTER,
         description: "Variables, prompts, dice rolls, and inline tables.",
     },
     {
-        filename: "04-shop.ipt",
+        filename: "04-shop.rdm",
         content: SHOP,
         description: "Lookup tables (d% rarity), repetitions, and shop composition.",
     },
     {
-        filename: "05-treasure-dictionary.ipt",
+        filename: "05-treasure-dictionary.rdm",
         content: TREASURE,
         description: "Dictionary tables, [#key Table] lookups, and bracket-wrapped conditionals.",
     },
@@ -327,22 +327,22 @@ export const EXAMPLE_FILES: ExampleFile[] = [
 
 /**
  * README that gets written into the examples folder alongside the
- * .ipt files. Explains what the files demonstrate so a user
+ * generator files. Explains what the files demonstrate so a user
  * browsing the folder can decide where to start.
  */
 export const EXAMPLES_README = `# Randomness — example generators
 
-This folder was seeded by the Randomness plugin. Each \`.ipt\` file
+This folder was seeded by the Randomness plugin. Each \`.rdm\` file
 demonstrates a feature or pattern; the numbered prefix is a
 suggested reading order.
 
 | File | What it covers |
 | --- | --- |
-| 01-greetings.ipt | The basics: one table, multiple items |
-| 02-tavern.ipt | Tables calling other tables |
-| 03-monster.ipt | Variables, prompts, dice, inline tables |
-| 04-shop.ipt | Lookup tables (d%), repetitions |
-| 05-treasure-dictionary.ipt | Dictionary tables, conditionals |
+| 01-greetings.rdm | The basics: one table, multiple items |
+| 02-tavern.rdm | Tables calling other tables |
+| 03-monster.rdm | Variables, prompts, dice, inline tables |
+| 04-shop.rdm | Lookup tables (d%), repetitions |
+| 05-treasure-dictionary.rdm | Dictionary tables, conditionals |
 
 ## How to run them
 
@@ -363,7 +363,7 @@ You can also reference a specific file with \`Use:\`:
 
 \`\`\`text
 \`\`\`randomness
-Use: 02-tavern.ipt
+Use: 02-tavern.rdm
 [@TavernName]
 \`\`\`
 \`\`\`

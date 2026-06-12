@@ -1,4 +1,4 @@
-// place-temple.ipt
+// place-temple.rdm
 // =====================================================================
 // A PF2e temple / shrine. Institutional, not commercial: the framing
 // is devotion, not trade. Gives a GM: the deity worshipped (PF2e
@@ -17,8 +17,8 @@
 // not official PF2e prices — temples don't "sell" — marked (~).
 
 Title: Temple
-Use: people.ipt
-Use: prices.ipt
+Use: people.rdm
+Use: prices.rdm
 
 Prompt: town {} an unnamed town
 Prompt: shopType {} temple

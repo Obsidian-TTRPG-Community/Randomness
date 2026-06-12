@@ -45,7 +45,7 @@ describe("bundled example generators", () => {
         // and the content isn't accidentally empty (could happen if
         // a build step mangled the bundle).
         for (const f of EXAMPLE_FILES) {
-            expect(f.filename).toMatch(/\.ipt$/);
+            expect(f.filename).toMatch(/\.rdm$/);
             expect(f.content.length).toBeGreaterThan(100);
             expect(f.description.length).toBeGreaterThan(0);
         }

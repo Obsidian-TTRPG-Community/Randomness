@@ -263,7 +263,7 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                 .setDesc(
                     "Write " +
                         EXAMPLE_FILES.length +
-                        " example .ipt files and a README into " +
+                        " example .rdm files and a README into " +
                         `"${rootPath}". Each example demonstrates a ` +
                         "feature (basics, sub-tables, prompts, lookup " +
                         "tables, dictionaries) with heavy comments. " +
@@ -523,13 +523,13 @@ export class RandomnessSettingsTab extends PluginSettingTab {
             "",
             "## File(s)",
             "",
-            "<!-- Paste the contents of your .ipt file(s) below," +
+            "<!-- Paste the contents of your .rdm (or .ipt) file(s) below," +
                 " each in its own code block. If you have several" +
                 " files that work together, paste them all and " +
                 "explain how they relate. -->",
             "",
             "````",
-            "Paste your .ipt content here",
+            "Paste your .rdm content here",
             "````",
             "",
             "## Attribution",
@@ -626,7 +626,7 @@ export class RandomnessSettingsTab extends PluginSettingTab {
     }
 
     /**
-     * Write the bundled example .ipt files plus a README into the
+     * Write the bundled example .rdm files plus a README into the
      * given folder. Called from the "Add examples" button.
      *
      * Uses vault.create when the file doesn't exist, vault.modify

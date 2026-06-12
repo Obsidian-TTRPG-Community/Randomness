@@ -18,6 +18,7 @@
  * sanitiser, then made copyable.
  */
 
+import { isGeneratorPath } from "../generatorFormat";
 import {
     ItemView,
     WorkspaceLeaf,
@@ -1073,7 +1074,7 @@ export async function discoverGenerators(
     // walk could be faster, but this is simple and correct.
     const all = vault.getFiles();
     const candidates = all.filter((f) => {
-        if (!f.path.toLowerCase().endsWith(".ipt")) return false;
+        if (!isGeneratorPath(f.path)) return false;
         if (root === "") return true;
         // Match either the root itself or anything beneath it.
         return f.path === root || f.path.startsWith(root + "/");

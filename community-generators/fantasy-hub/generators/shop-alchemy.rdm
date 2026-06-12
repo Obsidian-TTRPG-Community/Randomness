@@ -1,4 +1,4 @@
-// shop-alchemy.ipt
+// shop-alchemy.rdm
 // =====================================================================
 // A PF2e alchemist's shop: elixirs, bombs, poisons, tools. Reuses
 // people, customers, prices. Entry table: [@AlchemyShop]
@@ -6,11 +6,11 @@
 // the values below are typical low-level prices. (~) marks approximations.
 
 Title: Alchemy Shop
-Use: people.ipt
-Use: customers.ipt
-Use: prices.ipt
-Use: stock-count.ipt
-Use: items-alchemy.ipt
+Use: people.rdm
+Use: customers.rdm
+Use: prices.rdm
+Use: stock-count.rdm
+Use: items-alchemy.rdm
 
 // Optional inputs from a caller (e.g. Town Forge via the API's
 // promptValues). Defaults keep the file working standalone.

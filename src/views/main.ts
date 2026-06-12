@@ -28,6 +28,7 @@ import {
 import { registerIptView } from "./iptView";
 import { registerBrowserView } from "./browserView";
 import { openReferenceView } from "./referenceView";
+import { isGeneratorPath } from "../generatorFormat";
 import { TableAutocomplete } from "./tableAutocomplete";
 import { createApi, RandomnessAPI } from "../api";
 import { VaultIndex } from "../resolver/vaultIndex";
@@ -136,7 +137,7 @@ export default class RandomnessPlugin extends Plugin {
         // because a file's *table names* can change, affecting the
         // table-name map.
         const maybeInvalidate = (path: string): void => {
-            if (path.toLowerCase().endsWith(".ipt")) {
+            if (isGeneratorPath(path)) {
                 this.vaultIndex.invalidate();
             }
         };
