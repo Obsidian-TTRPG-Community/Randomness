@@ -8,3 +8,6 @@ node_modules/
 *.swo
 .idea/
 .vscode/
+
+# release artifacts staged locally, uploaded to GitHub releases by hand
+*.zip
