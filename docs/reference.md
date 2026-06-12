@@ -769,7 +769,7 @@ and branch on the surface they need.
   doesn't shuffle results. Useful for "this codeblock should
   stay consistent until I edit it".
 - **Install Fantasy Portrait Pack** — one click: downloads the
-  official art pack (~60 MB) into your vault and switches every
+  official art pack (~7 MB) into your vault and switches every
   portrait feature on. Portraits stay off until a pack is
   installed. (Self-hosting? Set `portraitPackUrl` in the
   plugin's data.json — there's deliberately no UI for it.)

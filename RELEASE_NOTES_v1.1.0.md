@@ -12,7 +12,7 @@ a working town generator.
   builder as tabs in the generator browser. Lock any face into a
   drift-proof recipe, export PNGs, or copy ready-to-paste snippets.
   Gender-aware art selection, race/gender-appropriate names, age and
-  skin-tone axes. Install with one click from settings (~60 MB art
+  skin-tone axes. Install with one click from settings (~7 MB art
   pack, downloaded on demand — the plugin stays small).
 - **Fantasy Hub**: a town's worth of generators (five stocked shop
   types, tavern, inn, temple, castle, guild, barracks, market and

@@ -322,7 +322,7 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     : "Rollable character portraits: seeded faces with names, " +
                           "used by codeblocks, inline spans, the roller pane " +
                           "and templates. One click — downloads the art " +
-                          `(~60 MB) into "${packPath}" and switches the ` +
+                          `(~7 MB) into "${packPath}" and switches the ` +
                           "portrait features on."
             );
             packSetting.addButton((btn) =>
