@@ -504,6 +504,11 @@ export class ButtonComponent {
 }
 
 export class TextComponent {
+    /** Real input element so code can attach DOM listeners (blur etc.). */
+    inputEl: HTMLInputElement =
+        typeof document !== "undefined"
+            ? document.createElement("input")
+            : ({ addEventListener: () => {} } as unknown as HTMLInputElement);
     setValue(_value: string): this {
         return this;
     }

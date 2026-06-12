@@ -178,7 +178,7 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     "resolve against the note's own folder. Leave blank to " +
                     "only resolve relative to the calling note."
             )
-            .addText((text) =>
+            .addText((text) => {
                 text
                     .setPlaceholder("Generators")
                     .setValue(this.plugin.settings.generatorRoot)
@@ -192,12 +192,17 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         this.plugin.settings.generatorRoot =
                             trimmed === "" ? "" : normalizePath(trimmed);
                         await this.plugin.saveSettings();
-                        // Refresh the panel so the create-folder /
-                        // seed-examples buttons recompute their state
-                        // based on whether the new path exists.
-                        this.display();
-                    })
-            );
+                    });
+                // The rows below (create-folder / examples / install
+                // destinations) depend on this value, but re-rendering
+                // inside onChange would rebuild the panel on EVERY
+                // keystroke — destroying this input and dropping focus
+                // after one character. Refresh once, when the user
+                // leaves the field.
+                text.inputEl.addEventListener("blur", () => {
+                    this.display();
+                });
+            });
 
         // ─── Folder setup helpers ──────────────────────────────────
         //
