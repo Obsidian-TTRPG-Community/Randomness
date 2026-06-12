@@ -393,6 +393,18 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         hubSetting
             .addExtraButton((b) =>
                 b
+                    .setIcon("scroll")
+                    .setTooltip(
+                        "Get Templater (required for the templates)"
+                    )
+                    .onClick(() => {
+                        window.open(
+                            "obsidian://show-plugin?id=templater-obsidian"
+                        );
+                    })
+            )
+            .addExtraButton((b) =>
+                b
                     .setIcon("castle")
                     .setTooltip("Get Town Forge (community plugins)")
                     .onClick(() => {
@@ -406,6 +418,16 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     .onClick(() => {
                         window.open(
                             "obsidian://show-plugin?id=heraldry-weaver"
+                        );
+                    })
+            )
+            .addExtraButton((b) =>
+                b
+                    .setIcon("palette")
+                    .setTooltip("Get the ITS theme (styles the infoboxes)")
+                    .onClick(() => {
+                        window.open(
+                            "obsidian://show-theme?name=ITS%20Theme"
                         );
                     })
             );
@@ -441,9 +463,10 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     "one-click Templater templates that build whole " +
                     `location notes with portrait NPCs. Generators install ` +
                     `to "${generatorsDest}", templates to "${templatesDest}". ` +
-                    "Works great with Town Forge (stamp whole towns) and " +
-                    "Heraldry Weaver (crests) — the buttons here open them " +
-                    "in Community plugins."
+                    "Templates require the Templater plugin. Works great " +
+                    "with Town Forge (stamp whole towns), Heraldry Weaver " +
+                    "(crests) and the ITS theme (infobox styling) — the " +
+                    "buttons here open each of them."
             );
             hubSetting.addButton((btn) =>
                 btn
