@@ -11,7 +11,7 @@ const result = await api.roll("VillainName");
 console.log(result.result); // -> "Mordred the Pale"
 ```
 
-- **API version:** `1.1.0` (read `api.version`)
+- **API version:** `1.2.0` (read `api.version`)
 - The API is stable within a major version. New methods may be added
   in minor versions; breaking changes bump the major.
 
@@ -27,6 +27,7 @@ console.log(result.result); // -> "Mordred the Pale"
 | `tables(callerNotePath?)` | List table names visible from a note's scope. |
 | `tablesWithSources(callerNotePath?)` | List tables with their source files and scope flag. |
 | `onRoll(callback)` | Subscribe to every roll attempt. Returns an unsubscribe fn. |
+| `randomNote(folder?, opts?)` | A random markdown note from a folder (recursive). |
 | `portraits.*` | Portrait compositor: roll/render/savePng/snippets (see below). |
 | `version` | The API version string. |
 
@@ -402,6 +403,25 @@ console.table(
 );
 ```
 
+
+---
+
+## Random notes (`randomNote`, since 1.2.0)
+
+Pick a random markdown note, optionally limited to a folder
+(searched recursively). Great for "roll a random encounter/NPC/rumour
+note" tables you don't want to maintain by hand:
+
+```js
+const api = app.plugins.plugins["randomness"].api;
+const enc = api.randomNote("Encounters/Forest");
+if (enc) tR += `Tonight: ${enc.link}`;   // -> Tonight: [[Encounters/Forest/Wolves]]
+```
+
+Returns `{ path, basename, link }` (the link is path-qualified), or
+`null` when the folder contains no notes. `opts.seed` makes the pick
+deterministic. Prefer a hand-curated `.ipt` table of `[[links]]` when
+you want to control weighting.
 
 ---
 

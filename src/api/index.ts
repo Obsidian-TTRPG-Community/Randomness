@@ -32,6 +32,7 @@ import { vaultFileSource } from "../views/vaultFileSource";
 import { discoverGenerators } from "../views/browserView";
 import { collectTablesFromBundle } from "../views/tableAutocomplete";
 import { Evaluator } from "../engine/evaluator";
+import { RNG } from "../engine/rng";
 import { dirname } from "../resolver/fileResolver";
 import type RandomnessPlugin from "../views/main";
 import { createPortraitApi, PortraitAPI } from "../portrait/api";
@@ -40,7 +41,7 @@ import { createPortraitApi, PortraitAPI } from "../portrait/api";
  * Semantic version of the API surface, independent of the plugin
  * version. Bump on any change to the public contract below.
  */
-export const API_VERSION = "1.1.0" as const;
+export const API_VERSION = "1.2.0" as const;
 
 /** Options accepted by roll / rollExpression. */
 export interface RollOptions {
@@ -107,6 +108,16 @@ export interface TableSource {
     filePath: string;
     /** True if reachable from the caller note's current scope. */
     inScope: boolean;
+}
+
+/** Result of randomNote — a random markdown note from the vault. */
+export interface NoteRollResult {
+    /** Vault path, e.g. "NPCs/Goblins/Snagg.md". */
+    path: string;
+    /** Filename without extension. */
+    basename: string;
+    /** Ready-to-paste wiki link, path-qualified: "[[NPCs/Goblins/Snagg]]". */
+    link: string;
 }
 
 /** Listener for the onRoll event stream. */
@@ -180,6 +191,19 @@ export interface RandomnessAPI {
      * Returns an unsubscribe function.
      */
     onRoll(callback: RollEventListener): () => void;
+
+    /**
+     * Pick a random markdown note, optionally limited to a folder
+     * (recursive). Returns null when the folder holds no notes.
+     * `seed` makes the pick deterministic. Added in API 1.2.0.
+     *
+     *   const enc = api.randomNote("Encounters/Forest");
+     *   if (enc) tR += `Tonight: ${enc.link}`;
+     */
+    randomNote(
+        folder?: string,
+        opts?: { seed?: number }
+    ): NoteRollResult | null;
 
     /**
      * Portrait compositor surface (roll/render/savePng/snippets,
@@ -587,6 +611,30 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         };
     };
 
+    const randomNote = (
+        folder?: string,
+        opts?: { seed?: number }
+    ): NoteRollResult | null => {
+        const norm = (folder ?? "").trim().replace(/^\/+|\/+$/g, "");
+        const files = plugin.app.vault
+            .getMarkdownFiles()
+            .filter((f) => (norm === "" ? true : f.path.startsWith(norm + "/")));
+        if (files.length === 0) return null;
+        // Seedless picks use Math.random — the engine RNG's time-based
+        // fallback would repeat within the same millisecond (e.g. two
+        // calls in one template).
+        const idx =
+            opts?.seed !== undefined
+                ? new RNG(opts.seed).nextU32() % files.length
+                : Math.floor(Math.random() * files.length);
+        const f = files[idx];
+        return {
+            path: f.path,
+            basename: f.basename,
+            link: `[[${f.path.replace(/\.md$/i, "")}]]`,
+        };
+    };
+
     return {
         version: API_VERSION,
         roll,
@@ -595,6 +643,7 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         tables,
         tablesWithSources,
         onRoll,
+        randomNote,
         portraits: createPortraitApi(plugin),
     };
 }

@@ -195,6 +195,9 @@ export class Vault {
     getFiles(): TFile[] {
         return [];
     }
+    getMarkdownFiles(): TFile[] {
+        return [];
+    }
     async read(_file: TFile): Promise<string> {
         return "";
     }

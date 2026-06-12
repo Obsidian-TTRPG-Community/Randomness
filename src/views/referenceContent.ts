@@ -558,6 +558,104 @@ edit \`.ipt\` files. If it ever seems out of date (e.g. after a sync
 dropped files in while Obsidian was closed), run the **"Rebuild
 generator index"** command.
 
+## Portraits
+
+(Added in v1.1.0. Needs a **portrait pack** — a folder of layered
+art + \`manifest.json\`. Set the folder in Settings → Randomness;
+everything below stays invisible until a pack is found.)
+
+Seeded, layered character portraits with rolled names, rendered
+anywhere markdown renders.
+
+### Codeblock
+
+\`\`\`text
+\`\`\`portrait
+count: 6        (1-24 portraits, default 1)
+size: 200       (tile width px, default 256)
+seed: gandalf   (stable across reloads; omit for random)
+pack: my_pack   (override the settings pack)
+\`\`\`
+\`\`\`
+
+Hover a portrait for its controls:
+
+- **lock** (top-right) rewrites the block to \`recipe: {…}\` — the
+  exact portrait, set in stone, immune to pack updates. On a locked
+  block the icon flips to **unlock** (roll again).
+- **PNG** (top-left) saves the image next to the note and replaces
+  the block with \`![[file.png]]\`.
+
+Captions are race/gender-appropriate names rolled through the
+engine's own tables — deterministic per portrait (hover for the
+seed).
+
+### Inline
+
+A portrait inside a sentence, a table cell, or an infobox callout:
+
+\`\`\`text
+\`portrait:\`                 random face, default size (128)
+\`portrait: gandalf 96\`      bare word = seed, bare number = size
+\`portrait: size=160\`        key=value form (seed=, size=, pack=)
+\`portrait: recipe={…}\`      pinned recipe (recipe= must be last)
+\`\`\`
+
+Hover for the same controls (reroll appears on unpinned spans).
+PNG replaces the span with the image embed — handy for statblock
+infoboxes.
+
+### Roller & builder
+
+The generator browser pane (dice ribbon icon) has **Portraits**
+(roll a grid; per-tile icons save a PNG + copy \`![[name]]\` to the
+clipboard, or copy the portrait as a ready-to-paste codeblock /
+inline span) and **Builder** (pick every part from dropdowns —
+gender, age, skin tone, hair, clothing — with a live preview).
+Commands: *Open portrait roller* / *Open portrait builder*.
+
+### In templates
+
+\`api.portraits\` rolls portraits from scripts — including
+constrained rolls (\`{ gender, race, age }\`) and passing the rolled
+person's facts into your text generators so one NPC threads through
+a whole note. See the Scripting API section below and API.md for the
+full surface; the **Fantasy Hub** bundle (Settings → Randomness →
+Install) ships fifteen working examples.
+
+## Random notes from folders
+
+Two ways to "roll a random note" (an encounter, an NPC, a rumour
+note) depend on where you're rolling from.
+
+**From a generator (.ipt)** — make a table of wiki-links; rolling
+it yields a clickable link (see the wiki-syntax section above):
+
+\`\`\`text
+Table: ForestEncounter
+[[Encounters/Forest/Wolves]]
+[[Encounters/Forest/Bandits]]
+[[Encounters/Forest/Old Shrine]]
+\`\`\`
+
+The table is curated by hand — which is often what you want (you
+control the weighting by repeating lines).
+
+**From a script (Templater/DataviewJS)** — pick straight from a
+folder, no table needed:
+
+\`\`\`text
+<%*
+const api = app.plugins.plugins["randomness"].api;
+const note = api.randomNote("Encounters/Forest");
+tR += note ? \`Tonight: \${note.link}\` : "_no notes in that folder_";
+%>
+\`\`\`
+
+\`randomNote(folder?, { seed? })\` searches the folder recursively
+(whole vault when omitted) and returns \`{ path, basename, link }\`,
+or \`null\` for an empty folder.
+
 ## Scripting API
 
 (Added in v0.5.0.)
@@ -615,6 +713,17 @@ generator anywhere in your vault without needing a \`Use:\` line.
   source files; in-scope tables first, then the rest of the vault.
 - \`onRoll(callback)\` — subscribe to every roll (success and
   failure). Returns an unsubscribe function.
+- \`randomNote(folder?, opts?)\` — a random markdown note from a
+  folder (recursive; whole vault when omitted). Returns
+  \`{ path, basename, link }\` or \`null\`. \`opts.seed\` pins the
+  pick.
+- \`portraits.*\` — the portrait surface: \`available()\`,
+  \`roll({ seed?, gender?, race?, age? })\` (constraints reroll
+  until matched), \`render(recipe)\`, \`savePng(p)\`,
+  \`name(recipe)\`, \`blockSnippet(recipe)\`,
+  \`inlineSnippet(recipe, size?)\`. All throw without a pack —
+  check \`available()\` first. Full docs + a Templater NPC-note
+  example live in API.md.
 
 **Options** (\`opts\`): \`callerNotePath\` sets the scope (which
 \`Use:\` imports and same-note tables are visible; defaults to the
@@ -637,6 +746,13 @@ and branch on the surface they need.
   derived from their position so re-rendering the same note
   doesn't shuffle results. Useful for "this codeblock should
   stay consistent until I edit it".
+- **Portrait pack folder / status / download URL** — where the
+  portrait pack lives, whether one was found (with part counts),
+  and an optional URL for one-click pack install. Portrait
+  features activate only when a pack is present.
+- **Install Fantasy Hub content** — downloads the showcase bundle
+  (town generators + standalone Templater templates with portrait
+  NPCs) into your generator root.
 
 ## More
 
