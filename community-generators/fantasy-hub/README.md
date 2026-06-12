@@ -55,6 +55,11 @@ drivers:
 Don't point Town Forge at `templates/` — those prompt interactively
 and roll their own names, which fights Town Forge's own naming.
 
+(The same Town Forge set also ships with Town Forge itself, as
+`Examples/TownForge-Templates.zip` in its repo, for offline/manual
+setups. The canonical copies live here — this folder is what the
+installer deploys and auto-points Town Forge at.)
+
 ## One person across the whole note
 
 Every place generator accepts optional prompts (`keeperName`,
