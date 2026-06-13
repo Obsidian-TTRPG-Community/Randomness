@@ -2,6 +2,14 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.1.1
+
+Maintenance release. No user-facing changes.
+
+### Security
+- Bumped esbuild to 0.28.1 to clear advisory GHSA-gv7w-rqvm-qjhr
+  (dev-time only; the shipped plugin code is unaffected).
+
 ## 1.0.18
 
 Bug fix release. Codeblocks that use \`Use:\` to import another
