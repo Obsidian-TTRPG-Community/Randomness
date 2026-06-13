@@ -6,6 +6,28 @@ export function clearElement(el: HTMLElement): void {
     while (el.firstChild) el.removeChild(el.firstChild);
 }
 
+/**
+ * Mount a composed portrait's SVG markup into a container without
+ * `innerHTML` (Obsidian review forbids it). The SVG is our own output
+ * from the compositor — parsed via DOMParser and the root <svg>
+ * element imported into the live document, so no HTML string ever
+ * touches the DOM directly.
+ */
+export function mountSvg(container: HTMLElement, svg: string): void {
+    clearElement(container);
+    if (!svg.startsWith("<svg")) return;
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    const root = doc.documentElement;
+    if (root && root.nodeName.toLowerCase() === "svg") {
+        container.appendChild(activeDocument.importNode(root, true));
+    }
+}
+
+/** Set an element's pixel width via setCssStyles (no direct .style). */
+export function setWidthPx(el: HTMLElement, px: number): void {
+    el.setCssStyles({ width: `${px}px` });
+}
+
 export function makeChildDiv(
     parent: HTMLElement,
     className?: string

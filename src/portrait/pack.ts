@@ -17,7 +17,9 @@
  *     (e.g. hair_front/hair_back → braid↔braid; shaved_topknot front → no back).
  * ========================================================================== */
 
-export type CoherenceGroup = string[] | { categories: string[]; by?: "prefix" | "style" };
+export type CoherenceGroup =
+  | string[]
+  | { categories: string[]; by?: "prefix" | "style" | "color"; lock?: string };
 
 export interface PackManifest {
   viewBox: string;
@@ -29,8 +31,42 @@ export interface PackManifest {
   suppression?: Record<string, Record<string, string[]>>;
   colors?: Record<string, { values: string[]; notEqualTo?: string[] }>;
   weights?: Record<string, number>;
-  meta?: any;
+  meta?: PackMeta;
   name?: string;
+}
+
+/** Free-form-ish pack metadata. All fields optional; packs vary. */
+export interface PackMeta {
+  skin?: { layers?: string[]; tones?: RGB[]; names?: string[] };
+  age?: { young?: number; old?: number };
+  genderLean?: {
+    files?: Record<string, string>;
+    multipliers?: { same?: number; opposite?: number; strongOpposite?: number };
+  };
+  incompatible?: string[][];
+  license?: { name?: string; url?: string };
+  [key: string]: unknown;
+}
+
+/** Raw manifest as parsed from manifest.json — either dialect. */
+export interface RawManifest {
+  viewBox?: string;
+  canvas?: { viewBox?: string; width?: number; height?: number };
+  layers?: Record<string, string[]>;
+  assets?: Record<string, string[]>;
+  suggestedOrder?: string[];
+  layerOrder?: string[];
+  coherenceGroups?: Array<
+    string[] | { categories: string[]; by?: string; lock?: string }
+  >;
+  optional?: Record<string, number>;
+  exclude?: string[];
+  suppression?: Record<string, Record<string, string[]>>;
+  colors?: Record<string, { values: string[]; notEqualTo?: string[] }>;
+  weights?: Record<string, number>;
+  meta?: PackMeta;
+  name?: string;
+  pack?: string;
 }
 
 export type LoadFile = (relPath: string) => Promise<string>;
@@ -65,7 +101,7 @@ const DEFAULT_COHERENCE: CoherenceGroup[] = [
 const DEFAULT_EXCLUDE = ["poster"];
 
 /* ---- accept either manifest dialect ---- */
-export function normalizeManifest(raw: any): PackManifest {
+export function normalizeManifest(raw: RawManifest): PackManifest {
   return {
     viewBox:
       raw.viewBox ??
@@ -75,7 +111,7 @@ export function normalizeManifest(raw: any): PackManifest {
         : "0 0 512 512"),
     layers: raw.layers ?? raw.assets ?? {},
     suggestedOrder: raw.suggestedOrder ?? raw.layerOrder,
-    coherenceGroups: raw.coherenceGroups,
+    coherenceGroups: raw.coherenceGroups as CoherenceGroup[] | undefined,
     optional: raw.optional,
     exclude: raw.exclude,
     suppression: raw.suppression,
@@ -136,12 +172,12 @@ function styleToken(cat: string, file: string): string {
 /* per-layer isolation so stacked layers never clash on ids or classes */
 function isolate(svg: string, token: string): string {
   svg = svg
-    .replace(/id="([^"]+)"/g, (_m, id) => `id="${token}-${id}"`)
-    .replace(/url\(#([^)]+)\)/g, (_m, id) => `url(#${token}-${id})`)
-    .replace(/(xlink:href|href)="#([^"]+)"/g, (_m, a, id) => `${a}="#${token}-${id}"`);
-  svg = svg.replace(/<style>([\s\S]*?)<\/style>/g, (_m, css) =>
+    .replace(/id="([^"]+)"/g, (_m: string, id: string) => `id="${token}-${id}"`)
+    .replace(/url\(#([^)]+)\)/g, (_m: string, id: string) => `url(#${token}-${id})`)
+    .replace(/(xlink:href|href)="#([^"]+)"/g, (_m: string, a: string, id: string) => `${a}="#${token}-${id}"`);
+  svg = svg.replace(/<style>([\s\S]*?)<\/style>/g, (_m: string, css: string) =>
     `<style>${css.replace(/\.([A-Za-z_][\w-]*)/g, `.${token}-$1`)}</style>`);
-  svg = svg.replace(/class="([^"]*)"/g, (_m, cls) =>
+  svg = svg.replace(/class="([^"]*)"/g, (_m: string, cls: string) =>
     `class="${cls.split(/\s+/).filter(Boolean).map((c: string) => `${token}-${c}`).join(" ")}"`);
   return svg;
 }
@@ -222,23 +258,40 @@ export function recolorSkinPixels(d: Uint8ClampedArray, tone: RGB, inkFloor = 72
     d[i + 2] = ramp(sh[2], tb, hi[2], x);
   }
 }
+/** Browser globals needed for canvas recolour; null under Node (tests). */
+interface CanvasGlobals {
+  OffscreenCanvas: { new (w: number, h: number): OffscreenCanvas };
+  createImageBitmap: (b: Blob) => Promise<ImageBitmap>;
+  fetch: (u: string) => Promise<Response>;
+  btoa: (s: string) => string;
+}
+function canvasGlobals(): CanvasGlobals | null {
+  const w =
+    typeof activeWindow !== "undefined"
+      ? activeWindow
+      : typeof window !== "undefined"
+        ? window
+        : null;
+  const g = w as unknown as Partial<CanvasGlobals> | null;
+  if (!g || !g.OffscreenCanvas || !g.createImageBitmap || !g.fetch) return null;
+  return g as CanvasGlobals;
+}
 /* recolour a PNG data URI via canvas; returns input unchanged where OffscreenCanvas is absent (Node). */
 async function recolorPngDataUri(href: string, tone: RGB): Promise<string> {
-  const G: any = (typeof globalThis !== "undefined") ? globalThis : {};
-  if (!G.OffscreenCanvas || !G.createImageBitmap || !G.fetch) return href;
+  const G = canvasGlobals();
+  if (!G) return href;
   try {
     const blob = await (await G.fetch(href)).blob();
     const bmp = await G.createImageBitmap(blob);
     const cv = new G.OffscreenCanvas(bmp.width, bmp.height);
-    const ctx = cv.getContext("2d"); ctx.drawImage(bmp, 0, 0);
+    const ctx = cv.getContext("2d"); if (!ctx) return href; ctx.drawImage(bmp, 0, 0);
     const img = ctx.getImageData(0, 0, bmp.width, bmp.height);
     recolorSkinPixels(img.data, tone);
     ctx.putImageData(img, 0, 0);
     const buf = await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer();
     const u8 = new Uint8Array(buf); let bin = "";
     for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
-    const b64 = G.btoa ? G.btoa(bin) : Buffer.from(u8).toString("base64");
-    return `data:image/png;base64,${b64}`;
+    return `data:image/png;base64,${G.btoa(bin)}`;
   } catch { return href; }
 }
 
@@ -275,24 +328,24 @@ export function recolorGreyToColor(d: Uint8ClampedArray, color: RGB, inkFloor = 
   }
 }
 async function sampleColorFromDataUri(href: string): Promise<RGB | null> {
-  const G: any = (typeof globalThis !== "undefined") ? globalThis : {};
-  if (!G.OffscreenCanvas || !G.createImageBitmap || !G.fetch) return null;
+  const G = canvasGlobals();
+  if (!G) return null;
   try {
     const bmp = await G.createImageBitmap(await (await G.fetch(href)).blob());
-    const cv = new G.OffscreenCanvas(bmp.width, bmp.height); const ctx = cv.getContext("2d"); ctx.drawImage(bmp, 0, 0);
+    const cv = new G.OffscreenCanvas(bmp.width, bmp.height); const ctx = cv.getContext("2d"); if (!ctx) return null; ctx.drawImage(bmp, 0, 0);
     return sampleHairColor(ctx.getImageData(0, 0, bmp.width, bmp.height).data);
   } catch { return null; }
 }
 async function recolorGreyDataUri(href: string, color: RGB, inkFloor = 0): Promise<string> {
-  const G: any = (typeof globalThis !== "undefined") ? globalThis : {};
-  if (!G.OffscreenCanvas || !G.createImageBitmap || !G.fetch) return href;
+  const G = canvasGlobals();
+  if (!G) return href;
   try {
     const bmp = await G.createImageBitmap(await (await G.fetch(href)).blob());
-    const cv = new G.OffscreenCanvas(bmp.width, bmp.height); const ctx = cv.getContext("2d"); ctx.drawImage(bmp, 0, 0);
+    const cv = new G.OffscreenCanvas(bmp.width, bmp.height); const ctx = cv.getContext("2d"); if (!ctx) return href; ctx.drawImage(bmp, 0, 0);
     const img = ctx.getImageData(0, 0, bmp.width, bmp.height); recolorGreyToColor(img.data, color, inkFloor); ctx.putImageData(img, 0, 0);
     const buf = await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer();
     const u8 = new Uint8Array(buf); let bin = ""; for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
-    return `data:image/png;base64,${G.btoa ? G.btoa(bin) : Buffer.from(u8).toString("base64")}`;
+    return `data:image/png;base64,${G.btoa(bin)}`;
   } catch { return href; }
 }
 /* seed-derived gender on an INDEPENDENT hash (does not disturb the selection rng stream). */
@@ -313,7 +366,7 @@ const AGE_INK_FLOOR = 45;                                      // greying keeps 
 /* weights are TUNABLE from manifest meta.age ({ young, old } fractions, adult = remainder) so the
  * mix can be rebalanced without an engine rebuild. Defaults 20% young / 70% adult / 10% old. */
 export function ageFor(seed: string, w?: { young?: number; old?: number }): Age {
-  const cl = (x: any, dflt: number) => { const n = Number(x); return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : dflt; };
+  const cl = (x: unknown, dflt: number) => { const n = Number(x); return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : dflt; };
   const young = cl(w?.young, 0.2), old = Math.min(cl(w?.old, 0.1), 1 - young);
   const h = hashStr(seed + ":a") % 1000;
   if (h < young * 1000) return "young";
@@ -338,7 +391,7 @@ function layerTransform(cat: string, vbW: number, flip: Record<string, boolean>,
 }
 
 /* recipe -> ordered draw ops. PURE (no RNG). For the plugin to re-render a persisted recipe. */
-export function resolveRecipe(recipe: PortraitRecipe, manifestRaw: any, cfg: ComposeConfig = {}): LayerOp[] {
+export function resolveRecipe(recipe: PortraitRecipe, manifestRaw: RawManifest, cfg: ComposeConfig = {}): LayerOp[] {
   const manifest = normalizeManifest(manifestRaw);
   const layers = manifest.layers;
   const exclude = new Set(cfg.exclude ?? manifest.exclude ?? DEFAULT_EXCLUDE);
@@ -366,7 +419,7 @@ export function resolveRecipe(recipe: PortraitRecipe, manifestRaw: any, cfg: Com
  * @param cfg          optional overrides for coherence / optional / exclude
  */
 export async function composePack(
-  manifestRaw: any, loadFile: LoadFile, seed?: string, cfg: ComposeConfig = {},
+  manifestRaw: RawManifest, loadFile: LoadFile, seed?: string, cfg: ComposeConfig = {},
 ): Promise<Composed> {
   const manifest = normalizeManifest(manifestRaw);
   const usedSeed = seed ?? randomSeed();
@@ -388,10 +441,7 @@ export async function composePack(
    * ADD tags re-roll seeded (non-recipe) portraits — locked recipes
    * are unaffected. Multipliers tunable via meta.genderLean.multipliers. */
   const gender = genderFor(usedSeed);
-  const leanCfg = (manifest.meta?.genderLean ?? {}) as {
-    files?: Record<string, string>;
-    multipliers?: { same?: number; opposite?: number; strongOpposite?: number };
-  };
+  const leanCfg = manifest.meta?.genderLean ?? {};
   const leanFiles = leanCfg.files ?? {};
   const hasLean = Object.keys(leanFiles).length > 0;
   const LEAN_SAME = leanCfg.multipliers?.same ?? 1.6;
@@ -425,7 +475,8 @@ export async function composePack(
   const skipReason: Record<string, string> = {};
 
   for (const g of groups) {
-    const obj: any = Array.isArray(g) ? { categories: g } : g;
+    const obj: { categories?: string[]; by?: "prefix" | "style" | "color"; lock?: string } =
+      Array.isArray(g) ? { categories: g } : g;
     // resolve match mode: explicit `by`, else infer from `lock` (race→prefix, family/style→style, colour→palette)
     let by: "prefix" | "style" | "color" = obj.by ?? "prefix";
     if (!obj.by && obj.lock) {
@@ -478,7 +529,7 @@ export async function composePack(
   if (layers["base"]?.length && !chosen["base"] && !skip.has("base")) {
     chosen["base"] = weightedPick(rng, layers["base"], effWeights(layers["base"]));
   }
-  const incompatPairs: string[][] = (manifest.meta?.incompatible ?? []) as string[][];
+  const incompatPairs: string[][] = manifest.meta?.incompatible ?? [];
   const conflicts = (a: string, b: string) =>
     incompatPairs.some((p) => (p[0] === a && p[1] === b) || (p[1] === a && p[0] === b));
 
@@ -555,7 +606,7 @@ export async function composePack(
     else {
       const hp = picks.find((p) => p.cat === "hair_back") ?? picks.find((p) => p.cat === "hair_front");
       if (hp) { const rel = hp.file.includes("/") ? hp.file : `${hp.cat}/${hp.file}`;
-        try { const raw = await loadFile(rel); fhColor = await sampleColorFromDataUri(`data:image/png;base64,${raw.replace(/^data:[^,]*,/, "")}`); } catch {} }
+        try { const raw = await loadFile(rel); fhColor = await sampleColorFromDataUri(`data:image/png;base64,${raw.replace(/^data:[^,]*,/, "")}`); } catch { /* sampling best-effort */ } }
       if (!fhColor) fhColor = [96, 60, 34];
     }
   }
@@ -599,7 +650,7 @@ export async function composePack(
   for (const pk of picks) partsIdx[pk.cat] = layers[pk.cat].indexOf(pk.file);
   const recipe: PortraitRecipe = { v: 1, seed: usedSeed, parts: partsIdx, flip, jitter, skin: skinIdx, gender, age };
 
-  const m: any = manifest.meta;
+  const m = manifest.meta;
   const metaComment = m?.license?.name ? `<!-- ${manifest.name ?? "pack"} | ${m.license.name} -->` : "";
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${manifest.viewBox}">${metaComment}${groupsSvg.join("")}${colorStyle}</svg>`;
@@ -610,7 +661,7 @@ export async function composePack(
  * note stores a resolved recipe: composeFromRecipe(note.recipe, manifest, loadFile). Mirrors the
  * composePack emit so output is identical for a recipe produced by the same seed. */
 export async function composeFromRecipe(
-  recipe: PortraitRecipe, manifestRaw: any, loadFile: LoadFile, cfg: ComposeConfig = {},
+  recipe: PortraitRecipe, manifestRaw: RawManifest, loadFile: LoadFile, cfg: ComposeConfig = {},
 ): Promise<Composed> {
   const manifest = normalizeManifest(manifestRaw);
   const ops = resolveRecipe(recipe, manifestRaw, cfg);
@@ -623,7 +674,7 @@ export async function composeFromRecipe(
     else {
       const hp = ops.find((o) => o.cat === "hair_back") ?? ops.find((o) => o.cat === "hair_front");
       if (hp) { const rel = hp.file.includes("/") ? hp.file : `${hp.cat}/${hp.file}`;
-        try { const raw = await loadFile(rel); fhColor = await sampleColorFromDataUri(`data:image/png;base64,${raw.replace(/^data:[^,]*,/, "")}`); } catch {} }
+        try { const raw = await loadFile(rel); fhColor = await sampleColorFromDataUri(`data:image/png;base64,${raw.replace(/^data:[^,]*,/, "")}`); } catch { /* sampling best-effort */ } }
       if (!fhColor) fhColor = [96, 60, 34];   // hair suppressed (headwear): beard never raw grey
     }
   }
@@ -655,7 +706,7 @@ export async function composeFromRecipe(
   const images = layerOut.map((l) => l.href).filter((h): h is string => !!h);
   const parts: Record<string, string> = {};
   for (const op of ops) parts[op.cat] = op.file;
-  const m: any = manifest.meta;
+  const m = manifest.meta;
   const metaComment = m?.license?.name ? `<!-- ${manifest.name ?? "pack"} | ${m.license.name} -->` : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${manifest.viewBox}">${metaComment}${groupsSvg.join("")}</svg>`;
   return { svg, seed: recipe.seed, parts, colors: {}, order: ops.map((o) => o.cat), skipped: {}, images, recipe };

@@ -14,7 +14,7 @@
 import { parseFileSource } from "../resolver/fileResolver";
 import { Evaluator } from "../engine/evaluator";
 import type { GeneratorFile } from "../engine/ast";
-import { normalizeManifest, PortraitRecipe } from "./pack";
+import { normalizeManifest, PortraitRecipe, RawManifest } from "./pack";
 
 /** Races with built-in tables; must match base_<race>_NN filenames. */
 export const NAME_RACES = [
@@ -280,7 +280,7 @@ function fnv(s: string): number {
  */
 export function raceOf(
     recipe: PortraitRecipe,
-    manifestRaw: unknown
+    manifestRaw: RawManifest
 ): string | null {
     const man = normalizeManifest(manifestRaw);
     const idx = recipe.parts?.base;
@@ -298,7 +298,7 @@ export function raceOf(
  */
 export function nameFor(
     recipe: PortraitRecipe,
-    manifestRaw: unknown
+    manifestRaw: RawManifest
 ): string {
     const raceRaw = raceOf(recipe, manifestRaw) ?? "human";
     const race = (NAME_RACES as readonly string[]).includes(raceRaw)

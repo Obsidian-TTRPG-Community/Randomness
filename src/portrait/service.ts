@@ -16,10 +16,7 @@
 import { normalizePath, requestUrl, arrayBufferToBase64, Notice } from "obsidian";
 import { unzipSync } from "fflate";
 import type RandomnessPlugin from "../views/main";
-import { normalizeManifest, LoadFile } from "./pack";
-
-/** Raw manifest type — the engine's normalizeManifest handles shape. */
-type RawManifest = Record<string, unknown>;
+import { normalizeManifest, LoadFile, RawManifest } from "./pack";
 
 /**
  * Official portrait pack release asset. The settings "Install Fantasy
@@ -220,10 +217,11 @@ export async function installPackFromZipBytes(
         const folder = target.slice(0, target.lastIndexOf("/"));
         await ensureFolder(folder);
         const data = entries[p];
-        await adapter.writeBinary(
-            target,
-            data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
-        );
+        // Copy into a fresh ArrayBuffer (fflate may hand back a view
+        // over a shared buffer; writeBinary wants a plain ArrayBuffer).
+        const copy = new Uint8Array(data.byteLength);
+        copy.set(data);
+        await adapter.writeBinary(target, copy.buffer);
         written++;
         if (written % 50 === 0) {
             new Notice(`Portrait pack: ${written}/${paths.length} files…`, 2000);

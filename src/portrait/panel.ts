@@ -24,6 +24,7 @@ import {
     Composed,
     PortraitRecipe,
     Age,
+    RawManifest,
 } from "./pack";
 import { saveComposedPng } from "./png";
 import { nameFor } from "./names";
@@ -33,6 +34,8 @@ import {
     overlayIconButton,
     portraitBlockSnippet,
     portraitInlineSnippet,
+    mountSvg,
+    setWidthPx,
 } from "./ui";
 
 /** Vault folder pane exports land in (created on demand). */
@@ -72,13 +75,13 @@ function renderTile(
     plugin: RandomnessPlugin,
     grid: HTMLElement,
     composed: Composed,
-    manifestRaw: unknown,
+    manifestRaw: RawManifest,
     width: number
 ): void {
     const tile = makeChildDiv(grid, "randomness-portrait-tile");
     const art = makeChildDiv(tile, "randomness-portrait-art");
-    art.style.width = `${width}px`;
-    if (composed.svg.startsWith("<svg")) art.innerHTML = composed.svg;
+    setWidthPx(art, width);
+    mountSvg(art, composed.svg);
 
     overlayIconButton(
         art,
@@ -240,7 +243,7 @@ export function renderBuilderTab(
         const wrap = makeChildDiv(container, "randomness-portrait-builder");
         const left = makeChildDiv(wrap, "randomness-portrait-builder-preview");
         const art = makeChildDiv(left, "randomness-portrait-art");
-        art.style.width = "240px";
+        setWidthPx(art, 240);
         const caption = makeChildDiv(left, "randomness-portrait-caption");
         const form = makeChildDiv(wrap, "randomness-portrait-builder-form");
 
@@ -251,10 +254,7 @@ export function renderBuilderTab(
                     manifestRaw,
                     load
                 );
-                clearElement(art);
-                if (composed.svg.startsWith("<svg")) {
-                    art.innerHTML = composed.svg;
-                }
+                mountSvg(art, composed.svg);
                 overlayIconButton(
                     art,
                     "image-down",

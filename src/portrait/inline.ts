@@ -32,7 +32,7 @@ import { MarkdownPostProcessorContext, Notice, TFile } from "obsidian";
 import type RandomnessPlugin from "../views/main";
 import { composePack, composeFromRecipe, Composed, PortraitRecipe } from "./pack";
 import { saveComposedPng } from "./png";
-import { overlayIconButton } from "./ui";
+import { overlayIconButton, mountSvg, setWidthPx } from "./ui";
 
 export interface InlinePortraitParams {
     pack: string;
@@ -137,7 +137,7 @@ export function buildPortraitInlineProcessor(plugin: RandomnessPlugin) {
 
             const span = activeDocument.createElement("span");
             span.className = "randomness-portrait-inline";
-            span.style.width = `${params.size}px`;
+            setWidthPx(span, params.size);
             span.textContent = "…";
             code.replaceWith(span);
 
@@ -185,7 +185,7 @@ async function renderInlineSpan(
 ): Promise<void> {
     try {
         if (!(await plugin.portraits.available(params.pack))) {
-            span.textContent = "⚠ portrait pack not found";
+            span.textContent = "⚠ Portrait pack not found";
             span.classList.add("randomness-portrait-hint");
             return;
         }
@@ -207,10 +207,7 @@ async function renderInlineSpan(
                 : composePack(manifest, load, params.seed);
 
         const draw = (composed: Composed): void => {
-            while (span.firstChild) span.removeChild(span.firstChild);
-            if (composed.svg.startsWith("<svg")) {
-                span.innerHTML = composed.svg;
-            }
+            mountSvg(span, composed.svg);
             span.setAttribute("aria-label", `portrait ${composed.seed}`);
 
             // PNG, top-left: save next to the note, replace the span

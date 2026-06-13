@@ -27,10 +27,10 @@ import {
     TFile,
 } from "obsidian";
 import type RandomnessPlugin from "../views/main";
-import { composePack, composeFromRecipe, Composed, PortraitRecipe } from "./pack";
+import { composePack, composeFromRecipe, Composed, PortraitRecipe, RawManifest } from "./pack";
 import { saveComposedPng } from "./png";
 import { nameFor } from "./names";
-import { overlayIconButton } from "./ui";
+import { overlayIconButton, mountSvg, setWidthPx } from "./ui";
 
 export interface PortraitBlockParams {
     pack: string;
@@ -222,14 +222,14 @@ class PortraitCodeblockChild extends MarkdownRenderChild {
         composed: Composed,
         params: PortraitBlockParams,
         locked: boolean,
-        manifestRaw: unknown
+        manifestRaw: RawManifest
     ): void {
         const tile = makeChildDiv(grid, "randomness-portrait-tile");
         const art = makeChildDiv(tile, "randomness-portrait-art");
-        art.style.width = `${params.size}px`;
+        setWidthPx(art, params.size);
         // The svg is built locally by the compositor from pack data —
         // same trust level as the pack itself (user-installed files).
-        if (composed.svg.startsWith("<svg")) art.innerHTML = composed.svg;
+        mountSvg(art, composed.svg);
 
         // PNG icon, top-left: save next to the note and replace this
         // block with the ![[embed]].

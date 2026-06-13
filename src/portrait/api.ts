@@ -30,8 +30,7 @@ import {
     ageFor,
     Age,
     Composed,
-    PortraitRecipe,
-} from "./pack";
+    PortraitRecipe, RawManifest } from "./pack";
 import { nameFor, raceOf } from "./names";
 import { saveComposedPng } from "./png";
 import { portraitBlockSnippet, portraitInlineSnippet } from "./ui";
@@ -117,7 +116,7 @@ function freshSeed(): string {
 export function createPortraitApi(plugin: RandomnessPlugin): PortraitAPI {
     const toResult = (
         composed: Composed,
-        manifestRaw: unknown
+        manifestRaw: RawManifest
     ): PortraitResult => {
         const recipe = composed.recipe;
         let name = composed.seed;
@@ -133,11 +132,11 @@ export function createPortraitApi(plugin: RandomnessPlugin): PortraitAPI {
             name,
             race: raceOf(recipe, manifestRaw),
             gender: recipe.gender === "female" ? "female" : "male",
-            age: (recipe.age ?? "adult") as Age,
+            age: recipe.age ?? "adult",
         };
     };
 
-    const requirePack = async (pack?: string): Promise<unknown> => {
+    const requirePack = async (pack?: string): Promise<RawManifest> => {
         if (!(await plugin.portraits.available(pack))) {
             throw new Error(
                 "Randomness: no portrait pack installed (Settings → Randomness)."
@@ -207,10 +206,10 @@ export function createPortraitApi(plugin: RandomnessPlugin): PortraitAPI {
         ): Promise<string> {
             let composedLike: { svg: string; seed: string };
             if ("svg" in portrait && "seed" in portrait) {
-                composedLike = portrait as PortraitResult;
+                composedLike = portrait;
             } else {
                 const rendered = await this.render(
-                    portrait as PortraitRecipe,
+                    portrait,
                     { pack: opts.pack }
                 );
                 composedLike = rendered;
