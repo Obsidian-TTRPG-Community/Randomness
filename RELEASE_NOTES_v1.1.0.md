@@ -26,10 +26,18 @@ a working town generator.
 - **Scripting API 1.2.0**: `api.portraits.*` (constrained rolls,
   render, savePng, snippets) and `api.randomNote(folder)` for rolling
   random notes from folders. See API.md.
+- **`.rdm` is the native generator format**: the engine, browser,
+  index, autocomplete and `Use:` resolution all speak `.rdm` first.
+  Legacy `.ipt` files load identically, forever — existing libraries
+  keep working without changes.
 - **Engine**: prompts now also seed label-named variables
   (`{$keeperName}`) for position-independent fact passing; manifest
-  `meta.genderLean` weighting; pack installs from release `.zip`
-  assets.
+  `meta.genderLean` weighting (gender-appropriate art selection);
+  pack installs from release `.zip` assets.
+- **Town Forge**: stamps whole towns from these generators — Town
+  Forge 1.0.4+ carries the place templates itself; the prompt
+  contract (`keeperName`, `keeperRace`, …) keeps each note's face,
+  name and prose describing one person.
 
 ## Upgrade notes
 
@@ -38,3 +46,7 @@ a working town generator.
 - Portrait features stay invisible until a pack is installed
   (Settings → Randomness → Install Fantasy Portrait Pack).
 - API consumers: `api.version` is now `1.2.0` (additive minor).
+- Fixes from the pre-release test round: the Generator root field no
+  longer drops focus while typing; the portrait pack installs under
+  the Generator root (not the vault root); bundle downloads handle
+  filenames with spaces.
