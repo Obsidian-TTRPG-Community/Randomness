@@ -40,25 +40,19 @@ drivers:
 - **`templates/`** — standalone: trigger one in an empty note, it asks
   for the town and size and rolls everything else. No other plugin
   needed (besides Templater).
-- **`townforge-templates/`** — for [Town Forge](obsidian://show-plugin?id=town-forge):
-  these use `{{name}}` / `{{town}}` / `{{subtype}}` / `{{size}}`
-  placeholders and never prompt, so Town Forge can stamp a whole town
-  of keyed location notes in one go. Two settings make this work:
-  1. **Town Forge → Template folder** → the installed
-     `townforge-templates` folder (forward slashes, e.g.
-     `Generators/fantasy-hub/townforge-templates`).
-  2. **Templater → "Trigger Templater on new file creation"** → ON —
-     Town Forge creates the notes; this is what makes Templater run
-     the template code inside them. (Fresh Templater installs have it
-     off.)
+- **`townforge-templates/`** — the Town Forge set: `{{name}}` /
+  `{{town}}` / `{{subtype}}` / `{{size}}` placeholders, never prompts,
+  built for stamping whole towns. **You don't install these from
+  here** — Town Forge 1.0.4+ embeds this same set and installs it
+  itself (**Settings → Town Forge → Create place templates**). This
+  folder is the canonical source Town Forge mirrors at release time.
+  The one manual step either way: **Templater → "Trigger Templater on
+  new file creation" → ON** (per-device).
 
 Don't point Town Forge at `templates/` — those prompt interactively
 and roll their own names, which fights Town Forge's own naming.
 
-(The same Town Forge set also ships with Town Forge itself, as
-`Examples/TownForge-Templates.zip` in its repo, for offline/manual
-setups. The canonical copies live here — this folder is what the
-installer deploys and auto-points Town Forge at.)
+
 
 ## One person across the whole note
 

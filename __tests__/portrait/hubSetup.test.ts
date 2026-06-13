@@ -39,58 +39,27 @@ const DESTS = {
 };
 
 describe("fantasy hub setup", () => {
-    test("start-here note covers both sets and the Templater toggle", () => {
-        const md = fantasyHubStartHere({ ...DESTS, townForge: "configured" });
-        expect(md).toContain("townforge-templates");
+    test("start-here covers both sets, TF's own seeding, the Templater toggle", () => {
+        const md = fantasyHubStartHere(DESTS);
+        expect(md).toContain("Create place templates");
         expect(md).toContain("z_Templates/Fantasy Hub");
         expect(md).toContain("Trigger Templater on new file creation");
-        expect(md).toContain("✅ Done automatically");
+        expect(md).not.toContain("townforge-templates");
     });
 
-    test("configures a live Town Forge and saves", async () => {
-        const saved: unknown[] = [];
-        const tf = {
-            settings: { templateFolder: "Templates/TownForge" },
-            saveSettings: async () => void saved.push(1),
-        };
-        const { plugin, writes, opened } = fakePlugin({
-            livePlugins: { "town-forge": tf },
-        });
-        const r = await finishFantasyHubSetup(plugin, DESTS);
-        expect(r.townForge).toBe("configured");
-        expect(tf.settings.templateFolder).toBe(
-            "Generators/fantasy-hub/townforge-templates"
-        );
-        expect(saved).toHaveLength(1);
-        expect(writes[r.startHerePath]).toContain("start here");
-        expect(opened).toEqual([r.startHerePath]);
-    });
-
-    test("configures a disabled Town Forge via its data.json", async () => {
-        const { plugin, files } = fakePlugin({
+    test("writes + opens the note; never touches other plugins", async () => {
+        const { plugin, writes, opened, files } = fakePlugin({
             files: {
-                ".obsidian/plugins/town-forge/data.json": JSON.stringify({
-                    templateFolder: "z_Templates\\\\old",
-                    other: 1,
-                }),
+                ".obsidian/plugins/town-forge/data.json":
+                    '{"templateFolder":"Untouched"}',
             },
         });
         const r = await finishFantasyHubSetup(plugin, DESTS);
-        expect(r.townForge).toBe("configured-disabled");
-        const data = JSON.parse(
-            files[".obsidian/plugins/town-forge/data.json"]
+        expect(writes[r.startHerePath]).toContain("start here");
+        expect(opened).toEqual([r.startHerePath]);
+        expect(files[".obsidian/plugins/town-forge/data.json"]).toBe(
+            '{"templateFolder":"Untouched"}'
         );
-        expect(data.templateFolder).toBe(
-            "Generators/fantasy-hub/townforge-templates"
-        );
-        expect(data.other).toBe(1);
-    });
-
-    test("no Town Forge: still writes + opens the note", async () => {
-        const { plugin, writes } = fakePlugin({});
-        const r = await finishFantasyHubSetup(plugin, DESTS);
-        expect(r.townForge).toBe("not-installed");
-        expect(writes[r.startHerePath]).toContain("Install [Town Forge]");
     });
 
     test("readPluginSetting prefers live, falls back to data.json", async () => {
@@ -116,8 +85,6 @@ describe("fantasy hub setup", () => {
         expect(
             await readPluginSetting(p2, "templater-obsidian", "templates_folder")
         ).toBe("FromDisk");
-        expect(
-            await readPluginSetting(p2, "missing-plugin", "x")
-        ).toBeUndefined();
+        expect(await readPluginSetting(p2, "missing-plugin", "x")).toBeUndefined();
     });
 });

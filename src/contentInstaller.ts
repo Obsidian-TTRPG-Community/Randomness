@@ -80,16 +80,8 @@ export async function installContentBundle(
 // ─────────────────────────────────────────────────────────────────────
 
 export interface HubSetupResult {
-    /** "configured" | "configured-disabled" | "not-installed" | "failed" */
-    townForge: string;
     /** Vault path of the Start Here note. */
     startHerePath: string;
-}
-
-interface TownForgeLike {
-    settings?: { templateFolder?: string };
-    saveSettings?: () => Promise<void>;
-    saveData?: (data: unknown) => Promise<void>;
 }
 
 /**
@@ -99,44 +91,36 @@ interface TownForgeLike {
 export function fantasyHubStartHere(opts: {
     generatorsDest: string;
     templatesDest: string;
-    townForge: string;
 }): string {
-    const tfFolder = `${opts.generatorsDest}/townforge-templates`;
-    const tfLine =
-        opts.townForge === "configured"
-            ? `✅ Done automatically — Town Forge's template folder now points at \`${tfFolder}\`.`
-            : opts.townForge === "configured-disabled"
-              ? `✅ Pre-configured — Town Forge is installed but disabled; its template folder will point at \`${tfFolder}\` when you enable it.`
-              : `Install [Town Forge](obsidian://show-plugin?id=town-forge), then set **Town Forge → Template folder** to \`${tfFolder}\` (forward slashes!) — or just re-run the Fantasy Hub install and it's configured for you.`;
     return `---
 cssclasses: []
 ---
 # Fantasy Hub — start here
 
-Everything installed. Two template sets shipped:
+Everything installed:
 
+- **\`${opts.generatorsDest}/generators\`** — the settlement tables
+  (five stocked shop types, tavern, inn, temple, castle, guild,
+  barracks, market and more). Roll them in codeblocks, inline, the
+  browser pane, or from scripts.
 - **\`${opts.templatesDest}\`** — standalone templates. Open an empty
   note → *Templater: Insert template* → pick a location (Tavern, Inn,
   Temple…). It asks for the town and size, rolls everything else, and
   renames the note.
-- **\`${tfFolder}\`** — the Town Forge set,
-  for stamping a whole town of keyed location notes in one go.
 
 ## Stamp a whole town with Town Forge
 
-1. ${tfLine}
-2. **Templater → "Trigger Templater on new file creation" → ON.**
-   This one's a per-device Templater setting (it can't be set for
-   you, and sync won't carry it) — it's what makes the template code
-   run inside the notes Town Forge creates. Accept the warning;
-   "Template matching mode" can stay **None**.
-3. Generate a town in Town Forge and export — every shop, tavern,
-   temple and barracks note arrives with a named, portraited keeper
-   and coherent rolled text.
+[Town Forge](obsidian://show-plugin?id=town-forge) (1.0.4+) carries
+its own copy of the place templates and installs them itself:
 
-(Town Forge 1.0.4+ also carries this template set itself — its
-settings have a **Create place templates** button that writes them
-into whatever folder it's pointed at. Same templates either way.)
+1. **Settings → Town Forge → Create place templates** — one click.
+2. **Templater → "Trigger Templater on new file creation" → ON.**
+   A per-device Templater setting (sync won't carry it) — it's what
+   makes the template code run inside the notes Town Forge creates.
+   Accept the warning; "Template matching mode" can stay **None**.
+3. Generate a town and export — every shop, tavern, temple and
+   barracks note arrives with a named, portraited keeper and coherent
+   rolled text.
 
 Crests on castles and guilds? Install
 [Heraldry Weaver](obsidian://show-plugin?id=heraldry-weaver).
@@ -157,62 +141,27 @@ keep your own notes elsewhere.)*
 }
 
 /**
- * Post-install: point Town Forge at the shipped template set (live
- * plugin, or its data.json when installed-but-disabled), write the
- * Start Here note, open it. Returns what happened for the Notice.
+ * Post-install: write + open the Start Here note. (Town Forge 1.0.4+
+ * seeds and configures its own templates — Randomness no longer
+ * writes another plugin's settings.)
  */
 export async function finishFantasyHubSetup(
     plugin: RandomnessPlugin,
     opts: { generatorsDest: string; templatesDest: string }
 ): Promise<HubSetupResult> {
-    const app = plugin.app as unknown as {
-        plugins?: { plugins?: Record<string, TownForgeLike> };
-        vault: typeof plugin.app.vault;
-        workspace: typeof plugin.app.workspace;
-    };
-    const tfFolder = `${opts.generatorsDest}/townforge-templates`;
-    let townForge = "not-installed";
-
-    try {
-        const tf = app.plugins?.plugins?.["town-forge"];
-        if (tf?.settings) {
-            tf.settings.templateFolder = tfFolder;
-            if (tf.saveSettings) await tf.saveSettings();
-            else if (tf.saveData) await tf.saveData(tf.settings);
-            townForge = "configured";
-        } else {
-            // Installed but disabled: configure its data.json so the
-            // setting is right the moment it's enabled.
-            const dataPath = normalizePath(
-                `${plugin.app.vault.configDir}/plugins/town-forge/data.json`
-            );
-            if (await plugin.app.vault.adapter.exists(dataPath)) {
-                const data = JSON.parse(
-                    await plugin.app.vault.adapter.read(dataPath)
-                ) as Record<string, unknown>;
-                data.templateFolder = tfFolder;
-                await plugin.app.vault.adapter.write(
-                    dataPath,
-                    JSON.stringify(data, null, 2)
-                );
-                townForge = "configured-disabled";
-            }
-        }
-    } catch {
-        townForge = "failed";
-    }
-
     const startHerePath = normalizePath(
         `${opts.generatorsDest}/Fantasy Hub - Start Here.md`
     );
-    const content = fantasyHubStartHere({ ...opts, townForge });
-    await plugin.app.vault.adapter.write(startHerePath, content);
+    await plugin.app.vault.adapter.write(
+        startHerePath,
+        fantasyHubStartHere(opts)
+    );
     try {
         await plugin.app.workspace.openLinkText(startHerePath, "", true);
     } catch {
         // headless/test environments have no workspace leafs — fine
     }
-    return { townForge, startHerePath };
+    return { startHerePath };
 }
 
 /**

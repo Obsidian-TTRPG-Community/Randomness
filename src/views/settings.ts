@@ -469,18 +469,12 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                             const { finishFantasyHubSetup } = await import(
                                 "../contentInstaller"
                             );
-                            const setup = await finishFantasyHubSetup(
-                                this.plugin,
-                                { generatorsDest, templatesDest }
-                            );
-                            const tfMsg =
-                                setup.townForge === "configured"
-                                    ? "Town Forge is pointed at the new templates."
-                                    : setup.townForge === "configured-disabled"
-                                      ? "Town Forge (currently disabled) is pre-configured."
-                                      : "";
+                            await finishFantasyHubSetup(this.plugin, {
+                                generatorsDest,
+                                templatesDest,
+                            });
                             new Notice(
-                                `Fantasy Hub installed: ${n} files. ${tfMsg} ` +
+                                `Fantasy Hub installed: ${n} files. ` +
                                     "The Start Here note has the rest.",
                                 10000
                             );

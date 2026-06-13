@@ -50,21 +50,6 @@
     "templates/Temple.md",
     "templates/Thief Guild.md",
     "templates/Tower.md",
-    "templates/Undertaker.md",
-    "townforge-templates/Barracks.md",
-    "townforge-templates/Castle.md",
-    "townforge-templates/Dock.md",
-    "townforge-templates/Farm.md",
-    "townforge-templates/Inn.md",
-    "townforge-templates/Manor.md",
-    "townforge-templates/Market.md",
-    "townforge-templates/Mill.md",
-    "townforge-templates/Shop.md",
-    "townforge-templates/Stable.md",
-    "townforge-templates/Tavern.md",
-    "townforge-templates/Temple.md",
-    "townforge-templates/Thief Guild.md",
-    "townforge-templates/Tower.md",
-    "townforge-templates/Undertaker.md"
+    "templates/Undertaker.md"
   ]
 }
