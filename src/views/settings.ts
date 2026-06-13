@@ -411,26 +411,7 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         window.open("obsidian://show-plugin?id=town-forge");
                     })
             )
-            .addExtraButton((b) =>
-                b
-                    .setIcon("shield")
-                    .setTooltip("Get Heraldry Weaver (community plugins)")
-                    .onClick(() => {
-                        window.open(
-                            "obsidian://show-plugin?id=heraldry-weaver"
-                        );
-                    })
-            )
-            .addExtraButton((b) =>
-                b
-                    .setIcon("palette")
-                    .setTooltip("Get the ITS theme (styles the infoboxes)")
-                    .onClick(() => {
-                        window.open(
-                            "obsidian://show-theme?name=ITS%20Theme"
-                        );
-                    })
-            );
+            ;
         void (async () => {
             if (!this.plugin.portraits) return;
             const packReady = await this.plugin.portraits
@@ -463,10 +444,10 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     "one-click Templater templates that build whole " +
                     `location notes with portrait NPCs. Generators install ` +
                     `to "${generatorsDest}", templates to "${templatesDest}". ` +
-                    "Templates require the Templater plugin. Works great " +
-                    "with Town Forge (stamp whole towns), Heraldry Weaver " +
-                    "(crests) and the ITS theme (infobox styling) — the " +
-                    "buttons here open each of them."
+                    "Templates require the Templater plugin. Stamping " +
+                    "whole towns wants Town Forge — its settings carry the " +
+                    "same template set plus links to the rest of the " +
+                    "ecosystem (Heraldry Weaver, ITS theme)."
             );
             hubSetting.addButton((btn) =>
                 btn
