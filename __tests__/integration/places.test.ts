@@ -4,7 +4,7 @@
  * shops. This file grows as new place types are added (inn, stable,
  * then market, temple, castle, barracks, dock, mill, farm).
  *
- * Each place reuses people.ipt (and prices.ipt where money is
+ * Each place reuses people.rdm (and prices.rdm where money is
  * involved), takes the town/shopType/shopName prompt trio so Town
  * Forge can drive it like a shop, and renders a GM-usable block with
  * a hook. Tests assert the structural skeleton holds across seeds and
@@ -15,12 +15,12 @@ import * as path from "path";
 import { Evaluator } from "../../src/engine/evaluator";
 import { inMemorySource, resolveBundle } from "../../src/resolver/fileResolver";
 
-const SHOPS = path.resolve(__dirname, "../../demo/shops");
+const SHOPS = path.resolve(__dirname, "../../community-generators/fantasy-hub/generators");
 
 function loadAll(): Record<string, string> {
     const out: Record<string, string> = {};
     for (const f of fs.readdirSync(SHOPS)) {
-        if (f.endsWith(".ipt")) {
+        if (f.endsWith(".rdm")) {
             out[f] = fs.readFileSync(path.join(SHOPS, f), "utf8");
         }
     }
@@ -47,7 +47,7 @@ function roll(
 describe("place: inn", () => {
     test("renders host, priced board, common room, patron, hook", () => {
         for (let s = 1; s <= 6; s++) {
-            const out = roll("place-inn.ipt", "TF-Inn", s, {
+            const out = roll("place-inn.rdm", "TF-Inn", s, {
                 town: "Lythwen",
                 shopType: "inn",
                 shopName: "",
@@ -62,7 +62,7 @@ describe("place: inn", () => {
     });
 
     test("uses a passed inn name", () => {
-        const out = roll("place-inn.ipt", "TF-Inn", 1, {
+        const out = roll("place-inn.rdm", "TF-Inn", 1, {
             town: "Dewbridge",
             shopType: "inn",
             shopName: "The Salty Anchor",
@@ -75,7 +75,7 @@ describe("place: inn", () => {
 describe("place: market", () => {
     test("renders character, multiple stalls, square life, shopper, hook", () => {
         for (let s = 1; s <= 8; s++) {
-            const out = roll("place-market.ipt", "TF-Market", s, {
+            const out = roll("place-market.rdm", "TF-Market", s, {
                 town: "Lythwen",
                 shopType: "market",
                 shopName: "",
@@ -92,7 +92,7 @@ describe("place: market", () => {
     });
 
     test("uses a passed market name", () => {
-        const out = roll("place-market.ipt", "TF-Market", 1, {
+        const out = roll("place-market.rdm", "TF-Market", 1, {
             town: "Dewbridge",
             shopType: "market",
             shopName: "The Saltgate Bazaar",
@@ -104,7 +104,7 @@ describe("place: market", () => {
 describe("place: temple", () => {
     test("renders deity, clergy, services, worshipper, hook", () => {
         for (let s = 1; s <= 6; s++) {
-            const out = roll("place-temple.ipt", "TF-Temple", s, {
+            const out = roll("place-temple.rdm", "TF-Temple", s, {
                 town: "Frostkey",
                 shopType: "temple",
                 shopName: "",
@@ -120,7 +120,7 @@ describe("place: temple", () => {
 
     test("the title always names the dedicated deity", () => {
         for (let s = 1; s <= 20; s++) {
-            const out = roll("place-temple.ipt", "TF-Temple", s, {
+            const out = roll("place-temple.rdm", "TF-Temple", s, {
                 town: "X",
                 shopType: "temple",
                 shopName: "",
@@ -134,7 +134,7 @@ describe("place: temple", () => {
     });
 
     test("uses a passed temple name", () => {
-        const out = roll("place-temple.ipt", "TF-Temple", 1, {
+        const out = roll("place-temple.rdm", "TF-Temple", 1, {
             town: "X",
             shopType: "temple",
             shopName: "The Grand Basilica",
@@ -146,7 +146,7 @@ describe("place: temple", () => {
 describe("place: castle", () => {
     test("renders ruler, garrison, features, court, situation", () => {
         for (let s = 1; s <= 6; s++) {
-            const out = roll("place-castle.ipt", "TF-Castle", s, {
+            const out = roll("place-castle.rdm", "TF-Castle", s, {
                 town: "Frostkey",
                 shopType: "castle",
                 shopName: "",
@@ -161,7 +161,7 @@ describe("place: castle", () => {
 
     test("a castle has NO prices (institutional, not commercial)", () => {
         for (let s = 1; s <= 6; s++) {
-            const out = roll("place-castle.ipt", "TF-Castle", s, {
+            const out = roll("place-castle.rdm", "TF-Castle", s, {
                 town: "X",
                 shopType: "castle",
                 shopName: "",
@@ -171,7 +171,7 @@ describe("place: castle", () => {
     });
 
     test("uses a passed castle name", () => {
-        const out = roll("place-castle.ipt", "TF-Castle", 1, {
+        const out = roll("place-castle.rdm", "TF-Castle", 1, {
             town: "X",
             shopType: "castle",
             shopName: "Dragonwatch Keep",
@@ -182,10 +182,10 @@ describe("place: castle", () => {
 
 describe("place: working sites (barracks, dock, mill, farm)", () => {
     const cases: Array<[string, string, string]> = [
-        ["place-barracks.ipt", "TF-Barracks", "barracks"],
-        ["place-dock.ipt", "TF-Dock", "docks"],
-        ["place-mill.ipt", "TF-Mill", "mill"],
-        ["place-farm.ipt", "TF-Farm", "farmland"],
+        ["place-barracks.rdm", "TF-Barracks", "barracks"],
+        ["place-dock.rdm", "TF-Dock", "docks"],
+        ["place-mill.rdm", "TF-Mill", "mill"],
+        ["place-farm.rdm", "TF-Farm", "farmland"],
     ];
     for (const [file, table, label] of cases) {
         test(`${table} renders overseer, work, and a hook`, () => {
@@ -208,7 +208,7 @@ describe("place: working sites (barracks, dock, mill, farm)", () => {
     }
 
     test("working sites accept a passed name", () => {
-        const out = roll("place-mill.ipt", "TF-Mill", 1, {
+        const out = roll("place-mill.rdm", "TF-Mill", 1, {
             town: "X",
             shopType: "mill",
             shopName: "The Old Stone Mill",
@@ -217,11 +217,11 @@ describe("place: working sites (barracks, dock, mill, farm)", () => {
     });
 });
 
-describe("place: umbrella picker (location.ipt)", () => {
+describe("place: umbrella picker (location.rdm)", () => {
     test("TF-Location resolves any type and propagates the town", () => {
         const kinds = new Set<string>();
         for (let s = 1; s <= 40; s++) {
-            const out = roll("location.ipt", "TF-Location", s, {
+            const out = roll("location.rdm", "TF-Location", s, {
                 town: "Frostkey",
                 shopType: "location",
                 shopName: "",
@@ -245,7 +245,7 @@ describe("place: umbrella picker (location.ipt)", () => {
             "magic",
         ];
         for (let s = 1; s <= 30; s++) {
-            const out = roll("location.ipt", "TF-Place", s, {
+            const out = roll("location.rdm", "TF-Place", s, {
                 town: "X",
                 shopType: "location",
                 shopName: "",
@@ -270,7 +270,7 @@ describe("place: guild", () => {
     for (const [table, label] of categories) {
         test(`${table} renders a coherent ${label} guild`, () => {
             for (let s = 1; s <= 4; s++) {
-                const out = roll("place-guild.ipt", table, s, {
+                const out = roll("place-guild.rdm", table, s, {
                     town: "Frostkey",
                     shopType: "guild",
                     shopName: "",
@@ -290,7 +290,7 @@ describe("place: guild", () => {
     test("TF-Guild rolls across all categories", () => {
         const cats = new Set<string>();
         for (let s = 1; s <= 40; s++) {
-            const out = roll("place-guild.ipt", "TF-Guild", s, {
+            const out = roll("place-guild.rdm", "TF-Guild", s, {
                 town: "X",
                 shopType: "guild",
                 shopName: "",
@@ -305,7 +305,7 @@ describe("place: guild", () => {
 
     test("slant=good biases away from dark standing", () => {
         for (let s = 1; s <= 20; s++) {
-            const out = roll("place-guild.ipt", "TF-Guild", s, {
+            const out = roll("place-guild.rdm", "TF-Guild", s, {
                 town: "X",
                 shopType: "guild",
                 shopName: "",
@@ -319,7 +319,7 @@ describe("place: guild", () => {
     test("slant=dark biases toward dark standing", () => {
         let darkSeen = 0;
         for (let s = 1; s <= 12; s++) {
-            const out = roll("place-guild.ipt", "TF-Guild", s, {
+            const out = roll("place-guild.rdm", "TF-Guild", s, {
                 town: "X",
                 shopType: "guild",
                 shopName: "",
@@ -332,7 +332,7 @@ describe("place: guild", () => {
     });
 
     test("uses a passed guild name", () => {
-        const out = roll("place-guild.ipt", "TF-GuildCraft", 1, {
+        const out = roll("place-guild.rdm", "TF-GuildCraft", 1, {
             town: "X",
             shopType: "guild",
             shopName: "The Ironhand Fellowship",
@@ -345,7 +345,7 @@ describe("place: guild", () => {
 describe("place: tavern", () => {
     test("renders keeper, specialty, drinks, entertainment, hook", () => {
         for (let s = 1; s <= 5; s++) {
-            const out = roll("place-tavern.ipt", "TF-Tavern", s, {
+            const out = roll("place-tavern.rdm", "TF-Tavern", s, {
                 town: "Frostkey",
                 shopType: "tavern",
                 shopName: "",
@@ -359,7 +359,7 @@ describe("place: tavern", () => {
         }
     });
     test("uses a passed tavern name", () => {
-        const out = roll("place-tavern.ipt", "TF-Tavern", 1, {
+        const out = roll("place-tavern.rdm", "TF-Tavern", 1, {
             town: "X", shopType: "tavern", shopName: "The Rusty Tankard",
         });
         expect(out).toContain("The Rusty Tankard");
@@ -369,7 +369,7 @@ describe("place: tavern", () => {
 describe("place: wizard's tower", () => {
     test("renders mage, study, household, signs, hook", () => {
         for (let s = 1; s <= 5; s++) {
-            const out = roll("place-tower.ipt", "TF-Tower", s, {
+            const out = roll("place-tower.rdm", "TF-Tower", s, {
                 town: "Frostkey",
                 shopType: "tower",
                 shopName: "",
@@ -384,7 +384,7 @@ describe("place: wizard's tower", () => {
     });
     test("household line is not doubled", () => {
         // Regression: the household used to print twice.
-        const out = roll("place-tower.ipt", "TF-Tower", 6, {
+        const out = roll("place-tower.rdm", "TF-Tower", 6, {
             town: "X", shopType: "tower", shopName: "",
         });
         const line = out.split("\n").find((l) => l.startsWith("**The household:**"))!;
@@ -400,7 +400,7 @@ describe("place: wizard's tower", () => {
 describe("place: undertaker", () => {
     test("renders undertaker, services, grounds, care, hook", () => {
         for (let s = 1; s <= 5; s++) {
-            const out = roll("place-undertaker.ipt", "TF-Undertaker", s, {
+            const out = roll("place-undertaker.rdm", "TF-Undertaker", s, {
                 town: "Frostkey",
                 shopType: "undertaker",
                 shopName: "",
@@ -414,7 +414,7 @@ describe("place: undertaker", () => {
         }
     });
     test("uses a passed undertaker name", () => {
-        const out = roll("place-undertaker.ipt", "TF-Undertaker", 1, {
+        const out = roll("place-undertaker.rdm", "TF-Undertaker", 1, {
             town: "X", shopType: "undertaker", shopName: "The Last Repose",
         });
         expect(out).toContain("The Last Repose");
@@ -424,7 +424,7 @@ describe("place: undertaker", () => {
 describe("place: noble's manor", () => {
     test("renders head, household, family member, talk, hook", () => {
         for (let s = 1; s <= 5; s++) {
-            const out = roll("place-manor.ipt", "TF-Manor", s, {
+            const out = roll("place-manor.rdm", "TF-Manor", s, {
                 town: "Frostkey",
                 shopType: "manor",
                 shopName: "",
@@ -438,7 +438,7 @@ describe("place: noble's manor", () => {
         }
     });
     test("uses a passed manor name", () => {
-        const out = roll("place-manor.ipt", "TF-Manor", 1, {
+        const out = roll("place-manor.rdm", "TF-Manor", 1, {
             town: "X", shopType: "manor", shopName: "Blackwood Hall",
         });
         expect(out).toContain("Blackwood Hall");
@@ -450,20 +450,20 @@ describe("place: standalone name aliases (TF-*Name)", () => {
     // collision-proof TF-*Name table that yields a clean single-line
     // name with no markup, no empty fragments, no leftover syntax.
     const nameTables: Array<[string, string]> = [
-        ["place-barracks.ipt", "TF-BarracksName"],
-        ["place-castle.ipt", "TF-CastleName"],
-        ["place-dock.ipt", "TF-DockName"],
-        ["place-farm.ipt", "TF-FarmName"],
-        ["place-inn.ipt", "TF-InnName"],
-        ["place-market.ipt", "TF-MarketName"],
-        ["place-mill.ipt", "TF-MillName"],
-        ["place-stable.ipt", "TF-StableName"],
-        ["place-tavern.ipt", "TF-TavernName"],
-        ["place-tower.ipt", "TF-TowerName"],
-        ["place-undertaker.ipt", "TF-UndertakerName"],
-        ["place-guild.ipt", "TF-GuildName"],
-        ["place-manor.ipt", "TF-ManorName"],
-        ["place-temple.ipt", "TF-TempleName"],
+        ["place-barracks.rdm", "TF-BarracksName"],
+        ["place-castle.rdm", "TF-CastleName"],
+        ["place-dock.rdm", "TF-DockName"],
+        ["place-farm.rdm", "TF-FarmName"],
+        ["place-inn.rdm", "TF-InnName"],
+        ["place-market.rdm", "TF-MarketName"],
+        ["place-mill.rdm", "TF-MillName"],
+        ["place-stable.rdm", "TF-StableName"],
+        ["place-tavern.rdm", "TF-TavernName"],
+        ["place-tower.rdm", "TF-TowerName"],
+        ["place-undertaker.rdm", "TF-UndertakerName"],
+        ["place-guild.rdm", "TF-GuildName"],
+        ["place-manor.rdm", "TF-ManorName"],
+        ["place-temple.rdm", "TF-TempleName"],
     ];
 
     for (const [file, table] of nameTables) {
@@ -487,7 +487,7 @@ describe("place: guild names (standalone + criminal street-names)", () => {
     test("criminal guilds use cant/street-names, not 'Guild of Thieves'", () => {
         let streetNamed = 0;
         for (let s = 1; s <= 20; s++) {
-            const out = roll("place-guild.ipt", "TF-GuildCriminal", s, {
+            const out = roll("place-guild.rdm", "TF-GuildCriminal", s, {
                 town: "X", shopType: "guild", shopName: "", slant: "dark",
             });
             const title = out.split("\n")[0];
@@ -499,7 +499,7 @@ describe("place: guild names (standalone + criminal street-names)", () => {
 
     test("TF-ThievesGuildName yields a clean criminal name", () => {
         for (let s = 1; s <= 20; s++) {
-            const out = roll("place-guild.ipt", "TF-ThievesGuildName", s, {});
+            const out = roll("place-guild.rdm", "TF-ThievesGuildName", s, {});
             expect(out.trim().length).toBeGreaterThan(2);
             expect(out).not.toContain("[@");
             expect(out).not.toContain("\n");
@@ -519,7 +519,7 @@ describe("place: guild names (standalone + criminal street-names)", () => {
         ];
         for (const t of tables) {
             for (let s = 1; s <= 3; s++) {
-                const out = roll("place-guild.ipt", t, s, {});
+                const out = roll("place-guild.rdm", t, s, {});
                 expect(out.trim().length).toBeGreaterThan(2);
                 expect(out).not.toContain("[@");
                 expect(out).not.toMatch(/of\s*$/);
@@ -531,7 +531,7 @@ describe("place: guild names (standalone + criminal street-names)", () => {
 describe("place: stable", () => {
     test("renders stablemaster, priced stock, stalls, customer, hook", () => {
         for (let s = 1; s <= 6; s++) {
-            const out = roll("place-stable.ipt", "TF-Stable", s, {
+            const out = roll("place-stable.rdm", "TF-Stable", s, {
                 town: "Lythwen",
                 shopType: "stable",
                 shopName: "",
@@ -546,7 +546,7 @@ describe("place: stable", () => {
     });
 
     test("uses a passed stable name", () => {
-        const out = roll("place-stable.ipt", "TF-Stable", 1, {
+        const out = roll("place-stable.rdm", "TF-Stable", 1, {
             town: "Dewbridge",
             shopType: "stable",
             shopName: "The Iron Horseshoe",

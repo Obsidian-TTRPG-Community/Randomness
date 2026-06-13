@@ -12,11 +12,11 @@
 import * as fs from "fs"; import * as path from "path";
 import { Evaluator } from "../../src/engine/evaluator";
 import { inMemorySource, resolveBundle } from "../../src/resolver/fileResolver";
-const S = path.resolve(__dirname, "../../demo/shops");
-function la(){const o:Record<string,string>={};for(const f of fs.readdirSync(S))if(f.endsWith(".ipt"))o[f]=fs.readFileSync(path.join(S,f),"utf8");return o;}
+const S = path.resolve(__dirname, "../../community-generators/fantasy-hub/generators");
+function la(){const o:Record<string,string>={};for(const f of fs.readdirSync(S))if(f.endsWith(".rdm"))o[f]=fs.readFileSync(path.join(S,f),"utf8");return o;}
 function run(table:string,seed:number,type="",slant="any"){
   const f=la();
-  const b=resolveBundle("place-guild.ipt",f["place-guild.ipt"],{source:inMemorySource(f),callerDir:""});
+  const b=resolveBundle("place-guild.rdm",f["place-guild.rdm"],{source:inMemorySource(f),callerDir:""});
   return new Evaluator(b.main,b.extras,{seed,promptValues:{town:"Frostkey",shopType:type,shopName:"",slant}}).runByName(table);
 }
 const cats=["craft","religious","military","criminal","arcane","civic"];

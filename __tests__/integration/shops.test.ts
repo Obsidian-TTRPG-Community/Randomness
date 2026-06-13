@@ -1,7 +1,7 @@
 /** @jest-environment node */
 /**
  * Integration tests for the PF2e shop generator set
- * (demo/shops/*.ipt). Verifies the full Use: chain resolves
+ * (community-generators/fantasy-hub/generators/*.rdm). Verifies the full Use: chain resolves
  * (shop -> shop-TYPE -> people/customers/prices), every shop type
  * rolls a populated block, prices format as PF2e coins, and the
  * top-level picker works. Also exercises the API rollUnscoped path
@@ -12,12 +12,12 @@ import * as path from "path";
 import { Evaluator } from "../../src/engine/evaluator";
 import { inMemorySource, resolveBundle } from "../../src/resolver/fileResolver";
 
-const SHOPS = path.resolve(__dirname, "../../demo/shops");
+const SHOPS = path.resolve(__dirname, "../../community-generators/fantasy-hub/generators");
 
 function loadAll(): Record<string, string> {
     const out: Record<string, string> = {};
     for (const f of fs.readdirSync(SHOPS)) {
-        if (f.endsWith(".ipt")) {
+        if (f.endsWith(".rdm")) {
             out[f] = fs.readFileSync(path.join(SHOPS, f), "utf8");
         }
     }
@@ -35,11 +35,11 @@ function rollVia(entryFile: string, table: string, seed: number): string {
 
 describe("shops: each type rolls a populated block", () => {
     const cases: Array<[string, string, string]> = [
-        ["shop-general.ipt", "TF-GeneralShop", "general goods"],
-        ["shop-weapon.ipt", "TF-WeaponShop", "weapons"],
-        ["shop-armor.ipt", "TF-ArmorShop", "armor"],
-        ["shop-alchemy.ipt", "TF-AlchemyShop", "alchemy"],
-        ["shop-magic.ipt", "TF-MagicShop", "magic"],
+        ["shop-general.rdm", "TF-GeneralShop", "general goods"],
+        ["shop-weapon.rdm", "TF-WeaponShop", "weapons"],
+        ["shop-armor.rdm", "TF-ArmorShop", "armor"],
+        ["shop-alchemy.rdm", "TF-AlchemyShop", "alchemy"],
+        ["shop-magic.rdm", "TF-MagicShop", "magic"],
     ];
     for (const [file, table, label] of cases) {
         test(`${table} renders proprietor, stock, quote, customer`, () => {
@@ -65,7 +65,7 @@ describe("shops: top-level picker", () => {
     test("[@Shop] resolves to one of the five types", () => {
         const labels = ["general goods", "weapons", "armor", "alchemy", "magic"];
         for (let seed = 1; seed <= 15; seed++) {
-            const out = rollVia("shop.ipt", "TF-Shop", seed);
+            const out = rollVia("shop.rdm", "TF-Shop", seed);
             const matched = labels.some((l) => out.includes(l));
             expect(matched).toBe(true);
             expect(out).toContain("Proprietor:");
@@ -76,7 +76,7 @@ describe("shops: top-level picker", () => {
         const seen = new Set<string>();
         const labels = ["general goods", "weapons", "armor", "alchemy", "magic"];
         for (let seed = 1; seed <= 40; seed++) {
-            const out = rollVia("shop.ipt", "TF-Shop", seed);
+            const out = rollVia("shop.rdm", "TF-Shop", seed);
             for (const l of labels) if (out.includes(l)) seen.add(l);
         }
         // Across 40 seeds we should see at least 3 of the 5 types.
@@ -85,8 +85,8 @@ describe("shops: top-level picker", () => {
 });
 
 describe("shops: reusable people file", () => {
-    test("Person from people.ipt is usable standalone", () => {
-        const out = rollVia("people.ipt", "Person", 3);
+    test("Person from people.rdm is usable standalone", () => {
+        const out = rollVia("people.rdm", "Person", 3);
         expect(out.length).toBeGreaterThan(5);
         // Has a comma (Name, a <desc> <ancestry>).
         expect(out).toContain(",");

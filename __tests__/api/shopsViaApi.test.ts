@@ -1,19 +1,19 @@
 /** @jest-environment jsdom */
 /**
  * Verifies the user's actual Templater workflow: rollUnscoped("TF-Shop")
- * against the demo/shops/*.ipt files, with no note scope. This is the
+ * against the community-generators/fantasy-hub/generators/*.rdm files, with no note scope. This is the
  * call their fantasy-hub template will make.
  */
 import * as fs from "fs";
 import * as path from "path";
 import { createApi } from "../../src/api";
 
-const SHOPS = path.resolve(__dirname, "../../demo/shops");
+const SHOPS = path.resolve(__dirname, "../../community-generators/fantasy-hub/generators");
 
 function makePlugin() {
     const map = new Map<string, string>();
     for (const f of fs.readdirSync(SHOPS)) {
-        if (f.endsWith(".ipt")) {
+        if (f.endsWith(".rdm")) {
             map.set(f, fs.readFileSync(path.join(SHOPS, f), "utf8"));
         }
     }
@@ -41,7 +41,7 @@ test("rollUnscoped('Shop') produces a full shop with no note scope", async () =>
     const r = await api.rollUnscoped("TF-Shop");
     expect(r.result).toContain("Proprietor:");
     expect(r.result).toMatch(/general goods|weapons|armor|alchemy|magic/);
-    expect(r.source).toBe("shop.ipt");
+    expect(r.source).toBe("shop.rdm");
 });
 
 test("rollUnscoped can target a specific shop type", async () => {
