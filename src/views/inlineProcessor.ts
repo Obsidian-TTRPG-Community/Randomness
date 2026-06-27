@@ -30,6 +30,7 @@ import {
 import { Evaluator } from "../engine/evaluator";
 import { buildInlineBundle } from "../resolver/scope";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
+import { discoverReferencedTables } from "../resolver/autoDiscover";
 import { vaultFileSource } from "./vaultFileSource";
 import {
     parseInlineCall,
@@ -283,7 +284,26 @@ export async function evaluateInlineExpression(
         generatorRoot: settings.generatorRoot || undefined,
     });
 
-    const evaluator = new Evaluator(bundle.main, bundle.extras, {
+    // Auto-discover tables referenced by name but not defined in the
+    // note's own codeblocks or a Use:'d file — same mechanism as the
+    // codeblock processor. Lowest-priority, so explicit scope wins.
+    let extras = bundle.extras;
+    if (plugin.vaultIndex) {
+        await plugin.vaultIndex.prewarm();
+        const discovered = await discoverReferencedTables({
+            main: bundle.main,
+            extras: bundle.extras,
+            alreadyLoaded: bundle.loadedPaths,
+            resolveTableName: (n) => plugin.vaultIndex.resolveTable(n),
+            source: asyncSource,
+            generatorRoot: settings.generatorRoot || undefined,
+        });
+        if (discovered.length > 0) {
+            extras = [...bundle.extras, ...discovered];
+        }
+    }
+
+    const evaluator = new Evaluator(bundle.main, extras, {
         // Thread seed + promptValues through when provided (used by
         // the public API's roll options). Both are first-class
         // EvaluatorOptions fields, so this is a clean pass-through:

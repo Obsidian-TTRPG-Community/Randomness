@@ -21,6 +21,13 @@ ecosystem.
 - **`Use:` other files** — share table libraries across notes. Reference
   `.ipt` files or `.md` notes containing `randomness` codeblocks; resolution
   follows the calling note's folder first, then a configurable generator root.
+- **Auto-discovery by table name** — reference a table by name
+  (`` `rdm:[@TavernName]` `` or `[@TavernName]` in a codeblock) with no
+  `Use:` line, and the plugin finds the `.rdm`/`.ipt` file that defines it
+  anywhere under your Generator root — pulling it in automatically, and
+  following that file's own `Use:` graph. Anything you define locally or
+  import with `Use:` always wins, so discovery can never shadow your own
+  tables.
 - **Prompts** — generators that declare `Prompt:` controls render dropdowns
   or text inputs above the output; changing a value re-rolls with the new
   prompt set.
@@ -122,8 +129,10 @@ The lock survives reloads, sync, and reopening the vault. To re-roll a
 locked call, click 🎲 — it strips the lock and shows a fresh preview.
 
 The expression's scope sees same-note `randomness` codeblocks plus any
-`Use:` declarations from those blocks, so you can keep table definitions
-alongside the prose that uses them.
+`Use:` declarations from those blocks, and falls back to auto-discovery
+(any table defined in a generator file under your Generator root), so you
+can keep table definitions alongside the prose or in a shared library —
+whichever you prefer.
 
 ### Sharing tables across notes
 
@@ -149,6 +158,25 @@ Table: NPC
 `Use:` paths resolve relative to the current note's folder first, then
 relative to the **Generator root** configured in Settings → Randomness.
 
+#### Or skip `Use:` entirely
+
+If the generator file lives under your **Generator root**, you can drop
+the `Use:` line and just reference the table by name — Randomness finds
+the file that defines it for you:
+
+````markdown
+```randomness
+[@Names]
+```
+````
+
+This works the same way in inline `rdm:` calls. It's a convenience layer
+on top of `Use:`: only files under the Generator root are searched, and
+anything you define locally or import with `Use:` takes precedence over a
+discovered table. Reach for an explicit `Use:` when you want an
+unambiguous reference — for instance when two files define a table with
+the same name.
+
 ### Commands
 
 - **Lock all unfilled `rdm:` in current note** — evaluates every unfilled
@@ -156,9 +184,10 @@ relative to the **Generator root** configured in Settings → Randomness.
   otherwise) and writes all locks in one atomic save.
 - **Reroll all `rdm:` in current note** — strips every lock and clears
   cached previews. The next render shows fresh previews everywhere.
-- **Rebuild generator index** — rescans the vault for `.ipt` generators.
-  Run this after adding or renaming generator files if the JS API's
-  `rollUnscoped` / bare-filename `Use:` resolution looks stale.
+- **Rebuild generator index** — rescans the vault for generator files.
+  Run this after adding or renaming generator files if auto-discovery,
+  the JS API's `rollUnscoped`, or bare-filename `Use:` resolution looks
+  stale.
 
 ## Scripting: the JS API
 

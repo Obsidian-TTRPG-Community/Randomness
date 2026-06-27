@@ -33,6 +33,7 @@ import {
 import { Evaluator } from "../engine/evaluator";
 import { resolveBundle } from "../resolver/fileResolver";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
+import { discoverReferencedTables } from "../resolver/autoDiscover";
 import { vaultFileSource } from "./vaultFileSource";
 import type RandomnessPlugin from "./main";
 import { stableSeedFor } from "./settings";
@@ -165,6 +166,27 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
             source: prefetch.source,
         });
 
+        // Step 2b: auto-discover tables referenced by name but not
+        // defined here or in a Use:'d file — the vault index maps a
+        // table name to the file that defines it. Purely additive and
+        // lowest-priority, so explicit definitions always win.
+        let extras = bundle.extras;
+        if (this.plugin.vaultIndex) {
+            await this.plugin.vaultIndex.prewarm();
+            const discovered = await discoverReferencedTables({
+                main: bundle.main,
+                extras: bundle.extras,
+                alreadyLoaded: bundle.loadedPaths,
+                resolveTableName: (n) =>
+                    this.plugin.vaultIndex.resolveTable(n),
+                source: asyncSource,
+                generatorRoot: settings.generatorRoot || undefined,
+            });
+            if (discovered.length > 0) {
+                extras = [...bundle.extras, ...discovered];
+            }
+        }
+
         // Seed prompt values on first render (we need the parsed file
         // to know what prompts exist). Subsequent renders preserve
         // whatever the user has selected.
@@ -180,7 +202,7 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         const seed = settings.stableCodeblockSeeds
             ? stableSeedFor(this.source, sectionInfo?.lineStart ?? 0)
             : undefined;
-        const evaluator = new Evaluator(bundle.main, bundle.extras, {
+        const evaluator = new Evaluator(bundle.main, extras, {
             seed,
             promptValues: this.promptValues,
         });

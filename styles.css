@@ -68,8 +68,14 @@
 }
 
 .randomness-inline-error {
+    /* Red text on a neutral panel background — readable in every
+     * theme. (Red-on-red was unreadable in dark themes where
+     * `--background-modifier-error` is a vivid solid red.) */
     color: var(--text-error);
-    background: var(--background-modifier-error);
+    background: var(--background-secondary);
+    border: 1px solid var(--text-error);
+    border-radius: 4px;
+    padding: 0 0.3em;
     font-family: var(--font-monospace);
     font-size: 0.85em;
 }
@@ -86,14 +92,15 @@
 }
 
 .randomness-error {
-    /* `--background-modifier-error` is a vivid red in many themes,     * and `--text-error` is also red — so red-on-red made the
-     * message invisible (the bar showed but the text didn't).
-     * Use a subdued error background and the normal text colour
-     * so the message is readable regardless of theme. The strong
-     * red is reserved for the left border so the row still reads
-     * as an error at a glance. */
+    /* Both `--background-modifier-error` AND its `-hover` variant are
+     * vivid solid reds in many themes, and `--text-error` is also red
+     * — so any of them as the background gave red-on-red, leaving the
+     * message unreadable. Use the neutral panel background with the
+     * normal text colour so the message is always legible; the strong
+     * red is reserved for the left border so the row still reads as an
+     * error at a glance. */
     color: var(--text-normal);
-    background: var(--background-modifier-error-hover, rgba(var(--background-modifier-error-rgb, 200, 50, 50), 0.15));
+    background: var(--background-secondary);
     padding: 0.5em 0.75em;
     border-radius: 4px;
     border-left: 3px solid var(--text-error);

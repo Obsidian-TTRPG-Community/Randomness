@@ -2,6 +2,40 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.2.0
+
+Feature release: reference tables across files without `Use:`, plus a
+revamped, beginner-friendly example tutorial.
+
+### Added
+- **Auto-discovery by table name.** A `randomness` codeblock or an inline
+  `rdm:` call can now reference a table by name (`[@TavernName]`) with no
+  `Use:` line — the plugin finds the generator file that defines it
+  anywhere under your Generator root and pulls it in automatically,
+  following that file's own `Use:` graph transitively. It is
+  lowest-priority and purely additive: anything you define locally or
+  import with `Use:` always wins, so discovery can never shadow your own
+  tables. Previously this resolved only via the JS API.
+- **Example tutorial covering all four usage styles.** The "Add examples"
+  button now ships a guided, heavily-commented set — inline in a note, a
+  self-contained codeblock, standalone `.rdm` generators, and referencing
+  a `.rdm` file from a note — plus a plain-language "Start Here" note.
+
+### Changed
+- **"Add examples" installs into its own `Randomness Examples`
+  sub-folder** under the Generator root, so the tutorial stays grouped and
+  is easy to remove in one move.
+
+### Fixed
+- **Error messages are readable in every theme.** Codeblock and inline
+  error boxes used a red-on-red colour pairing that was unreadable in many
+  dark themes; they now use a neutral panel background with a red accent.
+
+### Tests
+- New `autoDiscover` suite (discovery, transitive discovery, the
+  no-shadow guarantee, and dynamic/unknown references) plus updated
+  bundled-examples coverage.
+
 ## 1.1.1
 
 Maintenance release. No user-facing changes.

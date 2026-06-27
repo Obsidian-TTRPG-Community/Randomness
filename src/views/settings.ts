@@ -19,7 +19,7 @@ import {
     normalizePath,
 } from "obsidian";
 import type RandomnessPlugin from "./main";
-import { EXAMPLE_FILES, EXAMPLES_README } from "../examples";
+import { EXAMPLE_FILES, EXAMPLES_README, EXAMPLES_SUBFOLDER } from "../examples";
 
 /**
  * Extract a readable message from a caught value. `catch` clauses
@@ -266,14 +266,16 @@ export class RandomnessSettingsTab extends PluginSettingTab {
             new Setting(containerEl)
                 .setName("Add example generators")
                 .setDesc(
-                    "Write " +
-                        EXAMPLE_FILES.length +
-                        " example .rdm files and a README into " +
-                        `"${rootPath}". Each example demonstrates a ` +
-                        "feature (basics, sub-tables, prompts, lookup " +
-                        "tables, dictionaries) with heavy comments. " +
-                        "Safe to click multiple times — existing files " +
-                        "with the same names will be overwritten."
+                    "Create a " +
+                        `"${EXAMPLES_SUBFOLDER}" sub-folder inside ` +
+                        `"${rootPath}" and fill it with a beginner ` +
+                        "tutorial: example .rdm generators plus walkthrough " +
+                        "notes covering all four ways to use Randomness " +
+                        "(inline in a note, a codeblock in a note, .rdm " +
+                        "files, and referencing a .rdm file from a note). " +
+                        "Every file is heavily commented. Safe to click " +
+                        "multiple times — existing files with the same " +
+                        "names will be overwritten."
                 )
                 .addButton((btn) =>
                     btn
@@ -655,22 +657,48 @@ export class RandomnessSettingsTab extends PluginSettingTab {
     }
 
     /**
-     * Write the bundled example .rdm files plus a README into the
-     * given folder. Called from the "Add examples" button.
+     * Write the bundled examples into their own sub-folder under the
+     * given Generator root (e.g. "<root>/Randomness Examples"). Called
+     * from the "Add examples" button.
+     *
+     * The examples get their own folder so the whole tutorial set
+     * stays grouped — easy to read through, and easy to delete in one
+     * move when the user is done — without disturbing their own
+     * generators living alongside it in the root.
      *
      * Uses vault.create when the file doesn't exist, vault.modify
      * when it does — these are the two write paths Obsidian's API
      * gives us. Showing a Notice for each outcome would be too
-     * chatty (6 files); we show one summary Notice at the end.
+     * chatty; we show one summary Notice at the end.
      */
-    private async seedExampleGenerators(folder: string): Promise<void> {
+    private async seedExampleGenerators(root: string): Promise<void> {
         const vault = this.plugin.app.vault;
+        const folder = normalizePath(`${root}/${EXAMPLES_SUBFOLDER}`);
         let created = 0;
         let updated = 0;
         const errors: string[] = [];
 
+        // Make sure the sub-folder exists — vault.create can't create
+        // missing parent folders. Ignore "already exists" so the
+        // button stays safe to click more than once.
+        try {
+            if (vault.getAbstractFileByPath(folder) === null) {
+                await vault.createFolder(folder);
+            }
+        } catch (e: unknown) {
+            // A folder that already exists races to here harmlessly;
+            // anything else is a real problem worth surfacing.
+            if (vault.getAbstractFileByPath(folder) === null) {
+                new Notice(
+                    `Couldn't create "${folder}": ${errorMessage(e)}`,
+                    8000
+                );
+                return;
+            }
+        }
+
         const writeOne = async (filename: string, content: string) => {
-            const path = `${folder}/${filename}`;
+            const path = normalizePath(`${folder}/${filename}`);
             try {
                 const existing = vault.getAbstractFileByPath(path);
                 if (existing instanceof TFile) {
@@ -696,7 +724,7 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         for (const f of EXAMPLE_FILES) {
             await writeOne(f.filename, f.content);
         }
-        await writeOne("README.md", EXAMPLES_README);
+        await writeOne("Start Here.md", EXAMPLES_README);
 
         const summary: string[] = [];
         if (created > 0) summary.push(`${created} created`);
@@ -705,7 +733,8 @@ export class RandomnessSettingsTab extends PluginSettingTab {
             summary.push(`${errors.length} failed`);
         }
         let summaryText = summary.length > 0
-            ? `Examples: ${summary.join(", ")}.`
+            ? `Examples in "${folder}": ${summary.join(", ")}. ` +
+              `Open "Start Here.md" to begin.`
             : "Nothing happened.";
         // If anything failed, surface the first error in the Notice
         // itself rather than logging to console — gives the user
