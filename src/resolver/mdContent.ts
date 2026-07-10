@@ -36,6 +36,7 @@
  */
 
 import { TableDecl, TableItem } from "../engine/ast";
+import { translateDiceExpression } from "../compat/diceCompat";
 
 // ────────────────────────────────────────────────────────────────────
 // Wikilink reference helpers
@@ -195,6 +196,13 @@ export function extractMarkdownContentTables(md: string): TableDecl[] {
         }
         i++;
     }
+    // Embedded `dice: …` spans in cell text roll as part of the
+    // result (see rewriteEmbeddedDiceSpans).
+    for (const decl of out) {
+        for (const item of decl.items) {
+            item.rawContent = rewriteEmbeddedDiceSpans(item.rawContent);
+        }
+    }
     return out;
 }
 
@@ -259,6 +267,29 @@ function makeTable(name: string, items: string[]): TableDecl {
         inTableSets: [],
         items: items.map((rawContent): TableItem => ({ weight: 1, rawContent })),
     };
+}
+
+/**
+ * Rewrite `dice: …` code spans EMBEDDED IN CELL TEXT into engine dice
+ * expressions so they roll as part of the result. Dice Roller
+ * rendered results through MarkdownRenderer, which revived such spans
+ * as live rollers — the 1E Inns corpus relies on it ("Bustling
+ * `dice:1d8+5` x # Inn Rooms"). We deliberately don't revive spans in
+ * rendered results (recursion + lock targeting), so the translation
+ * happens here, at extraction time. Only pure formulas are rewritten;
+ * table/tag rollers and untranslatable spans keep their literal text.
+ */
+function rewriteEmbeddedDiceSpans(cell: string): string {
+    return cell.replace(/`dice:([^`]*)`/gi, (whole, inner: string) => {
+        try {
+            const { expr } = translateDiceExpression(inner.trim());
+            return expr.startsWith("{") && expr.endsWith("}")
+                ? expr
+                : whole;
+        } catch {
+            return whole;
+        }
+    });
 }
 
 /** Dice-formula sniff for lookup headers: `1d20`, `dice: 2d6+1`, `d%`. */

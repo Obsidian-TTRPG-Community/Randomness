@@ -36,7 +36,11 @@ import {
     makeTagFilesLookup,
     vaultFileSource,
 } from "./vaultFileSource";
-import { parseDirectTagCall, TAG_FILE_CAP } from "../resolver/mdContent";
+import {
+    parseDirectTagCall,
+    parseDirectWikilinkCall,
+    TAG_FILE_CAP,
+} from "../resolver/mdContent";
 import { translateDiceExpression } from "../compat/diceCompat";
 import { diceCompatEnabled } from "./settings";
 import { FileSource } from "../resolver/fileResolver";
@@ -335,15 +339,19 @@ export async function evaluateInlineExpression(
         // intentionally swallowed; see comment above
     }
 
-    // Prefetch the Use: graph reachable from the note's codeblocks.
+    // Prefetch the Use: graph reachable from the note's codeblocks —
+    // plus the target of a direct wikilink roll, whose Use: line is
+    // injected by buildInlineBundle after prefetch has already run.
     const asyncSource = vaultFileSource(vault);
     const basenameResolver = makeLinkAwareBasenameResolver(plugin);
+    const direct = parseDirectWikilinkCall(expr);
     const prefetch = await prefetchUseGraph({
         entryPath: notePath,
         entrySource: noteSource,
         generatorRoot: settings.generatorRoot || undefined,
         source: asyncSource,
         basenameResolver,
+        extraUses: direct !== null ? [direct.fileRef] : undefined,
     });
 
     // Tag rolls (merge Phase 4) inject Use: lines for tagged notes at

@@ -155,6 +155,29 @@ describe("extractMarkdownContentTables", () => {
         expect(t.items[0].rawContent).toBe("Braised beef");
     });
 
+    test("embedded dice: spans in cell text become engine dice", () => {
+        // 1E Inns corpus: "Bustling `dice:1d8+5` x # Inn Rooms" —
+        // Dice Roller revived such spans as live rollers in results;
+        // we translate them into engine dice at extraction time.
+        const md = [
+            "| dice:1d4 | Patrons |",
+            "| -------- | ------- |",
+            "| **1**    | Empty |",
+            "| **2-3**  | Bustling `dice:1d8+5` x # Inn Rooms |",
+            "| **4**    | Left as-is: `dice: [[Other^tbl]]` |",
+            "",
+            "^patron",
+        ].join("\n");
+        const decls = extractMarkdownContentTables(md);
+        expect(decls).toHaveLength(1);
+        const items = decls[0].items;
+        expect(items[1].rawContent).toBe("Bustling {1d8+5} x # Inn Rooms");
+        // Table rollers aren't pure formulas — literal text survives.
+        expect(items[2].rawContent).toBe(
+            "Left as-is: `dice: [[Other^tbl]]`"
+        );
+    });
+
     test("bare dice header without dice: prefix also triggers lookup", () => {
         const md = [
             "| 2d6 | Mood |",

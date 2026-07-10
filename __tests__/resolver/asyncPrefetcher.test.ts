@@ -20,6 +20,48 @@ import {
 import { resolveBundle } from "../../src/resolver/fileResolver";
 import { Evaluator } from "../../src/engine/evaluator";
 
+describe("prefetcher: extraUses (direct wikilink rolls)", () => {
+    test("extra Use refs are walked from the entry, snapshot entry stays pristine", async () => {
+        // Live bug: `dice: [[1E Inns^city1]]` from a note in a
+        // subfolder — the Use: line is injected at bundle-build time,
+        // so prefetch must be told about the target explicitly.
+        const src = inMemoryAsyncSource({
+            "Dice Roller/1E Inns.md":
+                "| dice:1d4 | Meal |\n| - | - |\n| **1-4** | Stew |\n\n^city1",
+        });
+        const noteSource = "# Inn Generator\n\nNo codeblocks here.";
+        const result = await prefetchUseGraph({
+            entryPath: "Dice Roller/1E Inn Generator.md",
+            entrySource: noteSource,
+            source: src,
+            extraUses: ["[[1E Inns]]"],
+        });
+        expect(result.missing).toEqual([]);
+        expect(result.source.exists("Dice Roller/1E Inns.md")).toBe(true);
+        // The stored entry is byte-identical to the real note — the
+        // extra Use: line is walk-only.
+        expect(result.source.read("Dice Roller/1E Inn Generator.md")).toBe(
+            noteSource
+        );
+    });
+
+    test("extra Use target's own Use: graph is walked too", async () => {
+        const src = inMemoryAsyncSource({
+            "notes/Target.md":
+                "```randomness\nUse:helper.ipt\nTable: T\n[@Helper]\n```\n\n^x",
+            "notes/helper.ipt": "Table: Helper\nx",
+        });
+        const result = await prefetchUseGraph({
+            entryPath: "notes/Note.md",
+            entrySource: "",
+            source: src,
+            extraUses: ["[[Target]]"],
+        });
+        expect(result.source.exists("notes/Target.md")).toBe(true);
+        expect(result.source.exists("notes/helper.ipt")).toBe(true);
+    });
+});
+
 describe("prefetcher: simple chains", () => {
     test("entry file with no Use: produces a source containing only it", async () => {
         const src = inMemoryAsyncSource({});

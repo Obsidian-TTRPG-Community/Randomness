@@ -56,6 +56,16 @@ export interface PrefetchOptions {
         basename: string,
         callerDir: string
     ) => string | null;
+    /**
+     * Additional Use: refs to walk from the entry point, as if the
+     * entry source contained them. Needed for direct wikilink rolls
+     * (`rdm:[[Note^id]]`, `[[Note|line]]`): their `Use:` line is
+     * injected at bundle-build time — AFTER prefetch — so without
+     * this the target never enters the sync snapshot and the
+     * resolver reports "Use: target not found" (live bug: cross-note
+     * lookups from a subfolder note).
+     */
+    extraUses?: string[];
 }
 
 export interface PrefetchResult {
@@ -96,9 +106,19 @@ export async function prefetchUseGraph(
 
     const maxDepth = opts.maxImportDepth ?? DEFAULT_MAX_DEPTH;
 
+    // The walk source may carry extra Use: lines (direct wikilink
+    // targets) that the stored entry content must NOT contain — the
+    // snapshot's entry stays byte-identical to the real file.
+    const entryWalkSource =
+        opts.extraUses && opts.extraUses.length > 0
+            ? opts.entrySource +
+              "\n" +
+              opts.extraUses.map((u) => `Use:${u}`).join("\n")
+            : opts.entrySource;
+
     /** Queue of (path, source) pairs whose Use: lines haven't been walked yet. */
     const queue: Array<{ path: string; source: string; depth: number }> = [
-        { path: opts.entryPath, source: opts.entrySource, depth: 0 },
+        { path: opts.entryPath, source: entryWalkSource, depth: 0 },
     ];
 
     while (queue.length > 0) {

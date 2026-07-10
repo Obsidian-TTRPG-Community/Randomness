@@ -122,6 +122,16 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   calling note's folder, then the Generator root, then vault-rooted.
 
 ### Fixed
+- **Cross-note rolls now prefetch their target.** `dice: [[Note^id]]`
+  injects its `Use:` line at bundle-build time — after the async
+  prefetch had already run — so the target note never entered the
+  resolver snapshot and every cross-note lookup failed with "Use:
+  target not found". The prefetcher now walks direct-wikilink targets
+  (and their own `Use:` graphs) explicitly.
+- `dice:` spans embedded in table cell text roll as part of the
+  result ("Bustling `dice:1d8+5` x # Inn Rooms") — Dice Roller
+  revived them via MarkdownRenderer; we translate pure formulas into
+  engine dice at extraction time.
 - Lookup tables with **bolded keys** (`| **1** | Braised beef |`) are
   recognised — authors habitually bold the dice column, and Dice
   Roller tolerated it. Emphasis/code wrapping is stripped from key
