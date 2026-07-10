@@ -130,6 +130,31 @@ describe("extractMarkdownContentTables", () => {
         expect(t.items[4].rawContent).toBe("Storm");
     });
 
+    test("bolded lookup keys still read as ranges (1E Inns style)", () => {
+        // Authors habitually bold the dice column; Dice Roller
+        // tolerated it, so we do too. Also: no space after `dice:`.
+        const md = [
+            "| dice:1d10 | Meal |",
+            "| --------- | ---- |",
+            "| **1**     | Braised beef |",
+            "| **2-9**   | Roasted cod |",
+            "| **10**    | Roll on a locale table |",
+            "",
+            "^city1",
+        ].join("\n");
+        const decls = extractMarkdownContentTables(md);
+        expect(decls).toHaveLength(1);
+        const t = decls[0];
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("1d10");
+        expect(t.items.map((i) => i.lookupRange)).toEqual([
+            [1, 1],
+            [2, 9],
+            [10, 10],
+        ]);
+        expect(t.items[0].rawContent).toBe("Braised beef");
+    });
+
     test("bare dice header without dice: prefix also triggers lookup", () => {
         const md = [
             "| 2d6 | Mood |",

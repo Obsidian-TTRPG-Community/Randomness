@@ -122,6 +122,10 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   calling note's folder, then the Generator root, then vault-rooted.
 
 ### Fixed
+- Lookup tables with **bolded keys** (`| **1** | Braised beef |`) are
+  recognised — authors habitually bold the dice column, and Dice
+  Roller tolerated it. Emphasis/code wrapping is stripped from key
+  cells before range parsing.
 - **Dice Roller compatibility is now truly automatic.** 1.3.0 draft
   builds computed the compat default once at load and then saved it,
   so disabling Dice Roller later did nothing and `dice:` spans

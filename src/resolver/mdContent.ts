@@ -269,6 +269,27 @@ function looksLikeDiceFormula(s: string): boolean {
 const RANGE_RE = /^(\d+)\s*[-–—]\s*(\d+)$/;
 const NUM_LIST_RE = /^\d+(\s*,\s*\d+)+$/;
 
+/**
+ * Strip markdown emphasis/code wrapping from a lookup key cell —
+ * authors habitually bold their dice columns (`**1**`, `**1-2**`),
+ * and Dice Roller tolerated that.
+ */
+function normaliseLookupKey(s: string): string {
+    let key = s.trim();
+    let prev = "";
+    while (prev !== key) {
+        prev = key;
+        key = key
+            .replace(/^\*\*(.*)\*\*$/s, "$1")
+            .replace(/^__(.*)__$/s, "$1")
+            .replace(/^\*(.*)\*$/s, "$1")
+            .replace(/^_(.*)_$/s, "$1")
+            .replace(/^`(.*)`$/s, "$1")
+            .trim();
+    }
+    return key;
+}
+
 /** Convert one markdown table (with block id) into TableDecl(s). */
 function tableToDecls(id: string, rowLines: string[]): TableDecl[] {
     const headers = splitRow(rowLines[0]);
@@ -280,7 +301,7 @@ function tableToDecls(id: string, rowLines: string[]): TableDecl[] {
 
     // Lookup form: two columns, dice-formula header, range-like keys.
     if (headers.length === 2 && looksLikeDiceFormula(headers[0])) {
-        const keys = body.map((r) => (r[0] ?? "").trim());
+        const keys = body.map((r) => normaliseLookupKey(r[0] ?? ""));
         const rangeLike = keys.every(
             (k) => RANGE_RE.test(k) || NUM_LIST_RE.test(k) || /^\d+$/.test(k)
         );
@@ -288,7 +309,7 @@ function tableToDecls(id: string, rowLines: string[]): TableDecl[] {
             const rollExpr = headers[0].replace(/^dice:\s*/i, "").trim();
             const items: TableItem[] = [];
             for (const row of body) {
-                const key = (row[0] ?? "").trim();
+                const key = normaliseLookupKey(row[0] ?? "");
                 const content = (row[1] ?? "").trim();
                 const range = key.match(RANGE_RE);
                 if (range) {
