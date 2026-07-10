@@ -291,10 +291,9 @@ export function renderDiceTrayTab(
             const del = el(row, "button", "randomness-tray-saved-del");
             del.textContent = "×";
             del.setAttribute("title", `Forget '${name}'`);
-            del.addEventListener("click", async () => {
+            del.addEventListener("click", () => {
                 delete plugin.settings.diceFormulas[name];
-                await plugin.saveSettings();
-                renderSaved();
+                void plugin.saveSettings().then(() => renderSaved());
             });
         }
     }
@@ -373,7 +372,7 @@ function el(parent: HTMLElement, tag: string, className: string): HTMLElement {
     const node = activeDocument.createElement(tag);
     node.className = className;
     parent.appendChild(node);
-    return node as HTMLElement;
+    return node;
 }
 
 function clear(node: HTMLElement): void {

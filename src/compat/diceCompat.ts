@@ -105,7 +105,7 @@ export function translateDiceExpression(
 
     // Table roller: optional repetitions, then a wikilink, then an
     // optional |column pick.
-    const table = s.match(/^(.*?)\[\[([^\[\]]+)\]\]([^\[\]]*)$/);
+    const table = s.match(/^(.*?)\[\[([^[\]]+)\]\]([^[\]]*)$/);
     if (table) {
         return {
             expr: translateTableRoller(
@@ -226,14 +226,14 @@ function translateFormula(raw: string): string {
     // Omitted roll count: a `d` at the start or after an operator
     // rolls one die (`d20` → `1d20`).
     s = s.replace(
-        /(^|[^0-9A-Za-z_\])])[dD](?=[0-9%F\[])/g,
+        /(^|[^0-9A-Za-z_\])])[dD](?=[0-9%F[])/g,
         (_m, before: string) => before + "1d"
     );
 
     // Omitted faces: `3d` rolls d100s. The negative lookahead keeps
     // real faces (`d6`), special dice (`d%`, `dF`, `d[`), and the
     // dl/dh drop modifiers (whose `d` also follows a digit) intact.
-    s = s.replace(/(\d)[dD](?![0-9%F\[lh])/g, "$1d100");
+    s = s.replace(/(\d)[dD](?![0-9%F[lh])/g, "$1d100");
 
     // Bare dice conditions are success counting in Dice Roller;
     // the rdm grammar requires the explicit `cs` marker (bare

@@ -94,7 +94,7 @@ export function parseDirectWikilinkCall(
     // BLOCKS_PREFIX below).
     const whole = expr
         .trim()
-        .match(/^(\d+|\{[^{}]+\})?\s*\[\[([^\[\]#|^]+)(?:#[^\[\]|^]*)?\|(line|block)\]\]$/i);
+        .match(/^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\|(line|block)\]\]$/i);
     if (whole) {
         const reps = whole[1] ?? "";
         const file = whole[2].trim();
@@ -117,7 +117,7 @@ export function parseDirectWikilinkCall(
     // `rdm:` for free.
     const m = expr
         .trim()
-        .match(/^(\d+|\{[^{}]+\})?\s*\[\[([^\[\]#|^]+)(?:#[^\[\]|^]*)?\^([A-Za-z0-9-]+)(?:\|([^\[\]]+))?\]\]$/);
+        .match(/^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\^([A-Za-z0-9-]+)(?:\|([^[\]]+))?\]\]$/);
     if (!m) return null;
     const reps = m[1] ?? "";
     const file = m[2].trim();
@@ -462,7 +462,7 @@ export interface DirectTagCall {
  * the block mode. Returns null for anything that isn't a tag call.
  */
 export function parseDirectTagCall(expr: string): DirectTagCall | null {
-    const m = expr.trim().match(/^#([A-Za-z0-9_\/-]+)(?:\|(.*))?$/);
+    const m = expr.trim().match(/^#([A-Za-z0-9_/-]+)(?:\|(.*))?$/);
     if (!m) return null;
     const suffix = (m[2] ?? "").trim().toLowerCase();
     if (suffix === "link") return { tag: m[1], mode: "link" };

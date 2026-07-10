@@ -296,15 +296,12 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
 
     const rollExpression = async (
         rawExpr: string,
-        opts?: RollOptions
+        opts?: InternalRollOptions
     ): Promise<RollResult> => {
         const notePath = resolveCallerNotePath(plugin, opts);
         // The table field reflects the originally-requested name
         // when called via roll(), else the raw expression.
-        const table =
-            (opts as InternalRollOptions | undefined)?.[
-                REQUESTED_TABLE
-            ] ?? rawExpr;
+        const table = opts?.[REQUESTED_TABLE] ?? rawExpr;
         try {
             const resultText = await evaluateInlineExpression(
                 rawExpr,

@@ -190,7 +190,7 @@ export function showDiceOverlay(
                 table.appendChild(totalEl);
             }
 
-            activeWindow.setTimeout(() => {
+            window.setTimeout(() => {
                 // Settle: stop the number cycling, show final values.
                 for (const el of Array.from(
                     layer.querySelectorAll<HTMLElement>(
@@ -206,11 +206,11 @@ export function showDiceOverlay(
                             el.getAttribute("data-final-value") ?? "";
                     }
                     const cycler = el.getAttribute("data-cycler");
-                    if (cycler) activeWindow.clearInterval(Number(cycler));
+                    if (cycler) window.clearInterval(Number(cycler));
                 }
                 totalEl?.classList.remove("is-pending");
                 resolve();
-                activeWindow.setTimeout(dismiss, LINGER_MS);
+                window.setTimeout(dismiss, LINGER_MS);
             }, TUMBLE_MS + maxDelay);
         } catch {
             // Decoration only — never block the roll on animation woes.
@@ -277,7 +277,7 @@ function buildDie(
         chip.appendChild(value);
         chip.style.animationDelay = `${delayMs}ms`;
         wrap.appendChild(chip);
-        const cycler = activeWindow.setInterval(() => {
+        const cycler = window.setInterval(() => {
             value.textContent = String(
                 1 + Math.floor(Math.random() * die.sides)
             );
