@@ -136,9 +136,14 @@ function containerWithCode(text: string): HTMLElement {
  */
 function getButton(
     el: ParentNode,
-    which: "lock" | "reroll"
+    which: "lock" | "reroll" | "unlock"
 ): HTMLButtonElement | null {
-    const label = which === "lock" ? "Lock this preview" : "Re-roll";
+    const label =
+        which === "lock"
+            ? "Lock this preview"
+            : which === "unlock"
+              ? "Unlock (rolls a fresh preview)"
+              : "Re-roll";
     return el.querySelector(
         `button[aria-label="${label}"]`
     ) as HTMLButtonElement | null;
@@ -290,8 +295,9 @@ describe("replaceCodeElement: rendering", () => {
             onReroll: () => {},
         });
         const controls2 = wrap2.querySelector(".randomness-inline-controls")!;
+        // Locked spans wear the unlock icon, in the same first slot.
         expect((controls2.firstElementChild as HTMLElement).getAttribute("aria-label")).toBe(
-            "Re-roll"
+            "Unlock (rolls a fresh preview)"
         );
     });
 });
@@ -659,7 +665,7 @@ describe("inline processor click handlers", () => {
         // For a locked call there's no Lock button — only Reroll.
         const buttons = wrap.querySelectorAll("button");
         expect(buttons.length).toBe(1);
-        getButton(wrap, "reroll")!.click();
+        getButton(wrap, "unlock")!.click();
         await new Promise((r) => setTimeout(r, 30));
 
         // Exactly one write, removing the ⟹Bob suffix.
@@ -960,7 +966,7 @@ describe("inlineProcessor: multiple identical calls", () => {
         const spans = wrap.querySelectorAll(".randomness-inline");
         const lastSpan = spans[2] as HTMLElement;
         const rerollBtn = Array.from(lastSpan.querySelectorAll("button")).find(
-            (b) => b.title.toLowerCase().includes("re-roll")
+            (b) => b.title.toLowerCase().includes("unlock")
         ) as HTMLButtonElement;
         rerollBtn.click();
         await new Promise((r) => setTimeout(r, 30));

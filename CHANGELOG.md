@@ -122,6 +122,9 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   calling note's folder, then the Generator root, then vault-rooted.
 
 ### Fixed
+- Locked spans now show an unlock icon instead of the dice icon —
+  clicking it strips the lock and rolls a fresh preview, same
+  behaviour, honest icon. Same button slot, so no mouse-chasing.
 - Markdown backslash escapes in results render correctly: `\*`
   shows a literal `*` (footnote markers like "5 sp \**") instead of
   a visible backslash. Escapes inside code spans stay byte-literal.

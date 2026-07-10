@@ -484,7 +484,13 @@ export function replaceCodeElement(
     const controls = activeDocument.createElement("span");
     controls.className = "randomness-inline-controls";
 
-    const rerollBtn = makeControlButton("🎲", "Re-roll");
+    // Locked spans wear the open-padlock icon: clicking it unlocks
+    // (strips the ⟹result from the source), and the re-render shows a
+    // fresh preview. Functionally that IS a re-roll, but the icon
+    // should say what it undoes.
+    const rerollBtn = props.isLocked
+        ? makeControlButton("🔓", "Unlock (rolls a fresh preview)")
+        : makeControlButton("🎲", "Re-roll");
     rerollBtn.addEventListener("click", (e) => {
         // addEventListener expects a void-returning handler. Wrap
         // the async work and void the promise — uncaught rejections
