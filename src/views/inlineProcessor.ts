@@ -124,10 +124,21 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
             while (sourceIdx < sourcePositions.length) {
                 const candidate = sourcePositions[sourceIdx];
                 sourceIdx++;
-                if (callKey(candidate.call) === callKey(call)) {
-                    sourcePos = candidate;
-                    break;
+                if (callKey(candidate.call) !== callKey(call)) continue;
+                // The LOCKED VALUE must match too. Live Preview
+                // renders each row/widget as its own container with
+                // null section info, so `sourcePositions` spans the
+                // whole note — matching by expression alone paired a
+                // locked span with its first UNFILLED twin, and
+                // Unlock then no-op'd against occurrence 0.
+                if (
+                    (candidate.call.locked ?? null) !==
+                    (call.locked ?? null)
+                ) {
+                    continue;
                 }
+                sourcePos = candidate;
+                break;
             }
 
             // If we couldn't find a matching source position (e.g.

@@ -122,6 +122,11 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   calling note's folder, then the Generator root, then vault-rooted.
 
 ### Fixed
+- **Unlock now works on duplicated expressions in Live Preview.**
+  Live Preview renders each row/widget separately (with no section
+  info), and a locked span could pair with its first UNFILLED twin
+  in the source — so clicking unlock targeted the wrong occurrence
+  and did nothing. Pairing now requires the locked value to match.
 - Locked spans now show an unlock icon instead of the dice icon —
   clicking it strips the lock and rolls a fresh preview, same
   behaviour, honest icon. Same button slot, so no mouse-chasing.
