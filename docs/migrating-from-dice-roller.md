@@ -62,6 +62,21 @@ your notes don't change at all.
   not a physics simulation — results are always the engine's, so
   seeds and locks stay exact.
 
+## Fantasy Statblocks and other API consumers
+
+Plugins that integrate with Dice Roller through its `window.DiceRoller`
+API — Fantasy Statblocks most prominently — keep working. When the
+standalone Dice Roller plugin is not enabled, Randomness installs a
+compatible API shim: statblock attack and damage dice render and roll
+exactly as before (honouring the Statblocks "dice" and "render dice"
+settings). No configuration needed; the shim steps aside automatically
+if Dice Roller is enabled.
+
+Consumers that roll through the API directly get a best-effort
+`getRollerSync`/`parseDice` backed by the Randomness dice core (plain
+dice sums with modifiers). If a plugin you use calls deeper into the
+API and misbehaves, please open an issue.
+
 ## FAQ
 
 **Do I have to edit my notes?** No. `dice:` spans keep working as

@@ -58,6 +58,16 @@ mentions in prose stay literal instead of erroring.
 
 ## Compatibility
 
+**Fantasy Statblocks works out of the box.** Randomness provides the
+`window.DiceRoller` API that Statblocks integrates with, so statblock
+attack and damage dice keep rolling after you disable Dice Roller.
+
+**Compatibility is automatic.** With no explicit choice, `dice:` spans
+are processed exactly when the Dice Roller plugin is disabled —
+checked live, so "disable Dice Roller, reload note" is the entire
+migration. The settings toggle stores an explicit override.
+
+
 IPP3/`.ipt` semantics are untouched: bare comparisons still compare
 sums (`cs` is the explicit success marker), unmodified `NdN` rolls
 consume the RNG stream identically (seeded generators reproduce

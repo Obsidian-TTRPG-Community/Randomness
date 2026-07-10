@@ -150,7 +150,6 @@ describe("settings: defaults", () => {
             pinnedTables: [],
             portraitPackPath: "fantasy_ink_parts_pack",
             portraitPackUrl: "",
-            diceRollerCompat: false,
             diceFormulas: {},
             graphicalDice: true,
         });
@@ -177,7 +176,7 @@ describe("settings: load merge", () => {
             pinnedTables: ["Generators/names.ipt::FirstName"],
             portraitPackPath: "art/pack",
             portraitPackUrl: "",
-            diceRollerCompat: false,
+            diceRollerCompatChoice: false,
             diceFormulas: {},
             graphicalDice: false,
         };
@@ -191,7 +190,7 @@ describe("settings: load merge", () => {
             pinnedTables: ["Generators/names.ipt::FirstName"],
             portraitPackPath: "art/pack",
             portraitPackUrl: "",
-            diceRollerCompat: false,
+            diceRollerCompatChoice: false,
             diceFormulas: {},
             graphicalDice: false,
         });

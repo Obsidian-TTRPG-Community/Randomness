@@ -112,11 +112,14 @@ export interface RandomnessSettings {
      * processed by the Randomness engine — full modifier grammar,
      * table rollers via ^block-ids, and lock/re-roll buttons.
      *
-     * Off by default: while the separate Dice Roller plugin is
-     * enabled, both plugins would fight over the same spans. Turn
-     * this on after disabling Dice Roller.
+     * This key stores the EXPLICIT user choice — written only by
+     * the settings toggle. When absent the mode is automatic:
+     * compat follows the environment live (on exactly when the
+     * standalone Dice Roller plugin is disabled), so turning that
+     * plugin off lights `dice:` spans up with zero configuration.
+     * See diceCompatEnabled().
      */
-    diceRollerCompat: boolean;
+    diceRollerCompatChoice?: boolean;
     /**
      * Formula aliases (from Dice Roller): alias → formula. When an
      * inline dice: expression is exactly an alias, the formula is
@@ -141,7 +144,6 @@ export const DEFAULT_SETTINGS: RandomnessSettings = {
     pinnedTables: [],
     portraitPackPath: "fantasy_ink_parts_pack",
     portraitPackUrl: "",
-    diceRollerCompat: false,
     diceFormulas: {},
     graphicalDice: true,
 };
@@ -705,16 +707,17 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                 "Process inline dice: code spans (plus dice+:, dice-:, " +
                     "dice-mod:) with the Randomness engine — Dice Roller " +
                     "syntax, full modifier grammar, table rolls via " +
-                    "^block-ids, and lock/re-roll buttons. Starts ON " +
-                    "when the separate Dice Roller plugin isn't enabled; " +
-                    "leave it OFF while that plugin is active, or both " +
-                    "will process the same spans."
+                    "^block-ids, and lock/re-roll buttons. Automatic " +
+                    "until you touch it: ON whenever the separate Dice " +
+                    "Roller plugin is disabled, OFF while it's enabled " +
+                    "(or both would process the same spans). Toggling " +
+                    "stores your explicit choice."
             )
             .addToggle((toggle) =>
                 toggle
-                    .setValue(this.plugin.settings.diceRollerCompat)
+                    .setValue(diceCompatEnabled(this.plugin))
                     .onChange(async (value) => {
-                        this.plugin.settings.diceRollerCompat = value;
+                        this.plugin.settings.diceRollerCompatChoice = value;
                         await this.plugin.saveSettings();
                         // Re-render open notes so the change takes
                         // effect immediately — post-processors don't
@@ -958,6 +961,21 @@ export function isDiceRollerPluginEnabled(app: App): boolean {
     } catch {
         return false;
     }
+}
+
+/**
+ * Effective Dice Roller compatibility: the user's explicit toggle
+ * choice when they've made one, else automatic — ON exactly when the
+ * standalone Dice Roller plugin is not enabled. Evaluated LIVE at
+ * every gating decision (never baked into saved settings), so
+ * disabling Dice Roller makes existing `dice:` notes work on the
+ * next render without any setup.
+ */
+export function diceCompatEnabled(plugin: RandomnessPlugin): boolean {
+    return (
+        plugin.settings.diceRollerCompatChoice ??
+        !isDiceRollerPluginEnabled(plugin.app)
+    );
 }
 
 /**

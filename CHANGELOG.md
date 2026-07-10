@@ -9,6 +9,13 @@ The Dice Roller merge, complete (phases 1–7) (see
 from @javalent/dice-roller (MIT, © Jeremy Valentine).
 
 ### Added
+- **Fantasy Statblocks support.** Randomness now provides the
+  `window.DiceRoller` API surface that Fantasy Statblocks (and other
+  Dice Roller API consumers) integrate with — `registerSource`,
+  `getRollerString`, `getRollerSync`/`getRoller`, `parseDice`, and
+  the `dice-roller:loaded` event. Statblock attack and damage dice
+  keep rolling after Dice Roller is disabled. The shim never installs
+  while the standalone plugin is enabled.
 - **Dice modifiers** on any `{NdN}` term: keep/drop (`k`, `kh2`, `kl2`,
   `dl1`, `dh1`), exploding dice (`!`, `!!`, `!3`, `!i`), re-rolls (`r`,
   `r3`, `ri`), sort (`s`, `sd`), unique (`u`), and success counting
@@ -113,6 +120,22 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
 - **Wikilink `Use:` targets.** `Use: [[Note]]` / `Use: [[Note^id]]`
   resolve like Obsidian links written as paths — relative to the
   calling note's folder, then the Generator root, then vault-rooted.
+
+### Fixed
+- **Dice Roller compatibility is now truly automatic.** 1.3.0 draft
+  builds computed the compat default once at load and then saved it,
+  so disabling Dice Roller later did nothing and `dice:` spans
+  rendered as plain code. The decision is now evaluated live on
+  every render: no explicit choice → compat is on exactly when the
+  Dice Roller plugin is disabled. The settings toggle now writes an
+  explicit choice (new `diceRollerCompatChoice` key; the baked
+  legacy key is dropped on load).
+- All Dice Roller display flags are tolerated: `|paren`, `|noparen`,
+  `|round`, `|floor`, `|ceil`, `|noround`, and `|signed` no longer
+  error (they strip cleanly; rounding/sign display remain inert).
+  This is also what Fantasy Statblocks appends to every roll.
+- README/CHANGELOG shipped with trailing NUL bytes in 1.3.0 draft
+  builds; scrubbed.
 
 ### Changed
 - **Self-imports are now a silent no-op.** `Use:` pointing at the file
@@ -680,4 +703,3 @@ proposed the public JS API that this release builds on and documents.
 - Community-plugin review fixes: replaced `builtin-modules` dependency
   with Node's `module.builtinModules`; CSS `text-decoration` shorthand
   split into longhand for Electron compatibility.
-                 

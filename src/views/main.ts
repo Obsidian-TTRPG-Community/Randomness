@@ -16,7 +16,9 @@ import {
     DEFAULT_SETTINGS,
     RandomnessSettingsTab,
     isDiceRollerPluginEnabled,
+    diceCompatEnabled,
 } from "./settings";
+import { installDiceRollerShim } from "./diceRollerShim";
 import { buildCodeblockProcessor } from "./codeblockProcessor";
 import {
     buildInlineProcessor,
@@ -167,6 +169,12 @@ export default class RandomnessPlugin extends Plugin {
         // app.plugins.plugins["randomness"].api. See src/api/index.ts.
         this.api = createApi(this);
 
+        // Dice Roller API shim: lets plugins that integrate through
+        // window.DiceRoller (Fantasy Statblocks & co.) keep their
+        // dice once the standalone plugin is retired. No-op while
+        // that plugin is enabled. See src/views/diceRollerShim.ts.
+        installDiceRollerShim(this);
+
         this.addSettingTab(new RandomnessSettingsTab(this.app, this));
 
         // ─── Commands ───
@@ -217,17 +225,14 @@ export default class RandomnessPlugin extends Plugin {
     async loadSettings(): Promise<void> {
         const stored = (await this.loadData()) as Partial<RandomnessSettings> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
-        // Smart default for Dice Roller compatibility: when the user
-        // has never touched the toggle, follow the environment — ON
-        // when the standalone Dice Roller plugin isn't enabled (its
-        // notes should Just Work here), OFF while it is (one plugin
-        // at a time owns the dice: spans). An explicit saved choice
-        // always wins.
-        if (stored?.diceRollerCompat === undefined) {
-            this.settings.diceRollerCompat = !isDiceRollerPluginEnabled(
-                this.app
-            );
-        }
+        // Dice Roller compat is a LIVE decision (diceCompatEnabled),
+        // never baked into saved data — 1.3.0 draft builds baked the
+        // computed default under the old `diceRollerCompat` key, and
+        // that snapshot then stuck forever. Drop the legacy key;
+        // absence of diceRollerCompatChoice means automatic.
+        delete (this.settings as unknown as Record<string, unknown>)[
+            "diceRollerCompat"
+        ];
     }
 
     async saveSettings(): Promise<void> {
@@ -276,7 +281,7 @@ export default class RandomnessPlugin extends Plugin {
             // plugin and we must not lock them.
             if (
                 (call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX &&
-                !this.settings.diceRollerCompat
+                !diceCompatEnabled(this)
             ) {
                 return null;
             }
@@ -402,7 +407,7 @@ export default class RandomnessPlugin extends Plugin {
             // unless the compatibility setting is on.
             if (
                 (call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX &&
-                !this.settings.diceRollerCompat
+                !diceCompatEnabled(this)
             ) {
                 return null;
             }

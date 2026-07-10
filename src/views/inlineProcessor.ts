@@ -38,6 +38,7 @@ import {
 } from "./vaultFileSource";
 import { parseDirectTagCall, TAG_FILE_CAP } from "../resolver/mdContent";
 import { translateDiceExpression } from "../compat/diceCompat";
+import { diceCompatEnabled } from "./settings";
 import { FileSource } from "../resolver/fileResolver";
 import {
     parseInlineCall,
@@ -76,7 +77,7 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
         // compat prefixes only when the setting is on (merge Phase 3)
         // so the standalone Dice Roller plugin can keep owning
         // `dice:` spans until the user opts in.
-        const compatOn = plugin.settings.diceRollerCompat;
+        const compatOn = diceCompatEnabled(plugin);
         const isCall = (t: string): boolean => {
             const p = matchInlinePrefix(t);
             return p !== null && (compatOn || p === INLINE_PREFIX);
