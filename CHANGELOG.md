@@ -122,6 +122,9 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   calling note's folder, then the Generator root, then vault-rooted.
 
 ### Fixed
+- Markdown backslash escapes in results render correctly: `\*`
+  shows a literal `*` (footnote markers like "5 sp \**") instead of
+  a visible backslash. Escapes inside code spans stay byte-literal.
 - **Identical expressions repeated the same result across a note.**
   The engine's default RNG seed was `Date.now()` — a note render
   evaluates every span in the same millisecond, so time-identical

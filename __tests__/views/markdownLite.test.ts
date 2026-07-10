@@ -10,6 +10,23 @@
 
 import { markdownLite, setSanitisedHtml } from "../../src/views/sanitiser";
 
+describe("backslash escapes", () => {
+    test("escaped punctuation renders literally, without the backslash", () => {
+        // 1E Inns price table: "Modest, 5 *sp* \\**" — the \\** is a
+        // footnote marker, not emphasis.
+        expect(markdownLite("Modest, 5 *sp* \\**")).toBe(
+            "Modest, 5 <i>sp</i> **"
+        );
+        expect(markdownLite("a \\* b \\* c")).toBe("a * b * c");
+        expect(markdownLite("pipe: \\|")).toBe("pipe: |");
+        expect(markdownLite("\\# not a heading")).toBe("# not a heading");
+        // Escapes inside code spans stay byte-literal.
+        expect(markdownLite("`\\*`")).toBe("<code>\\*</code>");
+        // A lone backslash before a letter is not an escape.
+        expect(markdownLite("C:\\notes")).toBe("C:\\notes");
+    });
+});
+
 describe("markdownLite", () => {
     test("inline constructs convert to whitelisted HTML", () => {
         expect(markdownLite("**bold** and *italic* and ~~gone~~")).toBe(

@@ -272,12 +272,25 @@ function cleanNode(node: Node): Node | null {
  */
 export function markdownLite(text: string): string {
     const NUL = String.fromCharCode(0);
+    const ESC = String.fromCharCode(1);
     // Code spans first — their content is literal.
     const codes: string[] = [];
     let out = text.replace(/`([^`\n]+)`/g, (_m, c: string) => {
         codes.push(c);
         return NUL + (codes.length - 1) + NUL;
     });
+    // Backslash escapes (CommonMark): \* \_ \~ \# \| \\ etc. render
+    // the punctuation literally — table corpora lean on \* to show
+    // footnote asterisks ("5 sp \**") without opening emphasis. Park
+    // the escaped character so the emphasis passes can't see it.
+    const escaped: string[] = [];
+    out = out.replace(
+        /\\([\\*_~#|`\[\]{}()<>+\-.!])/g,
+        (_m, ch: string) => {
+            escaped.push(ch);
+            return ESC + (escaped.length - 1) + ESC;
+        }
+    );
     out = out
         .replace(/^#{1,6}\s+(.*)$/gm, "<b>$1</b>")
         .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
@@ -288,6 +301,10 @@ export function markdownLite(text: string): string {
             "$1<i>$2</i>"
         )
         .replace(/~~([^~]+)~~/g, "<s>$1</s>");
+    out = out.replace(
+        new RegExp(ESC + "(\\d+)" + ESC, "g"),
+        (_m, i: string) => escaped[Number(i)]
+    );
     out = out.replace(
         new RegExp(NUL + "(\\d+)" + NUL, "g"),
         (_m, i: string) =>
