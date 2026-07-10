@@ -2,6 +2,140 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+The Dice Roller merge, complete (phases 1–7) (see
+`docs/dice-roller-merge-plan.md`). Dice mechanics and syntax ported
+from @javalent/dice-roller (MIT, © Jeremy Valentine).
+
+### Added
+- **Dice modifiers** on any `{NdN}` term: keep/drop (`k`, `kh2`, `kl2`,
+  `dl1`, `dh1`), exploding dice (`!`, `!!`, `!3`, `!i`), re-rolls (`r`,
+  `r3`, `ri`), sort (`s`, `sd`), unique (`u`), and success counting
+  (`cs>=5`, with `-=N` scoring −1). Explode and re-roll accept optional
+  conditions (`{1d6!i=!3}`, `{1d4r<3}`); conditions chain and are OR'd.
+  `{4d6dl1}` and `{2d20kh}+5` finally work everywhere the engine rolls —
+  codeblocks, inline `rdm:`, and the JS API.
+- **Special dice:** percentile `{1d%}`, digit dice `{1d66%}` (Traveller
+  d66), Fudge/Fate `{4dF}`, and custom face ranges `{1d[3,5]}`.
+- **Roll on markdown tables and lists.** Any table or list in a note
+  with an Obsidian `^block-id` is now a rollable table. Inline:
+  `` `rdm:[[Note^taverns]]` `` (with lock/re-roll buttons); from
+  codeblocks and generators: `Use: [[Note]]` then `[@taverns]` with
+  reps, filters, and deck picks. Multi-column tables expose
+  `[@id.Header]` per column and `[@id.xy]` for a random cell (inline:
+  `|Header` / `|xy`). Two-column tables with a dice-formula header
+  (`dice: 1d20`) act as lookup tables, ranges like `1-2`, `11`, and
+  `13,14` included. Cells are raw generator syntax, so `{2d6}` and
+  `[@OtherTable]` inside a cell just work.
+- **Dice Roller compatibility (`dice:` inline rolls).** A new
+  settings toggle routes inline `dice:` code spans —
+  plus `dice+:`, `dice-:`, and `dice-mod:` — through the Randomness
+  engine with Dice Roller's own syntax: bare success conditions
+  (`3d6>=5` counts successes, as Dice Roller defined it), omitted
+  values (`d20`, `3d` → d100s), all modifiers and special dice, and
+  table rolls `3[[Note^id]]` / `1d4+1[[Note^id]]` / `|Header` / `|xy`.
+  Every `dice:` span gets Randomness lock/re-roll buttons — locks
+  replace Dice Roller's fragile result saving and `dice-mod:`.
+  `|text(label)` shows the label with the rolled value in a tooltip,
+  `|form` shows the formula with the result, and `dice-mod:` spans
+  write their roll into the note on first render (as a lock — the
+  durable form of Dice Roller's note-modifying roll). `|render` plays
+  the graphical dice animation; the remaining display flags
+  (`|nodice`, `|avg`, `|none`, `|noform`) are accepted and
+  currently inert. Formula aliases from
+  settings work too: define `sneak = 4d6dl1` under Settings →
+  Randomness → Dice formula aliases and `dice: sneak` rolls it. Not
+  yet supported (clear errors): stunt and Genesys narrative dice. The toggle defaults to ON when the Dice
+  Roller plugin isn't enabled and OFF while it is (an explicit choice
+  always wins); enabling it alongside an active Dice Roller shows a
+  warning — one plugin at a time should own the spans. Flipping the
+  toggle re-renders open notes immediately.
+- **Dice tray.** A right-sidebar tray (dices ribbon icon, or the
+  "Open dice tray" command) replacing Dice Roller's Dice View: tap
+  d4–d100 buttons to build a pool (right-click removes), toggle
+  advantage/disadvantage (each d20 becomes `2d20kh`/`2d20kl`), step a
+  flat modifier, and Roll. A formula box takes the full Dice Roller
+  syntax — modifiers, `[[Note^id]]` table rolls, `#tag`, aliases —
+  scoped to the active note so `[@Table]` works too. Formulas saved
+  from the tray land in the same store as the "Dice formula aliases"
+  setting, so a tray-saved `sneak` also rolls as `dice: sneak` in
+  notes. Click a history row to re-roll it; click the result to copy.
+- **Graphical dice.** Rolls can animate: a tumbling 3D cube for
+  d6s, spinning polyhedra with a slot-machine number cycle for the
+  rest, settling on the rolled faces (dropped keep/drop dice shown
+  dimmed, total badge for multi-die rolls). Plays in the dice tray
+  and for inline rolls with the `|render` flag; click to dismiss.
+  Purely decorative by design — the engine rolls first and the
+  animation replays those exact values, so seeds and locks are
+  unaffected, and there are zero new dependencies (the three.js
+  physics port was rejected: Obsidian plugins can't lazy-load
+  chunks, so it would have permanently ~5×'d the bundle for an
+  animation). Toggle under Settings → Randomness → Graphical dice.
+- **Beginner's guide (installable).** Settings → Randomness →
+  "Install the guide" writes a "Randomness Guide" folder of ten
+  short notes — one per feature, kid-friendly, every example live
+  and rollable — from "roll a die" through generator files.
+  Re-running refreshes the notes. Sourced from docs/guide/
+  (npm run embed-guide).
+- **"Create new generator file" command.** A .rdm file is just a
+  text file, but Obsidian can't create one and manual renames trip
+  over hidden Windows extensions — this command creates a starter
+  generator (in the Generator root when set), uniquely named, and
+  opens it for editing.
+- **README rewritten** for the merged plugin: 30-second tour,
+  dice/tables/locks/compat up front, learning path, migration
+  pointer.
+- **Migration guide & retirement kit.** docs/migrating-from-dice-roller.md
+  walks Dice Roller users through the (three-step) switch, and
+  docs/retirement/ holds the ready-to-paste README banner, final
+  release notes, and deprecation-notice patch for winding down the
+  dice-roller repository.
+- **Roll random lines, blocks, and tagged notes (no Dataview
+  needed).** `rdm:[[Note|line]]` rolls a random line from a note,
+  `rdm:[[Note|block]]` a random block (paragraph, heading, fenced
+  code…); repetitions work (`rdm:3[[Note|line]]`). `rdm:#tag` rolls a
+  random block from a random note carrying that tag (frontmatter and
+  inline tags, nested tags included), and `rdm:#tag|link` inserts a
+  link to a random tagged note — all backed by Obsidian's own metadata
+  cache. Tag picks happen inside the engine, so seeded rolls stay
+  deterministic and re-rolls re-pick the note. In `dice:` compat,
+  `[[Note]]`, `[[Note]]|line`, `#tag`, `#tag|-`, and `#tag|link` now
+  work (block-type filters like `|paragraph` approximate to the block
+  roll; the every-file `#tag|+` mode errors clearly).
+- **Wikilinks resolve like Obsidian links.** `Use: [[Note]]`,
+  `rdm:[[Note^id]]`, and codeblock imports now fall back to
+  `metadataCache.getFirstLinkpathDest`, so a shortest-path link finds
+  the note anywhere in the vault — not just relative to the calling
+  note or the Generator root.
+- **Repetitions on inline wikilink rolls.** `rdm:3[[Note^id]]` and
+  `rdm:{1d4+1}[[Note^id]]` roll multiple results, joined with ", ".
+- **Wikilink `Use:` targets.** `Use: [[Note]]` / `Use: [[Note^id]]`
+  resolve like Obsidian links written as paths — relative to the
+  calling note's folder, then the Generator root, then vault-rooted.
+
+### Changed
+- **Self-imports are now a silent no-op.** `Use:` pointing at the file
+  (or note) that contains it previously threw "Use: cycle detected" —
+  and once notes hold rollable tables, `Use: [[This Very Note]]` is an
+  easy thing to write. A file's own tables are already loaded, so the
+  self-import just resolves to nothing. True multi-file cycles still
+  error.
+- **A note's own markdown tables are in scope for its inline calls.**
+  `rdm:[@taverns]` works in the note that defines `^taverns` with no
+  `Use:` line, mirroring how same-note codeblock tables behave.
+
+### Compatibility
+- Bare comparisons keep their IPP3 meaning: `{3d6>=10}` still compares
+  the *sum*. Success counting requires the explicit `cs` marker. Every
+  new suffix was previously a parse error, an unmodified `NdN` consumes
+  the RNG stream identically to before (seeded generators reproduce
+  exactly), and `1d[@table]` nesting is unchanged. The full `.ipt`
+  corpus passes untouched.
+- Markdown-content tables are additive: blocks without a `^block-id`
+  are ignored, and a plain `rdm:[[Note]]` (no block id) still renders
+  as an ordinary wikilink.
+
 ## 1.2.0
 
 Feature release: reference tables across files without `Use:`, plus a
@@ -546,3 +680,4 @@ proposed the public JS API that this release builds on and documents.
 - Community-plugin review fixes: replaced `builtin-modules` dependency
   with Node's `module.builtinModules`; CSS `text-decoration` shorthand
   split into longhand for Electron compatibility.
+                 

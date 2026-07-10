@@ -15,6 +15,7 @@ import {
     RandomnessSettings,
     DEFAULT_SETTINGS,
     RandomnessSettingsTab,
+    isDiceRollerPluginEnabled,
 } from "./settings";
 import { buildCodeblockProcessor } from "./codeblockProcessor";
 import {
@@ -24,6 +25,10 @@ import {
 import {
     PreviewRegistry,
     transformAllInlineCalls,
+    callKey,
+    evalSourceOf,
+    INLINE_PREFIX,
+    InlineCall,
 } from "./lockingService";
 import { registerIptView } from "./iptView";
 import { registerBrowserView } from "./browserView";
@@ -183,6 +188,15 @@ export default class RandomnessPlugin extends Plugin {
             callback: () => void openReferenceView(this),
         });
 
+        // A .rdm file is just a text file, but Obsidian's own "new
+        // file" UI can't create one — and manual renames trip over
+        // Windows' hidden extensions. One command sidesteps all of it.
+        this.addCommand({
+            id: "create-generator-file",
+            name: "Create new generator file",
+            callback: () => void this.createGeneratorFile(),
+        });
+
         this.addCommand({
             id: "rebuild-generator-index",
             name: "Rebuild generator index",
@@ -203,6 +217,17 @@ export default class RandomnessPlugin extends Plugin {
     async loadSettings(): Promise<void> {
         const stored = (await this.loadData()) as Partial<RandomnessSettings> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
+        // Smart default for Dice Roller compatibility: when the user
+        // has never touched the toggle, follow the environment — ON
+        // when the standalone Dice Roller plugin isn't enabled (its
+        // notes should Just Work here), OFF while it is (one plugin
+        // at a time owns the dice: spans). An explicit saved choice
+        // always wins.
+        if (stored?.diceRollerCompat === undefined) {
+            this.settings.diceRollerCompat = !isDiceRollerPluginEnabled(
+                this.app
+            );
+        }
     }
 
     async saveSettings(): Promise<void> {
@@ -244,10 +269,19 @@ export default class RandomnessPlugin extends Plugin {
         // Step 1: collect every unique unfilled expression. We
         // evaluate each one ONCE, then apply that result to every
         // occurrence in the transform pass below.
-        const exprsToEvaluate = new Set<string>();
+        const toEvaluate = new Map<string, InlineCall>();
         transformAllInlineCalls(source, (call) => {
+            // Dice Roller compat spans only participate when the
+            // setting is on — otherwise they belong to the other
+            // plugin and we must not lock them.
+            if (
+                (call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX &&
+                !this.settings.diceRollerCompat
+            ) {
+                return null;
+            }
             if (call.locked === undefined) {
-                exprsToEvaluate.add(call.expr);
+                toEvaluate.set(callKey(call), call);
             }
             return null; // we're using transformAll just to walk; don't mutate
         });
@@ -257,25 +291,25 @@ export default class RandomnessPlugin extends Plugin {
         // should be committed (the lock-what-you-see invariant).
         const results = new Map<string, string>();
         const failed: string[] = [];
-        for (const expr of exprsToEvaluate) {
+        for (const [key, call] of toEvaluate) {
             const cached = this.previewRegistry.get({
                 sourcePath: notePath,
-                expr,
+                expr: key,
                 occurrence: 0,
             });
             if (cached !== undefined) {
-                results.set(expr, cached);
+                results.set(key, cached);
                 continue;
             }
             try {
                 const value = await evaluateInlineExpression(
-                    expr,
+                    evalSourceOf(call, this.settings.diceFormulas),
                     notePath,
                     this
                 );
-                results.set(expr, value);
+                results.set(key, value);
             } catch {
-                failed.push(expr);
+                failed.push(key);
             }
         }
 
@@ -283,7 +317,7 @@ export default class RandomnessPlugin extends Plugin {
         let locked = 0;
         const newSource = transformAllInlineCalls(source, (call) => {
             if (call.locked !== undefined) return null;
-            const value = results.get(call.expr);
+            const value = results.get(callKey(call));
             if (value === undefined) return null;
             locked++;
             return { ...call, locked: value };
@@ -299,6 +333,58 @@ export default class RandomnessPlugin extends Plugin {
         );
     }
 
+    /**
+     * Create a starter .rdm file (in the Generator root when set,
+     * else the vault root) with a unique name, and open it.
+     */
+    private async createGeneratorFile(): Promise<void> {
+        const { vault, workspace } = this.app;
+        const root = this.settings.generatorRoot?.trim() ?? "";
+        if (root !== "") {
+            try {
+                if (!(await vault.adapter.exists(root))) {
+                    await vault.createFolder(root);
+                }
+            } catch {
+                // Best effort; creation below will surface real errors.
+            }
+        }
+        const dir = root === "" ? "" : root + "/";
+        let path = `${dir}New Generator.rdm`;
+        for (let n = 2; vault.getAbstractFileByPath(path) !== null; n++) {
+            path = `${dir}New Generator ${n}.rdm`;
+        }
+        const starter = [
+            "// This is a Randomness generator file — plain text.",
+            "// Lines starting with // are comments.",
+            "// The FIRST table is what rolls when the file is rolled.",
+            "",
+            "Table: Main",
+            "Replace these lines with your own results.",
+            "Each line is one possible outcome.",
+            "This one rolls dice: you find {2d6} coins.",
+            "This one calls another table: the [@Mood] innkeeper waves.",
+            "",
+            "Table: Mood",
+            "cheerful",
+            "grumpy",
+            "half-asleep",
+            "",
+            "// Roll it from any note with `rdm:[@Main]`",
+            "",
+        ].join("\n");
+        try {
+            const file = await vault.create(path, starter);
+            await workspace.getLeaf(true).openFile(file);
+            new Notice(`Randomness: created ${path}`);
+        } catch (e) {
+            new Notice(
+                "Randomness: couldn't create the generator file — " +
+                    (e instanceof Error ? e.message : String(e))
+            );
+        }
+    }
+
     private async rerollAllInActiveNote(): Promise<void> {
         const file = this.app.workspace.getActiveFile();
         if (!file) {
@@ -312,9 +398,17 @@ export default class RandomnessPlugin extends Plugin {
         const source = await this.app.vault.read(file);
         let unlocked = 0;
         const newSource = transformAllInlineCalls(source, (call) => {
+            // Same compat gate as lock-all: leave `dice:` spans alone
+            // unless the compatibility setting is on.
+            if (
+                (call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX &&
+                !this.settings.diceRollerCompat
+            ) {
+                return null;
+            }
             if (call.locked === undefined) return null;
             unlocked++;
-            return { expr: call.expr };
+            return { expr: call.expr, prefix: call.prefix };
         });
         if (newSource !== source) {
             await this.app.vault.modify(file, newSource);

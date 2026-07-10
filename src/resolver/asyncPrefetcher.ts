@@ -26,6 +26,7 @@ import {
     normalisePath,
     FileSource,
 } from "./fileResolver";
+import { wikilinkToPath } from "./mdContent";
 
 export interface AsyncFileSource {
     /** Return file contents, or null if not found. */
@@ -197,7 +198,9 @@ async function resolveAsync(
     source: AsyncFileSource,
     basenameResolver?: (basename: string, callerDir: string) => string | null
 ): Promise<string | null> {
-    const ref = normalisePath(rawRef);
+    // Wikilink refs — mirror resolveUsePath (the two must stay in sync).
+    const wiki = wikilinkToPath(rawRef);
+    const ref = normalisePath(wiki ?? rawRef);
     if (ref === "") return null;
     if (callerDir !== "") {
         const candidate = joinPath(callerDir, ref);

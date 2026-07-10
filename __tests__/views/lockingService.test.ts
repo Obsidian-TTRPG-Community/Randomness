@@ -63,8 +63,12 @@ describe("parseInlineCall", () => {
         expect(parseInlineCall("foo rdm:bar")).toBeNull();
     });
 
-    test("empty expression is allowed (caller validates)", () => {
-        expect(parseInlineCall("rdm:")).toEqual({ expr: "" });
+    test("a bare prefix is a literal mention, not a call", () => {
+        // Changed in the Dice Roller merge: `` `rdm:` `` or `` `dice:` ``
+        // in prose (headings, docs) used to parse as an empty call and
+        // render as an error/empty span. An empty expression now
+        // returns null so the code span stays literal.
+        expect(parseInlineCall("rdm:")).toBeNull();
     });
 
     test("separator appearing in expression is parsed as a lock", () => {

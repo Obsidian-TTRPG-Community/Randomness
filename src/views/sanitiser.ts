@@ -255,3 +255,48 @@ function cleanNode(node: Node): Node | null {
     }
     return clean;
 }
+
+/**
+ * Markdown-lite: convert the common INLINE markdown constructs in a
+ * roll result to the sanitiser's whitelisted HTML. Added when
+ * line/block rolls (Dice Roller merge, Phase 4) started returning
+ * arbitrary note content — headings and backticks looked like raw
+ * syntax in the inline span.
+ *
+ * Deliberately not Obsidian's MarkdownRenderer: the full pipeline
+ * runs post-processors, so a rolled line containing `rdm:…` would
+ * come alive INSIDE the result span — recursive rollers with broken
+ * lock targeting. This handles code spans, bold, italics,
+ * strikethrough, and heading markers (shown bold — a heading can't
+ * be a heading mid-sentence); everything else stays literal.
+ */
+export function markdownLite(text: string): string {
+    const NUL = String.fromCharCode(0);
+    // Code spans first — their content is literal.
+    const codes: string[] = [];
+    let out = text.replace(/`([^`\n]+)`/g, (_m, c: string) => {
+        codes.push(c);
+        return NUL + (codes.length - 1) + NUL;
+    });
+    out = out
+        .replace(/^#{1,6}\s+(.*)$/gm, "<b>$1</b>")
+        .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+        .replace(
+            // Emphasis content can't start/end with whitespace
+            // (CommonMark), which keeps math like "3 * 4 * 5" literal.
+            /(^|[^*\w])\*(\S(?:[^*\n]*\S)?)\*(?!\*)/g,
+            "$1<i>$2</i>"
+        )
+        .replace(/~~([^~]+)~~/g, "<s>$1</s>");
+    out = out.replace(
+        new RegExp(NUL + "(\\d+)" + NUL, "g"),
+        (_m, i: string) =>
+            "<code>" +
+            codes[Number(i)]
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;") +
+            "</code>"
+    );
+    return out;
+}

@@ -31,17 +31,32 @@ import { Evaluator } from "../engine/evaluator";
 import { buildInlineBundle } from "../resolver/scope";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
 import { discoverReferencedTables } from "../resolver/autoDiscover";
-import { vaultFileSource } from "./vaultFileSource";
+import {
+    makeLinkAwareBasenameResolver,
+    makeTagFilesLookup,
+    vaultFileSource,
+} from "./vaultFileSource";
+import { parseDirectTagCall, TAG_FILE_CAP } from "../resolver/mdContent";
+import { translateDiceExpression } from "../compat/diceCompat";
+import { FileSource } from "../resolver/fileResolver";
 import {
     parseInlineCall,
     applyLockToSource,
     applyUnlockToSource,
     PreviewKey,
     INLINE_PREFIX,
+    matchInlinePrefix,
+    callKey,
+    evalSourceOf,
+    InlineCall,
     findAllInlineCallPositions,
     InlineCallPosition,
 } from "./lockingService";
-import { setSanitisedHtml, setSanitisedHtmlWithLinks } from "./sanitiser";
+import {
+    markdownLite,
+    setSanitisedHtml,
+    setSanitisedHtmlWithLinks,
+} from "./sanitiser";
 import type RandomnessPlugin from "./main";
 
 /**
@@ -57,10 +72,17 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
         // Walk all <code> elements. Each one is a potential inline
         // call. Snapshot the list because we mutate as we go.
         const codeNodes = Array.from(el.querySelectorAll("code"));
+        // Which prefixes are live: `rdm:` always; the Dice Roller
+        // compat prefixes only when the setting is on (merge Phase 3)
+        // so the standalone Dice Roller plugin can keep owning
+        // `dice:` spans until the user opts in.
+        const compatOn = plugin.settings.diceRollerCompat;
+        const isCall = (t: string): boolean => {
+            const p = matchInlinePrefix(t);
+            return p !== null && (compatOn || p === INLINE_PREFIX);
+        };
         // Fast path: no inline calls in this block.
-        if (!codeNodes.some((c) =>
-            (c.textContent ?? "").startsWith(INLINE_PREFIX)
-        )) {
+        if (!codeNodes.some((c) => isCall(c.textContent ?? ""))) {
             return;
         }
 
@@ -84,7 +106,7 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
         let sourceIdx = 0;
         for (const code of codeNodes) {
             const text = code.textContent ?? "";
-            if (!text.startsWith(INLINE_PREFIX)) continue;
+            if (!isCall(text)) continue;
             const call = parseInlineCall(text);
             if (!call) continue;
 
@@ -97,7 +119,7 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
             while (sourceIdx < sourcePositions.length) {
                 const candidate = sourcePositions[sourceIdx];
                 sourceIdx++;
-                if (candidate.call.expr === call.expr) {
+                if (callKey(candidate.call) === callKey(call)) {
                     sourcePos = candidate;
                     break;
                 }
@@ -187,9 +209,12 @@ async function processOne(
     // it by aligning DOM order with source order. Reliable across
     // re-renders and partial section updates because it's grounded
     // in the persisted source text, not transient DOM state.
+    // Keyed by prefix+expr: `rdm:X` and `dice:X` are different calls
+    // (the latter is translated before evaluation) and must not share
+    // cached previews.
     const previewKey: PreviewKey = {
         sourcePath: ctx.sourcePath,
-        expr: call.expr,
+        expr: callKey(call),
         occurrence,
     };
 
@@ -207,7 +232,15 @@ async function processOne(
             result = cached;
         } else {
             try {
-                result = await evaluateExpression(call.expr, ctx, plugin);
+                // Dice Roller prefixes are translated to rdm grammar
+                // here (evalSourceOf); unsupported constructs throw a
+                // DiceCompatError with a user-facing message. Formula
+                // aliases from settings apply to compat prefixes.
+                result = await evaluateExpression(
+                    evalSourceOf(call, plugin.settings.diceFormulas),
+                    ctx,
+                    plugin
+                );
             } catch (err) {
                 renderInlineError(codeEl, err);
                 return;
@@ -217,19 +250,52 @@ async function processOne(
         isLocked = false;
     }
 
+    // Dice Roller's `dice-mod:` writes its roll straight into the
+    // note. A lock is our durable form of exactly that, so an
+    // unfilled dice-mod span commits itself on first render — the
+    // write triggers a re-render, which shows the locked state.
+    if (!isLocked && (call.prefix ?? INLINE_PREFIX) === "dice-mod:") {
+        await lockCall(ctx, plugin, call, occurrence);
+        return;
+    }
+
+    // Display flags (Dice Roller compat): `|text(label)` shows the
+    // label with the rolled value in the tooltip; `|form` shows the
+    // formula alongside the result. Other flags stay inert for now.
+    let displayResult = result;
+    let tooltip: string | undefined;
+    if ((call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX) {
+        try {
+            const { flags } = translateDiceExpression(
+                call.expr,
+                plugin.settings.diceFormulas
+            );
+            const textFlag = flags.find((f) => /^text\(.*\)$/i.test(f));
+            if (textFlag !== undefined) {
+                displayResult = textFlag.replace(/^text\(/i, "").slice(0, -1);
+                tooltip = result;
+            } else if (flags.some((f) => f.toLowerCase() === "form")) {
+                displayResult = `${call.expr.trim()} → ${result}`;
+            }
+        } catch {
+            // Translation errors were already surfaced above.
+        }
+    }
+
     // Render and keep a handle on the span we built — onReroll for an
     // unfilled call updates it in place without needing a re-render
     // from Obsidian.
     const span = replaceCodeElement(codeEl, {
-        result,
+        result: displayResult,
+        tooltip,
         isLocked,
         expr: call.expr,
-        onLock: () => lockCall(ctx, plugin, call.expr, occurrence),
+        onLock: () => lockCall(ctx, plugin, call, occurrence),
         onReroll: () =>
             rerollCall(
                 ctx,
                 plugin,
-                call.expr,
+                call,
                 occurrence,
                 previewKey,
                 isLocked,
@@ -270,18 +336,45 @@ export async function evaluateInlineExpression(
 
     // Prefetch the Use: graph reachable from the note's codeblocks.
     const asyncSource = vaultFileSource(vault);
+    const basenameResolver = makeLinkAwareBasenameResolver(plugin);
     const prefetch = await prefetchUseGraph({
         entryPath: notePath,
         entrySource: noteSource,
         generatorRoot: settings.generatorRoot || undefined,
         source: asyncSource,
+        basenameResolver,
     });
+
+    // Tag rolls (merge Phase 4) inject Use: lines for tagged notes at
+    // bundle-build time — after prefetch has already run — so those
+    // files must be fetched here and layered onto the sync source.
+    const tagLookup = makeTagFilesLookup(plugin);
+    let syncSource: FileSource = prefetch.source;
+    const tagCall = parseDirectTagCall(expr);
+    if (tagCall !== null) {
+        const tagged: Map<string, string> = new Map();
+        for (const p of tagLookup(tagCall.tag).slice(0, TAG_FILE_CAP)) {
+            try {
+                tagged.set(p, await vault.adapter.read(p));
+            } catch {
+                // Unreadable tagged note: skip it rather than failing
+                // the whole roll.
+            }
+        }
+        const base = prefetch.source;
+        syncSource = {
+            read: (p) => (tagged.has(p) ? (tagged.get(p) as string) : base.read(p)),
+            exists: (p) => tagged.has(p) || base.exists(p),
+        };
+    }
 
     const bundle = buildInlineBundle(expr, {
         notePath,
         noteSource,
-        source: prefetch.source,
+        source: syncSource,
         generatorRoot: settings.generatorRoot || undefined,
+        basenameResolver,
+        tagFiles: tagLookup,
     });
 
     // Auto-discover tables referenced by name but not defined in the
@@ -335,6 +428,8 @@ async function evaluateExpression(
 
 interface InlineRenderProps {
     result: string;
+    /** Optional hover text (e.g. the rolled value behind a |text label). */
+    tooltip?: string;
     isLocked: boolean;
     expr: string;
     onLock: () => Promise<void> | void;
@@ -363,6 +458,7 @@ export function replaceCodeElement(
 ): HTMLElement {
     const span = activeDocument.createElement("span");
     span.className = "randomness-inline";
+    if (props.tooltip !== undefined) span.title = props.tooltip;
     if (props.isLocked) span.classList.add("randomness-inline-locked");
     else span.classList.add("randomness-inline-preview");
 
@@ -417,12 +513,12 @@ export function replaceCodeElement(
     if (props.plugin !== undefined && props.sourcePath !== undefined) {
         setSanitisedHtmlWithLinks(
             resultSpan,
-            props.result,
+            markdownLite(props.result),
             props.plugin,
             props.sourcePath
         );
     } else {
-        setSanitisedHtml(resultSpan, props.result);
+        setSanitisedHtml(resultSpan, markdownLite(props.result));
     }
     resultSpan.title = props.expr; // hover shows the expression
     span.appendChild(resultSpan);
@@ -468,7 +564,7 @@ export function renderInlineError(
 async function lockCall(
     ctx: MarkdownPostProcessorContext,
     plugin: RandomnessPlugin,
-    expr: string,
+    call: InlineCall,
     occurrence: number
 ): Promise<void> {
     // Read the current preview value from THIS specific call's
@@ -485,7 +581,7 @@ async function lockCall(
     // by occurrence, each call's lock now targets its own data.
     const previewKey: PreviewKey = {
         sourcePath: ctx.sourcePath,
-        expr,
+        expr: callKey(call),
         occurrence,
     };
     const cached = plugin.previewRegistry.get(previewKey);
@@ -496,23 +592,23 @@ async function lockCall(
         // click does *something* useful.
         try {
             const fresh = await evaluateInlineExpression(
-                expr,
+                evalSourceOf(call, plugin.settings.diceFormulas),
                 ctx.sourcePath,
                 plugin
             );
             plugin.previewRegistry.set(previewKey, fresh);
-            return lockWithResult(ctx, plugin, expr, occurrence, fresh);
+            return lockWithResult(ctx, plugin, call, occurrence, fresh);
         } catch {
             return; // give up silently
         }
     }
-    return lockWithResult(ctx, plugin, expr, occurrence, cached);
+    return lockWithResult(ctx, plugin, call, occurrence, cached);
 }
 
 async function lockWithResult(
     ctx: MarkdownPostProcessorContext,
     plugin: RandomnessPlugin,
-    expr: string,
+    call: InlineCall,
     occurrence: number,
     result: string
 ): Promise<void> {
@@ -522,7 +618,13 @@ async function lockWithResult(
         // same-expression calls (locked or not), which is the
         // same scheme used by findAllInlineCallPositions when
         // computing the render-time occurrence. They line up.
-        return applyLockToSource(source, expr, occurrence, result);
+        return applyLockToSource(
+            source,
+            call.expr,
+            occurrence,
+            result,
+            call.prefix ?? INLINE_PREFIX
+        );
     });
 }
 
@@ -548,7 +650,7 @@ async function lockWithResult(
 async function rerollCall(
     ctx: MarkdownPostProcessorContext,
     plugin: RandomnessPlugin,
-    expr: string,
+    call: InlineCall,
     occurrence: number,
     previewKey: PreviewKey,
     wasLocked: boolean,
@@ -563,15 +665,31 @@ async function rerollCall(
         // aware.
         plugin.previewRegistry.delete(previewKey);
         await modifyNote(plugin, ctx.sourcePath, (source) => {
-            return applyUnlockToSource(source, expr, occurrence);
+            return applyUnlockToSource(
+                source,
+                call.expr,
+                occurrence,
+                call.prefix ?? INLINE_PREFIX
+            );
         });
         return;
     }
 
     // Unfilled → evaluate fresh, update the registry, repaint in place.
+    // Explicit user action, so this is also where |render animates.
+    // Crucially the animated roll IS the result — one roll feeds both
+    // the overlay and the span (same contract as the dice tray) — so
+    // what the dice show always matches what the span says.
     let fresh: string;
     try {
-        fresh = await evaluateInlineExpression(expr, ctx.sourcePath, plugin);
+        const rendered = await renderRollIfEligible(call, plugin);
+        fresh =
+            rendered ??
+            (await evaluateInlineExpression(
+                evalSourceOf(call, plugin.settings.diceFormulas),
+                ctx.sourcePath,
+                plugin
+            ));
     } catch (err) {
         // Replace the span with an error indicator. The user can edit
         // the source to fix the expression.
@@ -594,7 +712,7 @@ async function rerollCall(
     );
     setSanitisedHtmlWithLinks(
         resultSpan ?? span,
-        fresh,
+        markdownLite(fresh),
         plugin,
         ctx.sourcePath
     );
@@ -615,4 +733,42 @@ async function modifyNote(
     const file = plugin.app.vault.getAbstractFileByPath(notePath);
     if (!(file instanceof TFile)) return;
     await plugin.app.vault.process(file, transform);
+}
+
+/**
+ * |render handling for an inline dice: span, fired only from explicit
+ * re-rolls. Gates itself: compat prefix, graphical dice on, |render
+ * flag present (and |norender absent), and the expression must be a
+ * plain dice sum — matching Dice Roller, which could only render the
+ * basic d20 set. When it plays, the animated roll IS the span's
+ * result (returned as a string); returns null to fall back to the
+ * normal evaluation path with no animation.
+ */
+async function renderRollIfEligible(
+    call: InlineCall,
+    plugin: RandomnessPlugin
+): Promise<string | null> {
+    try {
+        if ((call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX) return null;
+        if (!plugin.settings.graphicalDice) return null;
+        const { flags } = translateDiceExpression(
+            call.expr,
+            plugin.settings.diceFormulas
+        );
+        if (!flags.some((f) => f.toLowerCase() === "render")) return null;
+        if (flags.some((f) => f.toLowerCase() === "norender")) return null;
+        const { parsePureDiceFormula, rollPureDiceFormula, showDiceOverlay } =
+            await import("../render3d/diceOverlay");
+        // Strip flags the same way translation does, then see if
+        // what's left is a plain dice sum.
+        const stripped = call.expr.replace(/\|[^|]*$/g, "").trim();
+        const terms = parsePureDiceFormula(stripped);
+        if (terms === null) return null;
+        const rolled = rollPureDiceFormula(terms);
+        await showDiceOverlay(rolled.dice, rolled.total);
+        return String(rolled.total);
+    } catch {
+        // Never let decoration break rolling — fall back silently.
+        return null;
+    }
 }

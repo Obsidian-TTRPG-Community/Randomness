@@ -24,6 +24,8 @@
  * the processor to write back via `Vault.process`.
  */
 
+import { translateDiceExpression } from "../compat/diceCompat";
+
 // ────────────────────────────────────────────────────────────────────
 // Text-level transforms — pure, no DOM, no state.
 // ────────────────────────────────────────────────────────────────────
@@ -48,6 +50,66 @@ export const LOCK_SEPARATOR = "⟹";
 export const INLINE_PREFIX = "rdm:";
 
 /**
+ * Dice Roller compatibility prefixes (merge Phase 3). All four are
+ * routed through the same pipeline; the expression is translated by
+ * src/compat/diceCompat.ts at evaluation time. `dice+:` / `dice-:`
+ * were Dice Roller's per-roll save toggles and `dice-mod:` its
+ * note-modifying roll — locks subsume all three, so they alias to
+ * plain `dice:` behaviour with the lock button available.
+ */
+export const DICE_COMPAT_PREFIXES = [
+    "dice-mod:",
+    "dice+:",
+    "dice-:",
+    "dice:",
+] as const;
+
+const ALL_PREFIXES: readonly string[] = [
+    INLINE_PREFIX,
+    ...DICE_COMPAT_PREFIXES,
+];
+
+/** Regex source matching any inline prefix (longest alternatives first). */
+const PREFIX_ALTERNATION = "(?:rdm:|dice-mod:|dice\\+:|dice-:|dice:)";
+
+/** Return the inline prefix `text` starts with, or null. */
+export function matchInlinePrefix(text: string): string | null {
+    for (const p of ALL_PREFIXES) {
+        if (text.startsWith(p)) return p;
+    }
+    return null;
+}
+
+/**
+ * Registry-key / identity string for a call: prefix + expression.
+ * Two spans with the same expression under different prefixes are
+ * different calls (e.g. `rdm:1d20` is literal text, `dice:1d20`
+ * rolls), so previews and lock targeting must not collide.
+ */
+export function callKey(call: InlineCall): string {
+    const prefix = call.prefix ?? INLINE_PREFIX;
+    // Native calls keep the bare expression as their key — the shape
+    // the preview registry has always used — so only compat prefixes
+    // get namespaced.
+    return prefix === INLINE_PREFIX ? call.expr : prefix + call.expr;
+}
+
+/**
+ * The expression to actually EVALUATE for a call. `rdm:` calls
+ * evaluate their expression as-is; Dice Roller prefixes are
+ * translated first. Throws DiceCompatError (user-facing message)
+ * for unsupported Dice Roller constructs.
+ */
+export function evalSourceOf(
+    call: InlineCall,
+    aliases?: Record<string, string>
+): string {
+    const prefix = call.prefix ?? INLINE_PREFIX;
+    if (prefix === INLINE_PREFIX) return call.expr;
+    return translateDiceExpression(call.expr, aliases).expr;
+}
+
+/**
  * Parse an inline call's textual content into its expression and
  * optional locked result. Input is the text INSIDE the backticks —
  * e.g. `rdm:[@Names]⟹Alice` (with no backticks).
@@ -58,18 +120,38 @@ export interface InlineCall {
     expr: string;
     /** The locked result, or undefined if unfilled. */
     locked?: string;
+    /**
+     * The prefix this call was written with (`rdm:` or a Dice Roller
+     * compat prefix). Optional so existing call sites and tests that
+     * build literals keep compiling; absent means `rdm:`.
+     * Serialisation preserves it, so locking a `dice:` span writes
+     * back `dice:…⟹result`, never rewriting the user's prefix.
+     */
+    prefix?: string;
 }
 
 export function parseInlineCall(text: string): InlineCall | null {
-    if (!text.startsWith(INLINE_PREFIX)) return null;
-    const rest = text.slice(INLINE_PREFIX.length);
+    const prefix = matchInlinePrefix(text);
+    if (prefix === null) return null;
+    const rest = text.slice(prefix.length);
+    // A bare prefix with no expression (`` `dice:` `` in prose, e.g. a
+    // heading mentioning the syntax) is a literal mention, not a call —
+    // leave it as plain code rather than rendering an error span.
     const sepIdx = rest.indexOf(LOCK_SEPARATOR);
+    const exprPart = sepIdx === -1 ? rest : rest.slice(0, sepIdx);
+    if (exprPart.trim() === "") return null;
+    // `rdm:` calls omit the prefix field — absent means rdm: — so the
+    // parsed shape (and every test/caller comparing it structurally)
+    // is unchanged for the native prefix.
+    const prefixField =
+        prefix === INLINE_PREFIX ? {} : { prefix };
     if (sepIdx === -1) {
-        return { expr: rest };
+        return { expr: rest, ...prefixField };
     }
     return {
         expr: rest.slice(0, sepIdx),
         locked: rest.slice(sepIdx + LOCK_SEPARATOR.length),
+        ...prefixField,
     };
 }
 
@@ -78,10 +160,11 @@ export function parseInlineCall(text: string): InlineCall | null {
  * between backticks). The inverse of parseInlineCall.
  */
 export function serialiseInlineCall(call: InlineCall): string {
+    const prefix = call.prefix ?? INLINE_PREFIX;
     if (call.locked === undefined) {
-        return INLINE_PREFIX + call.expr;
+        return prefix + call.expr;
     }
-    return INLINE_PREFIX + call.expr + LOCK_SEPARATOR + call.locked;
+    return prefix + call.expr + LOCK_SEPARATOR + call.locked;
 }
 
 /**
@@ -103,11 +186,13 @@ export function applyLockToSource(
     source: string,
     targetExpr: string,
     occurrence: number,
-    result: string
+    result: string,
+    targetPrefix: string = INLINE_PREFIX
 ): string {
-    return transformNthMatch(source, targetExpr, occurrence, () => ({
+    return transformNthMatch(source, targetPrefix, targetExpr, occurrence, () => ({
         expr: targetExpr,
         locked: result,
+        prefix: targetPrefix,
     }));
 }
 
@@ -118,10 +203,12 @@ export function applyLockToSource(
 export function applyUnlockToSource(
     source: string,
     targetExpr: string,
-    occurrence: number
+    occurrence: number,
+    targetPrefix: string = INLINE_PREFIX
 ): string {
-    return transformNthMatch(source, targetExpr, occurrence, () => ({
+    return transformNthMatch(source, targetPrefix, targetExpr, occurrence, () => ({
         expr: targetExpr,
+        prefix: targetPrefix,
     }));
 }
 
@@ -140,7 +227,7 @@ export function transformAllInlineCalls(
     // The backticks are part of the codespan syntax; they MUST be
     // preserved in the output, hence the wrapping.
     return source.replace(
-        /`(rdm:[^`]*)`/g,
+        new RegExp("`(" + PREFIX_ALTERNATION + "[^`]*)`", "g"),
         (whole, inner: string) => {
             const call = parseInlineCall(inner);
             if (!call) return whole;
@@ -161,6 +248,7 @@ export function transformAllInlineCalls(
  */
 function transformNthMatch(
     source: string,
+    targetPrefix: string,
     targetExpr: string,
     occurrence: number,
     transform: (call: InlineCall) => InlineCall
@@ -168,6 +256,7 @@ function transformNthMatch(
     let seen = 0;
     return transformAllInlineCalls(source, (call) => {
         if (call.expr !== targetExpr) return null;
+        if ((call.prefix ?? INLINE_PREFIX) !== targetPrefix) return null;
         const idx = seen++;
         if (idx !== occurrence) return null;
         return transform(call);
@@ -217,13 +306,13 @@ export function findAllInlineCallPositions(
     // is a binary search rather than counting newlines from
     // the start every time.
     const lineStarts = computeLineStarts(source);
-    const re = /`(rdm:[^`]*)`/g;
+    const re = new RegExp("`(" + PREFIX_ALTERNATION + "[^`]*)`", "g");
     let m: RegExpExecArray | null;
     while ((m = re.exec(source)) !== null) {
         const parsed = parseInlineCall(m[1]);
         if (!parsed) continue;
-        const occ = exprCounts.get(parsed.expr) ?? 0;
-        exprCounts.set(parsed.expr, occ + 1);
+        const occ = exprCounts.get(callKey(parsed)) ?? 0;
+        exprCounts.set(callKey(parsed), occ + 1);
         out.push({
             call: parsed,
             sourceOffset: m.index,

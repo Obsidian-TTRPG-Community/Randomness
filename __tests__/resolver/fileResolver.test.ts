@@ -249,19 +249,22 @@ describe("parseFileSource", () => {
             "more prose",
         ].join("\n");
         const f = parseFileSource("/gens/x.md", md);
-        expect(f.tables).toHaveLength(1);
-        expect(f.tables[0].name).toBe("T");
+        // Author tables only — every .md also gains hidden __lines:/
+        // __blocks: tables since the Dice Roller merge (Phase 4).
+        const authored = f.tables.filter((t) => !t.name.startsWith("__"));
+        expect(authored).toHaveLength(1);
+        expect(authored[0].name).toBe("T");
     });
 
     test(".md with no codeblocks produces empty file", () => {
         const f = parseFileSource("/gens/x.md", "# Just prose\n\nNo blocks here.");
-        expect(f.tables).toHaveLength(0);
+        expect(f.tables.filter((t) => !t.name.startsWith("__"))).toHaveLength(0);
     });
 
     test(".MD (uppercase) is also dispatched to extractor", () => {
         const md = "```randomness\nTable: T\nA\n```";
         const f = parseFileSource("/gens/x.MD", md);
-        expect(f.tables).toHaveLength(1);
+        expect(f.tables.filter((t) => !t.name.startsWith("__"))).toHaveLength(1);
     });
 });
 
@@ -355,17 +358,22 @@ describe("resolveBundle: cycles", () => {
         }
     });
 
-    test("self-cycle throws ImportCycleError", () => {
+    test("self-import is a silent no-op (changed in the Dice Roller merge)", () => {
+        // Previously a self-Use threw ImportCycleError. Once notes hold
+        // rollable tables it becomes easy to write `Use: [[This Note]]`
+        // inside the note itself, and the file's own tables are already
+        // loaded — so a self-import now resolves to nothing instead of
+        // erroring. True multi-file cycles still throw (tests below).
         const src = inMemorySource({
             "/g/a.ipt": "Use:a.ipt\nTable: A",
         });
-        expect(() =>
-            resolveBundle(
-                "/g/a.ipt",
-                src.read("/g/a.ipt") as string,
-                { callerDir: "/g", source: src }
-            )
-        ).toThrow(ImportCycleError);
+        const bundle = resolveBundle(
+            "/g/a.ipt",
+            src.read("/g/a.ipt") as string,
+            { callerDir: "/g", source: src }
+        );
+        expect(bundle.extras).toHaveLength(0);
+        expect(bundle.loadedPaths).toEqual(["/g/a.ipt"]);
     });
 
     test("three-step cycle is caught", () => {
@@ -448,8 +456,11 @@ describe("resolveBundle: mixed .md and .ipt", () => {
             src.read("/g/notes.md") as string,
             { callerDir: "/g", source: src }
         );
-        expect(bundle.main.tables).toHaveLength(1);
-        expect(bundle.main.tables[0].name).toBe("T");
+        const authored = bundle.main.tables.filter(
+            (t) => !t.name.startsWith("__")
+        );
+        expect(authored).toHaveLength(1);
+        expect(authored[0].name).toBe("T");
     });
 });
 

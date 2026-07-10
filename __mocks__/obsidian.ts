@@ -398,6 +398,28 @@ export class MarkdownRenderer {
     }
 }
 
+export class Modal {
+    app: App;
+    contentEl: HTMLElement;
+    titleEl: { setText: (t: string) => void };
+    constructor(app: App) {
+        this.app = app;
+        this.contentEl =
+            typeof document !== "undefined"
+                ? document.createElement("div")
+                : ({} as HTMLElement);
+        this.titleEl = { setText: () => undefined };
+    }
+    open(): void {
+        this.onOpen();
+    }
+    close(): void {
+        this.onClose();
+    }
+    onOpen(): void {}
+    onClose(): void {}
+}
+
 export class PluginSettingTab {
     app: App;
     plugin: Plugin;
@@ -433,6 +455,10 @@ export class Setting {
     }
     addText(cb: (text: TextComponent) => void): this {
         cb(new TextComponent());
+        return this;
+    }
+    addTextArea(cb: (text: TextAreaComponent) => void): this {
+        cb(new TextAreaComponent());
         return this;
     }
     addToggle(cb: (toggle: ToggleComponent) => void): this {
@@ -509,6 +535,23 @@ export class TextComponent {
         typeof document !== "undefined"
             ? document.createElement("input")
             : ({ addEventListener: () => {} } as unknown as HTMLInputElement);
+    setValue(_value: string): this {
+        return this;
+    }
+    setPlaceholder(_placeholder: string): this {
+        return this;
+    }
+    onChange(_cb: (value: string) => void): this {
+        return this;
+    }
+}
+
+export class TextAreaComponent {
+    /** Real textarea element so code can set rows etc. */
+    inputEl: HTMLTextAreaElement =
+        typeof document !== "undefined"
+            ? document.createElement("textarea")
+            : ({ addEventListener: () => {} } as unknown as HTMLTextAreaElement);
     setValue(_value: string): this {
         return this;
     }

@@ -75,3 +75,89 @@ export function vaultFileSource(vault: Vault): AsyncFileSource {
         },
     };
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Plugin-layer lookups (merge Phase 4)
+// ────────────────────────────────────────────────────────────────────
+
+import type RandomnessPlugin from "./main";
+
+/**
+ * Bare-filename resolver that resolves the way Obsidian resolves
+ * wikilinks: the vault index first (exact basenames for .rdm/.ipt
+ * libraries), then `metadataCache.getFirstLinkpathDest` — shortest
+ * path anywhere in the vault, honouring the user's link settings —
+ * so `Use: [[Note]]` and `rdm:[[Note^id]]` find a note wherever it
+ * lives, exactly like clicking the link would.
+ */
+export function makeLinkAwareBasenameResolver(
+    plugin: RandomnessPlugin
+): (basename: string, callerDir: string) => string | null {
+    return (basename, callerDir) => {
+        const viaIndex = plugin.vaultIndex?.resolveBasename?.(
+            basename,
+            callerDir
+        );
+        if (viaIndex) return viaIndex;
+        try {
+            const cache = plugin.app.metadataCache;
+            if (!cache?.getFirstLinkpathDest) return null;
+            const linkpath = basename.toLowerCase().endsWith(".md")
+                ? basename.slice(0, -3)
+                : basename;
+            // The second argument anchors relative resolution; a fake
+            // sibling file in the caller's folder mirrors how a link
+            // written in that folder would resolve.
+            const from = callerDir ? callerDir + "/__resolver__.md" : "";
+            const dest = cache.getFirstLinkpathDest(linkpath, from);
+            return dest?.path ?? null;
+        } catch {
+            return null;
+        }
+    };
+}
+
+/**
+ * Vault-wide tag lookup backed by the metadata cache: returns the
+ * paths of markdown notes carrying `#tag` (inline or frontmatter;
+ * nested tags `#tag/sub` match their parent). Sorted for
+ * deterministic seeded rolls. No Dataview required.
+ */
+export function makeTagFilesLookup(
+    plugin: RandomnessPlugin
+): (tag: string) => string[] {
+    return (tag) => {
+        const want = tag.replace(/^#/, "").toLowerCase();
+        const out: string[] = [];
+        try {
+            const cache = plugin.app.metadataCache;
+            for (const f of plugin.app.vault.getMarkdownFiles()) {
+                const fc = cache.getFileCache(f);
+                if (!fc) continue;
+                const tags = new Set<string>();
+                for (const t of fc.tags ?? []) {
+                    tags.add(t.tag.replace(/^#/, "").toLowerCase());
+                }
+                const fm = fc.frontmatter?.tags as unknown;
+                const fmList = Array.isArray(fm)
+                    ? fm
+                    : typeof fm === "string"
+                      ? fm.split(",")
+                      : [];
+                for (const t of fmList) {
+                    tags.add(String(t).trim().replace(/^#/, "").toLowerCase());
+                }
+                for (const t of tags) {
+                    if (t === want || t.startsWith(want + "/")) {
+                        out.push(f.path);
+                        break;
+                    }
+                }
+            }
+        } catch {
+            // Defensive: metadata cache API drift degrades to "no
+            // tagged notes" (a clear error upstream), not a crash.
+        }
+        return out.sort();
+    };
+}

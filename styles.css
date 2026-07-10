@@ -697,3 +697,308 @@
 .randomness-portrait-inline { position: relative; }
 .randomness-portrait-inline .randomness-portrait-iconbtn { opacity: 0; }
 .randomness-portrait-inline:hover .randomness-portrait-iconbtn { opacity: 0.9; }
+
+/* ── Dice tray (Dice Roller merge, Phase 5) ─────────────────────── */
+
+.randomness-tray {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.randomness-tray-result {
+    font-size: 1.6em;
+    font-weight: 600;
+    text-align: center;
+    padding: 12px 8px;
+    border-radius: 8px;
+    background: var(--background-secondary);
+    cursor: pointer;
+    min-height: 1.4em;
+    word-break: break-word;
+    user-select: text;
+}
+.randomness-tray-dice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+}
+.randomness-tray-die {
+    min-width: 44px;
+    font-variant-numeric: tabular-nums;
+}
+.randomness-tray-opts {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+}
+.randomness-tray-mod-value {
+    min-width: 2.5em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.randomness-tray-pool {
+    text-align: center;
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    padding: 4px;
+    border-radius: 6px;
+    background: var(--background-secondary);
+    word-break: break-word;
+}
+.randomness-tray-pool.is-empty {
+    color: var(--text-muted);
+    font-family: inherit;
+}
+.randomness-tray-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+}
+.randomness-tray-formula {
+    display: flex;
+    gap: 4px;
+}
+.randomness-tray-input {
+    flex: 1;
+    min-width: 0;
+}
+.randomness-tray-heading {
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+.randomness-tray-saved-row,
+.randomness-tray-history-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 2px 0;
+}
+.randomness-tray-saved-roll {
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.randomness-tray-history-row {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+.randomness-tray-history-row:hover {
+    background: var(--background-secondary);
+}
+.randomness-tray-history-formula {
+    flex: 1;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.randomness-tray-history-result {
+    font-weight: 600;
+    max-width: 55%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Graphical dice overlay (Dice Roller merge, Phase 6) ────────── */
+
+.randomness-dice3d-layer {
+    position: fixed;
+    inset: 0;
+    z-index: var(--layer-notice, 1000);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    cursor: pointer;
+    background: transparent;
+}
+/* The backdrop lives only behind the dice: a rounded, softly blurred
+   card sized to its contents — theme-aware rather than a full-screen
+   scrim. */
+.randomness-dice3d-table {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 26px;
+    align-items: center;
+    justify-content: center;
+    max-width: 72vw;
+    padding: 30px 38px 40px;
+    border-radius: 18px;
+    background: color-mix(
+        in srgb,
+        var(--background-primary) 82%,
+        transparent
+    );
+    backdrop-filter: blur(3px);
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    animation: rdm-backdrop-in 0.18s ease-out;
+}
+@keyframes rdm-backdrop-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+}
+.randomness-dice3d-die {
+    width: 64px;
+    height: 64px;
+    position: relative;
+    perspective: 420px;
+    margin-bottom: 18px;
+    flex: 0 0 auto;
+    /* Fade lives HERE, on the flat wrapper — animating opacity on the
+       preserve-3d cube flattens its 3D rendering in Chromium and can
+       expose mirrored backfaces (the "mirrored 1" bug). */
+    animation: rdm-die-fade 0.3s ease-out both;
+}
+@keyframes rdm-die-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.randomness-dice3d-die-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -20px;
+    text-align: center;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-shadow: 0 0 4px var(--background-primary);
+}
+/* Tell the dice apart at a glance: one hue per die type. */
+.randomness-dice3d-d4 .randomness-dice3d-chip { filter: hue-rotate(-40deg); }
+.randomness-dice3d-d8 .randomness-dice3d-chip { filter: hue-rotate(35deg); }
+.randomness-dice3d-d10 .randomness-dice3d-chip { filter: hue-rotate(80deg); }
+.randomness-dice3d-d12 .randomness-dice3d-chip { filter: hue-rotate(150deg); }
+.randomness-dice3d-d20 .randomness-dice3d-chip { filter: hue-rotate(210deg); }
+.randomness-dice3d-d100 .randomness-dice3d-chip { filter: hue-rotate(280deg); }
+.randomness-dice3d-die.is-dropped {
+    opacity: 0.35;
+    filter: grayscale(0.8);
+}
+.randomness-dice3d-hidden {
+    display: none;
+}
+
+/* d6: a real cube */
+.randomness-dice3d-cube {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    animation: rdm-tumble 1.1s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.randomness-dice3d-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6em;
+    font-weight: 700;
+    color: var(--text-on-accent, #fff);
+    background: var(--interactive-accent);
+    border: 2px solid var(--background-modifier-border);
+    border-radius: 10px;
+    backface-visibility: hidden;
+}
+.randomness-dice3d-face-front  { transform: translateZ(32px); }
+.randomness-dice3d-face-back   { transform: rotateY(180deg) translateZ(32px); }
+.randomness-dice3d-face-right  { transform: rotateY(90deg) translateZ(32px); }
+.randomness-dice3d-face-left   { transform: rotateY(-90deg) translateZ(32px); }
+.randomness-dice3d-face-top    { transform: rotateX(90deg) translateZ(32px); }
+.randomness-dice3d-face-bottom { transform: rotateX(-90deg) translateZ(32px); }
+
+.randomness-dice3d-land-1 { --rdm-lx: 0deg;    --rdm-ly: 0deg; }
+.randomness-dice3d-land-2 { --rdm-lx: 0deg;    --rdm-ly: -90deg; }
+.randomness-dice3d-land-3 { --rdm-lx: -90deg;  --rdm-ly: 0deg; }
+.randomness-dice3d-land-4 { --rdm-lx: 90deg;   --rdm-ly: 0deg; }
+.randomness-dice3d-land-5 { --rdm-lx: 0deg;    --rdm-ly: 90deg; }
+.randomness-dice3d-land-6 { --rdm-lx: 0deg;    --rdm-ly: 180deg; }
+
+@keyframes rdm-tumble {
+    from {
+        transform: rotateX(0deg) rotateY(0deg) translateY(-22vh);
+    }
+    60% {
+        transform: rotateX(calc(540deg + var(--rdm-lx, 0deg)))
+            rotateY(calc(360deg + var(--rdm-ly, 0deg))) translateY(4px);
+    }
+    to {
+        transform: rotateX(calc(720deg + var(--rdm-lx, 0deg)))
+            rotateY(calc(720deg + var(--rdm-ly, 0deg))) translateY(0);
+    }
+}
+
+/* other dice: shaped chips with a number-cycle */
+.randomness-dice3d-chip {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4em;
+    font-weight: 700;
+    color: var(--text-on-accent, #fff);
+    background: var(--interactive-accent);
+    border: 2px solid var(--background-modifier-border);
+    animation: rdm-chipspin 1.1s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@keyframes rdm-chipspin {
+    from { transform: rotate(0turn) scale(0.4) translateY(-22vh); }
+    to   { transform: rotate(2turn) scale(1) translateY(0); }
+}
+.randomness-dice3d-d4 .randomness-dice3d-chip {
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    padding-top: 14px;
+}
+.randomness-dice3d-d8 .randomness-dice3d-chip {
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+.randomness-dice3d-d10 .randomness-dice3d-chip,
+.randomness-dice3d-d100 .randomness-dice3d-chip {
+    clip-path: polygon(50% 0%, 92% 38%, 50% 100%, 8% 38%);
+}
+.randomness-dice3d-d12 .randomness-dice3d-chip {
+    clip-path: polygon(50% 0%, 98% 35%, 79% 91%, 21% 91%, 2% 35%);
+}
+.randomness-dice3d-d20 .randomness-dice3d-chip {
+    clip-path: polygon(25% 7%, 75% 7%, 100% 50%, 75% 93%, 25% 93%, 0% 50%);
+}
+
+.randomness-dice3d-total {
+    font-size: 2em;
+    font-weight: 700;
+    padding: 8px 20px;
+    border-radius: 12px;
+    background: var(--background-primary);
+    border: 2px solid var(--interactive-accent);
+}
+/* Present from the start so the card is pre-sized; revealed (with a
+   pop) only once the dice settle. */
+.randomness-dice3d-total.is-pending {
+    visibility: hidden;
+}
+.randomness-dice3d-total:not(.is-pending) {
+    animation: rdm-fadein 0.25s ease-out;
+}
+@keyframes rdm-fadein {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.randomness-dice3d-cube,
+.randomness-dice3d-chip {
+    animation-fill-mode: both;
+}

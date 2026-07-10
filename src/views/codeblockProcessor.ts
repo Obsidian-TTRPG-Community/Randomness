@@ -34,7 +34,10 @@ import { Evaluator } from "../engine/evaluator";
 import { resolveBundle } from "../resolver/fileResolver";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
 import { discoverReferencedTables } from "../resolver/autoDiscover";
-import { vaultFileSource } from "./vaultFileSource";
+import {
+    makeLinkAwareBasenameResolver,
+    vaultFileSource,
+} from "./vaultFileSource";
 import type RandomnessPlugin from "./main";
 import { stableSeedFor } from "./settings";
 import { renderPromptControls, initialPromptValues } from "./promptUI";
@@ -152,11 +155,15 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         // for the same trick on inline calls).
         const virtualPath = notePath + ".__codeblock.ipt";
         const asyncSource = vaultFileSource(vault);
+        const basenameResolver = makeLinkAwareBasenameResolver(
+            this.plugin
+        );
         const prefetch = await prefetchUseGraph({
             entryPath: virtualPath,
             entrySource: this.source,
             generatorRoot: settings.generatorRoot || undefined,
             source: asyncSource,
+            basenameResolver,
         });
 
         // Step 2: synchronous resolve.
@@ -164,6 +171,7 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
             callerDir: dirOf(notePath),
             generatorRoot: settings.generatorRoot || undefined,
             source: prefetch.source,
+            basenameResolver,
         });
 
         // Step 2b: auto-discover tables referenced by name but not

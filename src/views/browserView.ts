@@ -51,6 +51,11 @@ import {
 } from "./pinnedTables";
 import type RandomnessPlugin from "./main";
 import { renderRollerTab, renderBuilderTab } from "../portrait/panel";
+import { renderDiceTrayTab } from "./diceTrayView";
+
+/** Sidebar tabs, in display order. */
+const BROWSER_TABS = ["generators", "portraits", "builder", "dice"] as const;
+type BrowserTab = (typeof BROWSER_TABS)[number];
 
 export const VIEW_TYPE_BROWSER = "randomness-browser-view";
 
@@ -132,17 +137,21 @@ export class BrowserView extends ItemView {
         target.appendChild(portraitsEl);
         const builderEl = activeDocument.createElement("div");
         target.appendChild(builderEl);
+        const diceEl = activeDocument.createElement("div");
+        target.appendChild(diceEl);
 
         this.tabPanels = {
             generators: wrap,
             portraits: portraitsEl,
             builder: builderEl,
+            dice: diceEl,
         };
         this.tabButtons = {};
-        const defs: ["generators" | "portraits" | "builder", string][] = [
+        const defs: [BrowserTab, string][] = [
             ["generators", "Generators"],
             ["portraits", "Portraits"],
             ["builder", "Builder"],
+            ["dice", "Dice"],
         ];
         for (const [id, label] of defs) {
             const btn = activeDocument.createElement("button");
@@ -160,31 +169,35 @@ export class BrowserView extends ItemView {
     }
 
     /** Tab content panels (generators is this.root). */
-    private tabPanels: {
-        generators: HTMLElement;
-        portraits: HTMLElement;
-        builder: HTMLElement;
-    } | null = null;
+    private tabPanels: Record<BrowserTab, HTMLElement> | null = null;
     private tabButtons: Partial<Record<string, HTMLElement>> = {};
-    /** Portrait tabs render on first activation only. */
-    private portraitTabsRendered = { portraits: false, builder: false };
+    /** Lazy tabs render on first activation only. */
+    private lazyTabsRendered = {
+        portraits: false,
+        builder: false,
+        dice: false,
+    };
 
     /** Switch the visible tab. Public so commands can deep-link. */
-    showTab(id: "generators" | "portraits" | "builder"): void {
+    showTab(id: BrowserTab): void {
         const panels = this.tabPanels;
         if (!panels) return;
-        for (const key of ["generators", "portraits", "builder"] as const) {
+        for (const key of BROWSER_TABS) {
             panels[key].style.display = key === id ? "" : "none";
             const btn = this.tabButtons[key];
             if (btn) btn.classList.toggle("is-active", key === id);
         }
-        if (id === "portraits" && !this.portraitTabsRendered.portraits) {
-            this.portraitTabsRendered.portraits = true;
+        if (id === "portraits" && !this.lazyTabsRendered.portraits) {
+            this.lazyTabsRendered.portraits = true;
             renderRollerTab(this.plugin, panels.portraits);
         }
-        if (id === "builder" && !this.portraitTabsRendered.builder) {
-            this.portraitTabsRendered.builder = true;
+        if (id === "builder" && !this.lazyTabsRendered.builder) {
+            this.lazyTabsRendered.builder = true;
             renderBuilderTab(this.plugin, panels.builder);
+        }
+        if (id === "dice" && !this.lazyTabsRendered.dice) {
+            this.lazyTabsRendered.dice = true;
+            renderDiceTrayTab(this.plugin, panels.dice);
         }
     }
 
@@ -1200,12 +1213,18 @@ export function registerBrowserView(plugin: RandomnessPlugin): void {
         name: "Open portrait builder",
         callback: () => void activateBrowserTab(plugin, "builder"),
     });
+
+    plugin.addCommand({
+        id: "open-dice-tray",
+        name: "Open dice tray",
+        callback: () => void activateBrowserTab(plugin, "dice"),
+    });
 }
 
 /** Open the browser view and switch it to a specific tab. */
 async function activateBrowserTab(
     plugin: RandomnessPlugin,
-    tab: "generators" | "portraits" | "builder"
+    tab: BrowserTab
 ): Promise<void> {
     await activateBrowserView(plugin);
     const leaf = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_BROWSER)[0];

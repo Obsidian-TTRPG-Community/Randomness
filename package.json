@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
+    "embed-guide": "node scripts/embed-guide.mjs",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:engine": "jest __tests__/engine",

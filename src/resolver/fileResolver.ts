@@ -26,6 +26,29 @@
 import { GeneratorFile } from "../engine/ast";
 import { parseGeneratorFile } from "../engine/fileParser";
 import { extractRandomnessCodeblocks } from "./mdExtractor";
+import {
+    BLOCKS_PREFIX,
+    LINES_PREFIX,
+    extractMarkdownContentTables,
+    extractNoteBlocks,
+    extractNoteLines,
+    noteBaseName,
+    wikilinkToPath,
+} from "./mdContent";
+
+/** Build one of the hidden whole-note tables. */
+function hiddenTable(
+    name: string,
+    items: string[]
+): import("../engine/ast").TableDecl {
+    return {
+        name,
+        type: "weighted",
+        shuffleTargets: [],
+        inTableSets: [],
+        items: items.map((rawContent) => ({ weight: 1, rawContent })),
+    };
+}
 
 /**
  * Abstract file backend. Implementations:
@@ -200,7 +223,12 @@ export function resolveUsePath(
     useRef: string,
     opts: ResolveOptions
 ): string | null {
-    const ref = normalisePath(useRef);
+    // `Use: [[Note]]` / `[[Note^block-id]]` — wikilink form (Dice Roller
+    // merge Phase 2). The brackets and any #heading/^block suffix are
+    // stripped and `.md` appended when no extension is given; the
+    // resulting path then resolves through the same steps as any ref.
+    const wiki = wikilinkToPath(useRef);
+    const ref = normalisePath(wiki ?? useRef);
     if (ref === "") return null;
     // 1. Relative to caller's dir (sibling files, the most direct case).
     if (opts.callerDir !== "") {
@@ -251,7 +279,30 @@ export function parseFileSource(absPath: string, source: string): GeneratorFile 
     if (absPath.toLowerCase().endsWith(".md")) {
         const extracted = extractRandomnessCodeblocks(source);
         // If no codeblocks, an empty file produces an empty GeneratorFile.
-        return parseGeneratorFile(extracted);
+        const file = parseGeneratorFile(extracted);
+        // Markdown content tables (Dice Roller merge Phase 2): block-id'd
+        // markdown tables and lists in the note become rollable tables
+        // named by their id (see mdContent.ts). Codeblock-defined tables
+        // win on name collision, so notes can always override.
+        const taken = new Set(file.tables.map((t) => t.name.toLowerCase()));
+        for (const t of extractMarkdownContentTables(source)) {
+            if (taken.has(t.name.toLowerCase())) continue;
+            taken.add(t.name.toLowerCase());
+            file.tables.push(t);
+        }
+        // Whole-note line/block tables (merge Phase 4): power the
+        // `[[Note|line]]` / `[[Note|block]]` rolls and tag rolls. The
+        // `__`-prefixed names can't collide with author tables.
+        const base = noteBaseName(absPath).toLowerCase();
+        const noteLines = extractNoteLines(source);
+        if (noteLines.length > 0) {
+            file.tables.push(hiddenTable(LINES_PREFIX + base, noteLines));
+        }
+        const noteBlocks = extractNoteBlocks(source);
+        if (noteBlocks.length > 0) {
+            file.tables.push(hiddenTable(BLOCKS_PREFIX + base, noteBlocks));
+        }
+        return file;
     }
     return parseGeneratorFile(source);
 }
@@ -314,6 +365,13 @@ export function resolveBundle(
                         rawRef
                     );
                 }
+                // Self-import is a no-op: a note whose codeblock says
+                // `Use: [[This Very Note]]` (easy to write once notes
+                // themselves hold rollable tables, and injected by the
+                // inline direct-call path when the wikilink points at
+                // the containing note) already has its own tables
+                // loaded. Skip it rather than reporting a cycle.
+                if (resolved === fromPath) continue;
                 // Cycle check FIRST — if `resolved` is one of our ancestors
                 // (currently being visited), this is a cycle, not a dedupe.
                 // Order matters: the main file is in `loaded` before any

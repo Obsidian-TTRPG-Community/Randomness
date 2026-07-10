@@ -20,6 +20,7 @@ import {
 } from "obsidian";
 import type RandomnessPlugin from "./main";
 import { EXAMPLE_FILES, EXAMPLES_README, EXAMPLES_SUBFOLDER } from "../examples";
+import { GUIDE_FILES, GUIDE_FOLDER } from "./guideContent";
 
 /**
  * Extract a readable message from a caught value. `catch` clauses
@@ -105,6 +106,31 @@ export interface RandomnessSettings {
      * always be installed by copying the folder into the vault.
      */
     portraitPackUrl: string;
+    /**
+     * Dice Roller compatibility (merge Phase 3): when on, inline
+     * `dice:` code spans (plus `dice+:`, `dice-:`, `dice-mod:`) are
+     * processed by the Randomness engine — full modifier grammar,
+     * table rollers via ^block-ids, and lock/re-roll buttons.
+     *
+     * Off by default: while the separate Dice Roller plugin is
+     * enabled, both plugins would fight over the same spans. Turn
+     * this on after disabling Dice Roller.
+     */
+    diceRollerCompat: boolean;
+    /**
+     * Formula aliases (from Dice Roller): alias → formula. When an
+     * inline dice: expression is exactly an alias, the formula is
+     * rolled instead. E.g. `sneak` → `4d6dl1`, so `dice: sneak`
+     * rolls 4d6-drop-lowest.
+     */
+    diceFormulas: Record<string, string>;
+    /**
+     * Graphical dice (merge Phase 6): animate rolls with the CSS-3D
+     * dice overlay — in the dice tray, and for inline rolls carrying
+     * the `|render` flag. Animation only; results always come from
+     * the engine.
+     */
+    graphicalDice: boolean;
 }
 
 export const DEFAULT_SETTINGS: RandomnessSettings = {
@@ -115,6 +141,9 @@ export const DEFAULT_SETTINGS: RandomnessSettings = {
     pinnedTables: [],
     portraitPackPath: "fantasy_ink_parts_pack",
     portraitPackUrl: "",
+    diceRollerCompat: false,
+    diceFormulas: {},
+    graphicalDice: true,
 };
 
 /**
@@ -147,6 +176,21 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         // covers all the table-authoring syntax — without
         // discoverability here, new users have to know about the
         // command palette entry to find it.
+        new Setting(containerEl)
+            .setName("Beginner's guide")
+            .setDesc(
+                "Install a small folder of guide notes — one per " +
+                    "feature, every example live and rollable. The " +
+                    "friendliest way to learn the plugin. Re-running " +
+                    "refreshes the notes."
+            )
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Install the guide")
+                    .setCta()
+                    .onClick(() => void this.seedGuide())
+            );
+
         new Setting(containerEl)
             .setName("Help & reference")
             .setDesc(
@@ -654,6 +698,92 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+        new Setting(containerEl)
+            .setName("Dice Roller compatibility")
+            .setDesc(
+                "Process inline dice: code spans (plus dice+:, dice-:, " +
+                    "dice-mod:) with the Randomness engine — Dice Roller " +
+                    "syntax, full modifier grammar, table rolls via " +
+                    "^block-ids, and lock/re-roll buttons. Starts ON " +
+                    "when the separate Dice Roller plugin isn't enabled; " +
+                    "leave it OFF while that plugin is active, or both " +
+                    "will process the same spans."
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.diceRollerCompat)
+                    .onChange(async (value) => {
+                        this.plugin.settings.diceRollerCompat = value;
+                        await this.plugin.saveSettings();
+                        // Re-render open notes so the change takes
+                        // effect immediately — post-processors don't
+                        // re-run on their own, and "toggle did
+                        // nothing" is exactly the confusion this
+                        // setting doesn't need.
+                        rerenderMarkdownViews(this.app);
+                        if (value && isDiceRollerPluginEnabled(this.app)) {
+                            new Notice(
+                                "Randomness: the Dice Roller plugin is " +
+                                    "still enabled — both plugins will " +
+                                    "now try to render dice: spans. " +
+                                    "Disable Dice Roller (or this " +
+                                    "toggle) to avoid double handling.",
+                                10000
+                            );
+                        }
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Graphical dice")
+            .setDesc(
+                "Animate rolls with tumbling dice — in the dice tray, " +
+                    "and for inline rolls that carry the |render flag. " +
+                    "Cosmetic only: results always come from the engine, " +
+                    "so seeds and locks are unaffected."
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.graphicalDice)
+                    .onChange(async (value) => {
+                        this.plugin.settings.graphicalDice = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Dice formula aliases")
+            .setDesc(
+                "One 'alias = formula' per line. When an inline dice: " +
+                    "expression is exactly an alias, its formula rolls " +
+                    "instead — e.g. 'sneak = 4d6dl1' makes dice: sneak " +
+                    "roll 4d6-drop-lowest. (Dice Roller's saved " +
+                    "formulas; paste them straight in.)"
+            )
+            .addTextArea((text) => {
+                text.setPlaceholder("sneak = 4d6dl1" + String.fromCharCode(10) + "adv = 2d20kh")
+                    .setValue(
+                        Object.entries(this.plugin.settings.diceFormulas)
+                            .map(([k, v]) => `${k} = ${v}`)
+                            .join(String.fromCharCode(10))
+                    )
+                    .onChange(async (value) => {
+                        const parsed: Record<string, string> = {};
+                        for (const line of value.split(String.fromCharCode(10))) {
+                            const eq = line.indexOf("=");
+                            if (eq <= 0) continue;
+                            const alias = line.slice(0, eq).trim();
+                            const formula = line.slice(eq + 1).trim();
+                            if (alias !== "" && formula !== "") {
+                                parsed[alias] = formula;
+                            }
+                        }
+                        this.plugin.settings.diceFormulas = parsed;
+                        await this.plugin.saveSettings();
+                    });
+                text.inputEl.rows = 4;
+            });
     }
 
     /**
@@ -671,6 +801,50 @@ export class RandomnessSettingsTab extends PluginSettingTab {
      * gives us. Showing a Notice for each outcome would be too
      * chatty; we show one summary Notice at the end.
      */
+    /**
+     * Write the beginner's guide notes into a "Randomness Guide"
+     * folder at the vault root. Existing notes are refreshed
+     * (vault.modify) so re-running after an update picks up new
+     * content; user edits to guide notes are overwritten — they're
+     * documentation, and the button says so.
+     */
+    private async seedGuide(): Promise<void> {
+        const { vault } = this.plugin.app;
+        try {
+            if (!(await vault.adapter.exists(GUIDE_FOLDER))) {
+                await vault.createFolder(GUIDE_FOLDER);
+            }
+        } catch {
+            // Folder may already exist — vault.createFolder throws on
+            // duplicates in some versions; proceed either way.
+        }
+        let written = 0;
+        for (const f of GUIDE_FILES) {
+            const path = `${GUIDE_FOLDER}/${f.name}`;
+            try {
+                const existing = vault.getAbstractFileByPath(path);
+                if (existing instanceof TFile) {
+                    await vault.modify(existing, f.content);
+                } else {
+                    await vault.create(path, f.content);
+                }
+                written++;
+            } catch {
+                // Skip files that fail; report what we managed below.
+            }
+        }
+        new Notice(
+            `Randomness: guide installed — ${written} notes in ` +
+                `"${GUIDE_FOLDER}". Start with "Start Here".`
+        );
+        const start = vault.getAbstractFileByPath(
+            `${GUIDE_FOLDER}/Start Here.md`
+        );
+        if (start instanceof TFile) {
+            await this.plugin.app.workspace.getLeaf(true).openFile(start);
+        }
+    }
+
     private async seedExampleGenerators(root: string): Promise<void> {
         const vault = this.plugin.app.vault;
         const folder = normalizePath(`${root}/${EXAMPLES_SUBFOLDER}`);
@@ -768,4 +942,40 @@ export function stableSeedFor(source: string, position: number): number {
     h = Math.imul(h, 0x01000193);
     // Force positive 32-bit integer
     return h >>> 0;
+}
+
+/**
+ * Best-effort check for the standalone Dice Roller plugin. Uses the
+ * undocumented-but-stable `app.plugins` registry; wrapped defensively
+ * so API drift degrades to "no warning" rather than an exception.
+ */
+export function isDiceRollerPluginEnabled(app: App): boolean {
+    try {
+        const plugins = (app as unknown as {
+            plugins?: { enabledPlugins?: Set<string> };
+        }).plugins;
+        return plugins?.enabledPlugins?.has("obsidian-dice-roller") ?? false;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Force every open markdown view to re-render its reading/preview
+ * pane. Obsidian only runs post-processors when content renders, so
+ * settings that change what a post-processor does (the Dice Roller
+ * compat toggle) need this nudge to apply to already-open notes.
+ */
+function rerenderMarkdownViews(app: App): void {
+    try {
+        for (const leaf of app.workspace.getLeavesOfType("markdown")) {
+            const view = leaf.view as unknown as {
+                previewMode?: { rerender?: (full?: boolean) => void };
+            };
+            view.previewMode?.rerender?.(true);
+        }
+    } catch {
+        // Best-effort: a failed rerender just means the user reopens
+        // the note to see the change.
+    }
 }

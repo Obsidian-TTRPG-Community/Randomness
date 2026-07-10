@@ -26,6 +26,14 @@
 import { GeneratorFile, TableDecl } from "../engine/ast";
 import { findBlocks } from "./mdExtractor";
 import {
+    BLOCKS_PREFIX,
+    TAG_FILE_CAP,
+    extractMarkdownContentTables,
+    noteBaseName,
+    parseDirectTagCall,
+    parseDirectWikilinkCall,
+} from "./mdContent";
+import {
     FileSource,
     parseFileSource,
     resolveBundle,
@@ -44,6 +52,22 @@ export interface InlineScopeOptions {
     generatorRoot?: string;
     /** Optional max import depth, forwarded to resolveBundle. */
     maxImportDepth?: number;
+    /**
+     * Optional bare-filename fallback, forwarded to the resolver so
+     * `Use: [[Note]]` wikilinks resolve vault-wide (the plugin passes
+     * an Obsidian metadataCache-backed lookup).
+     */
+    basenameResolver?: (
+        basename: string,
+        callerDir: string
+    ) => string | null;
+    /**
+     * Optional tag lookup: vault paths of notes carrying `#tag`
+     * (merge Phase 4). Required for `#tag` roll expressions; the
+     * plugin backs it with the metadata cache. When absent, tag
+     * rolls throw a descriptive error.
+     */
+    tagFiles?: (tag: string) => string[];
 }
 
 /**
@@ -58,8 +82,51 @@ export function buildInlineBundle(
     expr: string,
     opts: InlineScopeOptions
 ): ResolvedBundle {
+    // Direct wikilink call (Dice Roller merge Phase 2):
+    // `rdm:[[Note^block-id]]` (optionally `|Column` or `|xy`) rolls
+    // that note's block-id table. Rewritten to a plain [@table] call
+    // plus a Use: of the note (prepended below), so locks, previews,
+    // and re-rolls behave like any other inline expression.
+    const direct = parseDirectWikilinkCall(expr);
+    if (direct !== null) expr = direct.tableCall;
+
+    // Direct tag roll (merge Phase 4): `#tag` rolls a random block
+    // from a random tagged note; `#tag|link` inserts a link to a
+    // random tagged note. The pick happens INSIDE the engine — the
+    // synthetic __tagroll table holds one item per tagged note — so
+    // seeded rolls stay deterministic and re-rolls re-pick the note.
+    let tagTable: TableDecl | null = null;
+    let tagUses: string[] = [];
+    const tag = direct === null ? parseDirectTagCall(expr) : null;
+    if (tag !== null) {
+        if (!opts.tagFiles) {
+            throw new Error(
+                `Tag rolls (#${tag.tag}) need the vault's tag index, ` +
+                    `which isn't available in this context.`
+            );
+        }
+        const files = opts.tagFiles(tag.tag).slice(0, TAG_FILE_CAP);
+        if (files.length === 0) {
+            throw new Error(`No notes found with #${tag.tag}.`);
+        }
+        if (tag.mode === "link") {
+            tagTable = makeTagTable(
+                files.map((p) => `[[${p.replace(/\.md$/i, "")}]]`)
+            );
+        } else {
+            tagTable = makeTagTable(
+                files.map(
+                    (p) => `[@${BLOCKS_PREFIX}${noteBaseName(p).toLowerCase()}]`
+                )
+            );
+            tagUses = files;
+        }
+        expr = "[@__tagroll]";
+    }
+
     // Step 1: synthetic main file holding just the expression.
     const synthetic = makeInlineFile(expr);
+    if (tagTable !== null) synthetic.tables.push(tagTable);
 
     // Step 2: walk in-note codeblocks. Each block becomes a virtual
     // file at notePath#blockN — uniquely identifiable so the resolver
@@ -71,7 +138,24 @@ export function buildInlineBundle(
     // directory, and table definitions across blocks share one
     // namespace — matching how the user perceives "this note's
     // generator state".
-    const virtualNoteContent = blocks.map((b) => b.content).join("\n\n");
+    let virtualNoteContent = blocks.map((b) => b.content).join("\n\n");
+    if (direct !== null) {
+        // Bring the linked note into scope ahead of the in-note blocks.
+        virtualNoteContent =
+            `Use:${direct.fileRef}` +
+            (virtualNoteContent.length > 0
+                ? "\n\n" + virtualNoteContent
+                : "");
+    }
+    if (tagUses.length > 0) {
+        // Tag block rolls import every candidate note so the engine's
+        // pick has all __blocks: tables in scope.
+        virtualNoteContent =
+            tagUses.map((p) => `Use:${p}`).join("\n") +
+            (virtualNoteContent.length > 0
+                ? "\n\n" + virtualNoteContent
+                : "");
+    }
     const virtualNotePath = opts.notePath;
     let virtualNoteFile: GeneratorFile | null = null;
     if (virtualNoteContent.length > 0) {
@@ -82,6 +166,29 @@ export function buildInlineBundle(
             virtualNotePath + ".__inline.ipt",
             virtualNoteContent
         );
+    }
+
+    // Markdown content tables in the containing note (Dice Roller merge
+    // Phase 2): block-id'd tables and lists are in scope for inline
+    // calls with no Use: line at all — same-note content Just Works,
+    // mirroring how same-note codeblock tables behave. Codeblock-defined
+    // tables win on name collision.
+    const mdTables = extractMarkdownContentTables(opts.noteSource);
+    if (mdTables.length > 0) {
+        if (virtualNoteFile === null) {
+            virtualNoteFile = parseFileSource(
+                virtualNotePath + ".__inline.ipt",
+                ""
+            );
+        }
+        const taken = new Set(
+            virtualNoteFile.tables.map((t) => t.name.toLowerCase())
+        );
+        for (const t of mdTables) {
+            if (taken.has(t.name.toLowerCase())) continue;
+            taken.add(t.name.toLowerCase());
+            virtualNoteFile.tables.push(t);
+        }
     }
 
     // Step 3: resolve any Use: directives the in-note file references.
@@ -149,6 +256,7 @@ function resolveSubBundle(
         generatorRoot: opts.generatorRoot,
         source: opts.source,
         maxImportDepth: opts.maxImportDepth,
+        basenameResolver: opts.basenameResolver,
     };
     return resolveBundle(fakePath, fakeSource, resolveOpts);
 }
@@ -168,6 +276,17 @@ function dirOf(p: string): string {
  * `__inline`. The engine treats it as a normal table and returns the
  * evaluated content.
  */
+/** Synthetic table backing a #tag roll: one item per tagged note. */
+function makeTagTable(items: string[]): TableDecl {
+    return {
+        name: "__tagroll",
+        type: "weighted",
+        shuffleTargets: [],
+        inTableSets: [],
+        items: items.map((rawContent) => ({ weight: 1, rawContent })),
+    };
+}
+
 function makeInlineFile(expr: string): GeneratorFile {
     const table: TableDecl = {
         name: "__inline",

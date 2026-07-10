@@ -9,8 +9,12 @@
 
 ## Getting started
 
-If you've just installed the plugin, the fastest way to get
-something running:
+New here? The friendliest start is **Settings → Randomness →
+Install the guide** — a small folder of notes, one per feature,
+every example live and rollable. This reference is the deep
+version: everything, in one searchable page.
+
+Prefer to dive straight in:
 
 1. Open **Settings → Randomness**.
 2. Type a folder name in **Generator root** (e.g. `Generators`).
@@ -183,6 +187,56 @@ they snarl and circle
 they freeze and watch
 they charge immediately
 ```
+
+### Dice modifiers
+
+(Added in the Dice Roller merge.) Suffixes attach directly to a
+dice term — no spaces:
+
+| Suffix | Meaning |
+| --- | --- |
+| `k` / `kh2` | Keep highest (1, or the given count). |
+| `kl2` | Keep lowest. |
+| `dl1` / `dh1` | Drop lowest / highest. |
+| `!` / `!3` / `!i` | Explode: extra die per max roll, chained up to N times (`i` ≈ 100). `!!` works too. |
+| `r` / `r3` / `ri` | Re-roll minimum rolls, up to N times. |
+| `s` / `sd` | Sort results ascending / descending. |
+| `u` | Re-roll until all results are unique. |
+| `cs>=5` | Count successes: each die scores +1 if it meets a condition, −1 on `-=N`, else 0. |
+
+Explode and re-roll take an optional condition that replaces
+their default trigger: `{1d6!i=!3}` explodes anything that isn't
+a 3; `{1d4r<3}` re-rolls 1s and 2s once. Conditions chain and
+any match counts (`{3d6cs>=5-=1}`).
+
+```text
+Table: stats
+Rolled 4d6, drop lowest: {4d6dl1}
+
+Table: attack
+Advantage: {2d20kh}+5 to hit, {1d8!}+3 slashing.
+
+Table: shadowrun
+{6d6cs>=5} hits.
+```
+
+> **Note.** A comparison written against a dice *sum* still works
+> the IPP3 way: `{3d6>=10}` is 1 when the total is ten or more.
+> Success counting only happens with the explicit `cs` marker.
+
+### Special dice
+
+| Syntax | Meaning |
+| --- | --- |
+| `{1d%}` | Percentile — d100. |
+| `{1d66%}` | Digit dice: one die per digit (d6, d6), read as digits (Traveller d66). |
+| `{4dF}` | Fudge/Fate dice — each die is −1, 0, or +1. |
+| `{1d[3,5]}` | Custom face range — a die that rolls 3–5. |
+
+Modifiers work on these too: `{4dF!}` explodes +1s,
+`{2d[3,5]kh}` keeps the higher of two range dice. (`1d[@table]`
+still means "sides from a table roll", as before — a face range
+is recognised only when the brackets hold exactly `min,max`.)
 
 ## Variables
 
@@ -469,6 +523,199 @@ reroll on a locked call strips the lock.
 > syntax inside the brackets is the expression body only. Use a
 > `randomness` codeblock in the same note to bring files
 > into scope.
+
+## Rolling on note content
+
+(Added in the Dice Roller merge.) Ordinary markdown tables and
+lists in your notes are rollable — no `.rdm` file needed. Give the
+block an Obsidian **block id** on the line below it:
+
+```text
+| Tavern |
+| ------ |
+| The Prancing Pony |
+| The Green Dragon |
+
+^taverns
+```
+
+Then roll it three ways:
+
+- **Inline, direct:** `` `rdm:[[Note^taverns]]` `` — rolls a random
+  row, with the usual 🔒/🎲 buttons. Locks work exactly as for any
+  other inline call.
+- **From a codeblock or generator:** `Use: [[Note]]` brings every
+  block-id table in that note into scope, then `[@taverns]` (and
+  `[@3 taverns]`, filters, deck picks…) works as usual.
+- **From another cell or table** — cells are raw generator syntax,
+  so a cell can contain `{2d6}` or `[@OtherTable]` and it evaluates
+  on the way out. Nested rollers come for free.
+
+Without a block id a table isn't rollable — the id is its name.
+
+### Multi-column tables
+
+A table with several columns produces several rollable names:
+
+```text
+| Name  | Trait  |
+| ----- | ------ |
+| Alia  | brave  |
+| Borin | greedy |
+
+^npcs
+```
+
+- `[@npcs]` — a whole random row (`Alia, brave`)
+- `[@npcs.Name]` / `[@npcs.Trait]` — a random cell from that column
+- `[@npcs.xy]` — a random cell from anywhere in the table
+
+Inline, the column pick is `` `rdm:[[Note^npcs|Trait]]` `` and the
+random cell is `` `rdm:[[Note^npcs|xy]]` ``.
+
+### Lookup tables in markdown
+
+A two-column table whose first header is a dice formula becomes a
+**lookup table**: the formula is rolled and the row whose range
+covers the result wins.
+
+```text
+| dice: 1d20 | Result   |
+| ---------- | -------- |
+| 1-2        | Ambush   |
+| 3-10       | Nothing  |
+| 11         | Merchant |
+| 13,14      | Storm    |
+| 15-20      | Ruins    |
+
+^encounters
+```
+
+Ranges accept `a-b` (en-dashes too), single values, and comma
+lists. The `dice:` prefix on the header is optional. The full
+modifier grammar works in the formula (`2d6kh1`, `1d%`, …).
+
+### Lists
+
+Bulleted and numbered lists work the same way — one entry per item
+(nested items are flattened):
+
+```text
+- a broken cart wheel
+- fresh wolf tracks
+- an abandoned campfire
+
+^omens
+```
+
+`` `rdm:[[Note^omens]]` `` or `Use: [[Note]]` + `[@omens]`.
+
+### Random lines, blocks, and tagged notes
+
+(Added in the Dice Roller merge, Phase 4.) Whole-note rolls need no
+block ids at all:
+
+```text
+`rdm:[[Rumours|line]]`     a random non-empty line from the note
+`rdm:[[Rumours|block]]`    a random block (paragraph, heading, …)
+`rdm:3[[Rumours|line]]`    three of them, comma-joined
+`rdm:#rumour`              a random block from a random note tagged
+                           #rumour (frontmatter or inline; nested
+                           tags match their parent)
+`rdm:#rumour|link`         a link to a random #rumour note
+```
+
+Tag rolls use Obsidian's own metadata cache — no Dataview required —
+and cap at 50 tagged notes per roll. The note pick happens inside the
+engine, so seeded rolls are reproducible and every re-roll may pick a
+different note.
+
+### How wikilinks resolve
+
+`[[Note]]` refs resolve the way Obsidian resolves links: relative
+to the calling note's folder, then the Generator root, then as a
+vault-rooted path (`[[Campaign/Tables^loot]]`), and finally by
+shortest path anywhere in the vault — so a link that works when you
+click it works when you roll it. The `^block-id`
+picks the table; the whole note's tables come into scope either
+way. Codeblock-defined tables win when a name collides, so a note
+can always override.
+
+## Dice tray
+
+(Added in the Dice Roller merge.) A sidebar tray for quick rolls —
+open it with the dices ribbon icon or the **Open dice tray**
+command. Tap d4–d100 to build a pool (right-click a die to remove
+one), toggle advantage/disadvantage for d20s, step a flat modifier,
+and Roll. The formula box takes anything the `dice:` syntax takes —
+`4d6dl1`, `[[Note^loot]]`, `#tag`, saved aliases — scoped to the
+active note, so `[@Table]` works there too. The ★ button saves the
+current formula under a name; saved formulas share the **Dice
+formula aliases** setting, so a formula saved in the tray also
+rolls inline as `dice: <name>`. Click any history row to re-roll
+it; click the big result to copy it.
+
+## Graphical dice
+
+(Added in the Dice Roller merge.) With **Settings → Randomness →
+Graphical dice** on, rolls animate: d6s tumble as a 3D cube, other
+dice spin and settle on the rolled face; dice dropped by keep/drop
+modifiers show dimmed, and multi-die rolls end with a total badge.
+Click anywhere on the dice to dismiss them early. The animation
+plays for dice-tray rolls and for inline `dice:` rolls carrying the
+`|render` flag (plain dice formulas only — the same limit Dice
+Roller had). It's decoration: the engine rolls first and the dice
+land on those exact values, so seeded rolls and locks behave
+identically with the animation on or off.
+
+## Dice Roller compatibility
+
+(Added in the Dice Roller merge.) Randomness can process inline
+`dice:` code spans written for the Dice Roller plugin — plus its
+`dice+:`, `dice-:`, and `dice-mod:` variants — so old notes keep
+rolling after you retire that plugin.
+
+Turn it on in **Settings → Randomness → Dice Roller compatibility**.
+It's off by default: leave it off while the separate Dice Roller
+plugin is still enabled, or both plugins will process the same
+spans.
+
+What works, in Dice Roller's own syntax:
+
+```text
+`dice: 1d20 + 5`          arithmetic, parens, exponents
+`dice: 4d6dl1`            all modifiers (kh/kl/dl/dh, !, !!, r, s, u)
+`dice: 3d6>=5`            bare conditions = success counting (Dice
+                          Roller semantics; rdm: uses the cs marker)
+`dice: d20` / `dice: 3d`  omitted values: 1 roll / d100 faces
+`dice: d%` `dice: 1d66%` `dice: 4dF` `dice: 1d[3,5]`
+`dice: [[Note^loot]]`     table rolls via ^block-ids
+`dice: 3[[Note^loot]]`    repeated rolls (also 1d4+1[[Note^loot]])
+`dice: [[Note^npcs]]|Trait`   column pick — and |xy for a random cell
+```
+
+Every compat span gets the same 🔒/🎲 buttons as `rdm:` — locks are
+the durable replacement for Dice Roller's result saving and
+`dice-mod:` (which are accepted as aliases of `dice:`).
+
+`|text(label)` shows your label and puts the rolled value in the
+hover tooltip (`dice: 1d20+2|text(Dexterity +2)`); `|form` shows
+the formula with the result. `dice-mod:` spans commit their roll
+into the note on first render — the lock form of Dice Roller's
+note-modifying roll. **Formula aliases** from Settings → Randomness
+→ Dice formula aliases work for every compat prefix: define
+`sneak = 4d6dl1` and `dice: sneak` rolls it. The remaining flags
+(`|nodice`, `|avg`, `|none`, `|noform`) are accepted and
+currently ignored. `|render` plays the graphical dice animation for
+plain dice formulas (see below). Whole-note
+rolls work: `dice: [[Note]]` picks a random block, `|line` a random
+line (block-type filters approximate to the block roll), and tag
+rolls `#tag` / `#tag|link` pick from one random tagged note. Still
+unsupported (clear errors): the every-file tag mode (`#tag|+`),
+stunt dice (`dS`), and Genesys narrative dice.
+
+`rdm:` also gains the repetition prefix on wikilink rolls:
+`` `rdm:3[[Note^loot]]` `` rolls three, joined with ", ".
 
 ## Escaping
 

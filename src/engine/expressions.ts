@@ -23,6 +23,7 @@
  */
 
 import { RNG } from "./rng";
+import { FaceSpec, parseDiceModifiers, rollModifiedDice } from "./dice";
 
 export type Value = number | string;
 
@@ -346,26 +347,54 @@ class ExprParser {
         // pattern.
         if (this.peek() === "d" || this.peek() === "D") {
             this.pos++;
-            let sides: number;
+            let faces: FaceSpec;
             const next = this.peek();
-            if (next === "[") {
-                // Sub-table call — evaluate as a value, expect numeric
-                const v = this.parseEmbeddedBracket();
-                sides = Math.floor(Number(v));
-                if (Number.isNaN(sides)) {
-                    throw new ExpressionError(
-                        "embedded expression for dice sides did not yield a number"
-                    );
+            if (next === "%") {
+                // Percentile: Xd% rolls X d100 dice.
+                this.pos++;
+                faces = { kind: "sides", sides: 100 };
+            } else if (next === "F" || next === "f") {
+                // Fudge/Fate dice: faces −1, 0, +1.
+                this.pos++;
+                faces = { kind: "fudge" };
+            } else if (next === "[") {
+                // Two forms share this syntax:
+                //   1d[3,5]      — custom face range (min, max)
+                //   1d[@dietype] — sub-table call yielding the sides (IPP3
+                //                  nesting; see the Nesting docs)
+                // A plain `min,max` body is never a valid embedded call, so
+                // sniff the raw content before deciding.
+                const close = this.source.indexOf("]", this.pos);
+                const body = close === -1 ? "" : this.source.slice(this.pos + 1, close);
+                const range = body.match(/^\s*(-?\d+)\s*,\s*(-?\d+)\s*$/);
+                if (range) {
+                    this.pos = close + 1;
+                    faces = {
+                        kind: "range",
+                        min: parseInt(range[1], 10),
+                        max: parseInt(range[2], 10),
+                    };
+                } else {
+                    // Sub-table call — evaluate as a value, expect numeric
+                    const v = this.parseEmbeddedBracket();
+                    const sides = Math.floor(Number(v));
+                    if (Number.isNaN(sides)) {
+                        throw new ExpressionError(
+                            "embedded expression for dice sides did not yield a number"
+                        );
+                    }
+                    faces = { kind: "sides", sides };
                 }
             } else if (next === "{") {
                 // Nested {...} expression
                 const v = this.parsePrimary(); // handles { case at line ~268
-                sides = Math.floor(Number(v));
+                const sides = Math.floor(Number(v));
                 if (Number.isNaN(sides)) {
                     throw new ExpressionError(
                         "nested expression for dice sides did not yield a number"
                     );
                 }
+                faces = { kind: "sides", sides };
             } else {
                 // Numeric sides (the common case)
                 let sidesStr = "";
@@ -380,11 +409,40 @@ class ExprParser {
                     throw new ExpressionError(
                         "expected dice sides after 'd'"
                     );
-                sides = parseInt(sidesStr, 10);
+                if (this.peek() === "%") {
+                    // Custom percent dice (Traveller d66 etc.): one die per
+                    // face digit, digits concatenated into the result.
+                    this.pos++;
+                    return this.rollCustomPercent(n, sidesStr);
+                }
+                faces = { kind: "sides", sides: parseInt(sidesStr, 10) };
             }
-            return this.ctx.rng.rollDice(n, sides);
+            // Modifier suffixes: kh/kl/dl/dh, !, !!, r, s, u, cs — see
+            // src/engine/dice.ts. Adjacent only; unknown text is left in
+            // place for the grammar to reject as before.
+            const { mods, pos } = parseDiceModifiers(this.source, this.pos);
+            this.pos = pos;
+            return rollModifiedDice(n, faces, mods, this.ctx.rng).total;
         }
         return n;
+    }
+
+    /**
+     * Custom percent dice: `{2d66%}` rolls, per set, one die per digit of
+     * the face string (d6, d6) and reads the results as digits (e.g. 63).
+     * Multiple sets sum.
+     */
+    private rollCustomPercent(count: number, faceDigits: string): number {
+        let total = 0;
+        for (let i = 0; i < count; i++) {
+            let digits = "";
+            for (const digitChar of faceDigits) {
+                const face = parseInt(digitChar, 10);
+                digits += String(this.ctx.rng.rollDie(face));
+            }
+            total += parseInt(digits, 10);
+        }
+        return total;
     }
 
     private parseIdentifierOrCall(): Value {
