@@ -13,7 +13,15 @@ export class RNG {
     private state: number;
 
     constructor(seed?: number) {
-        this.state = seed !== undefined ? (seed >>> 0) : (Date.now() >>> 0);
+        // Unseeded default draws from Math.random, NOT Date.now():
+        // a note render evaluates dozens of inline spans in the same
+        // millisecond, and time-identical seeds made every identical
+        // expression land on the same result ("Grinning Oak" eight
+        // rows in a row). Explicit seeds behave exactly as before.
+        this.state =
+            seed !== undefined
+                ? (seed >>> 0)
+                : (Math.random() * 0x100000000) >>> 0;
         // Avoid zero state (would produce zeros forever)
         if (this.state === 0) this.state = 1;
     }

@@ -7,6 +7,7 @@
  * explicit reps requests, and how header/footer wrap the output.
  */
 
+import { RNG } from "../../src/engine/rng";
 import { parseGeneratorFile } from "../../src/engine/fileParser";
 import { Evaluator } from "../../src/engine/evaluator";
 
@@ -14,6 +15,22 @@ function run(source: string, opts: ConstructorParameters<typeof Evaluator>[2] = 
     const file = parseGeneratorFile(source);
     return new Evaluator(file, [], opts).run();
 }
+
+describe("unseeded RNG default", () => {
+    test("back-to-back unseeded evaluations differ (no time-seed collision)", () => {
+        // Regression: RNG's default seed was Date.now(), so every
+        // inline span evaluated in the same render burst rolled
+        // identically — eight "Grinning Oak" taverns in a row.
+        const seqs = new Set<string>();
+        for (let i = 0; i < 8; i++) {
+            const rng = new RNG();
+            seqs.add(
+                Array.from({ length: 8 }, () => rng.nextU32()).join(",")
+            );
+        }
+        expect(seqs.size).toBeGreaterThan(1);
+    });
+});
 
 describe("Evaluator: reps and MaxReps", () => {
     test("default reps is 1 when neither caller nor file specifies", () => {

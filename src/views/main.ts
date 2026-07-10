@@ -271,39 +271,52 @@ export default class RandomnessPlugin extends Plugin {
         const source = await this.app.vault.read(file);
         const notePath = file.path;
 
-        // Step 1: collect every unique unfilled expression. We
-        // evaluate each one ONCE, then apply that result to every
-        // occurrence in the transform pass below.
-        const toEvaluate = new Map<string, InlineCall>();
-        transformAllInlineCalls(source, (call) => {
-            // Dice Roller compat spans only participate when the
-            // setting is on — otherwise they belong to the other
-            // plugin and we must not lock them.
-            if (
-                (call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX &&
-                !diceCompatEnabled(this)
-            ) {
-                return null;
-            }
-            if (call.locked === undefined) {
-                toEvaluate.set(callKey(call), call);
-            }
-            return null; // we're using transformAll just to walk; don't mutate
-        });
+        // Step 1: collect every unfilled call IN SOURCE ORDER with
+        // its per-expression occurrence index — the same indexing the
+        // renderer uses for previews. Each occurrence gets its own
+        // value: identical expressions roll independently, exactly
+        // like they render (Dice Roller parity — inn-name sheets put
+        // the same roll in every row and expect different names).
+        const compatGateOk = (call: InlineCall): boolean =>
+            (call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX ||
+            diceCompatEnabled(this);
+        const occKey = (key: string, occurrence: number): string =>
+            `${occurrence}\u0001${key}`;
+        const pending: Array<{
+            call: InlineCall;
+            key: string;
+            occurrence: number;
+        }> = [];
+        {
+            const counter = new Map<string, number>();
+            transformAllInlineCalls(source, (call) => {
+                // Dice Roller compat spans only participate when the
+                // setting is on — otherwise they belong to the other
+                // plugin and we must not lock them.
+                if (!compatGateOk(call)) return null;
+                const key = callKey(call);
+                const occurrence = counter.get(key) ?? 0;
+                counter.set(key, occurrence + 1);
+                if (call.locked === undefined) {
+                    pending.push({ call, key, occurrence });
+                }
+                return null; // walk only; don't mutate
+            });
+        }
 
-        // Step 2: evaluate each missing expression. Cached previews
-        // win — they're what the user saw on screen, so they're what
-        // should be committed (the lock-what-you-see invariant).
+        // Step 2: a value per occurrence. Cached previews win —
+        // they're what the user saw on screen, so they're what should
+        // be committed (the lock-what-you-see invariant).
         const results = new Map<string, string>();
         const failed: string[] = [];
-        for (const [key, call] of toEvaluate) {
+        for (const { call, key, occurrence } of pending) {
             const cached = this.previewRegistry.get({
                 sourcePath: notePath,
                 expr: key,
-                occurrence: 0,
+                occurrence,
             });
             if (cached !== undefined) {
-                results.set(key, cached);
+                results.set(occKey(key, occurrence), cached);
                 continue;
             }
             try {
@@ -312,17 +325,23 @@ export default class RandomnessPlugin extends Plugin {
                     notePath,
                     this
                 );
-                results.set(key, value);
+                results.set(occKey(key, occurrence), value);
             } catch {
                 failed.push(key);
             }
         }
 
-        // Step 3: apply the locks in a single source transform.
+        // Step 3: apply the locks in a single source transform,
+        // re-walking occurrences with the same counter.
         let locked = 0;
+        const applyCounter = new Map<string, number>();
         const newSource = transformAllInlineCalls(source, (call) => {
+            if (!compatGateOk(call)) return null;
+            const key = callKey(call);
+            const occurrence = applyCounter.get(key) ?? 0;
+            applyCounter.set(key, occurrence + 1);
             if (call.locked !== undefined) return null;
-            const value = results.get(callKey(call));
+            const value = results.get(occKey(key, occurrence));
             if (value === undefined) return null;
             locked++;
             return { ...call, locked: value };

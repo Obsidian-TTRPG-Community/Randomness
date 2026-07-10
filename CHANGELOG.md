@@ -122,6 +122,14 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   calling note's folder, then the Generator root, then vault-rooted.
 
 ### Fixed
+- **Identical expressions repeated the same result across a note.**
+  The engine's default RNG seed was `Date.now()` — a note render
+  evaluates every span in the same millisecond, so time-identical
+  seeds made every copy of an expression land on the same pick
+  (eight "Grinning Oak" taverns). Unseeded evaluations now draw
+  their seed from `Math.random()`; explicit seeds are unchanged.
+- "Lock all" now commits each occurrence's own on-screen value
+  instead of copying occurrence #1's result to every duplicate.
 - **Cross-note rolls now prefetch their target.** `dice: [[Note^id]]`
   injects its `Use:` line at bundle-build time — after the async
   prefetch had already run — so the target note never entered the
