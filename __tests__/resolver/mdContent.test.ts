@@ -172,10 +172,111 @@ describe("extractMarkdownContentTables", () => {
         expect(decls).toHaveLength(1);
         const items = decls[0].items;
         expect(items[1].rawContent).toBe("Bustling {1d8+5} x # Inn Rooms");
-        // Table rollers aren't pure formulas — literal text survives.
+        // Untranslatable cross-note rollers keep their literal text but
+        // lose the backticks so the engine's parser doesn't choke.
         expect(items[2].rawContent).toBe(
-            "Left as-is: `dice: [[Other^tbl]]`"
+            "Left as-is: dice: [[Other^tbl]]"
         );
+    });
+
+    test("backticked lookup header strips code wrapping before roll expr", () => {
+        // Real sheets write the header as a code span: `dice:1d100`.
+        // The x150 "unexpected character '`' at position 0" error came
+        // from feeding the backticks straight into the engine.
+        const md = [
+            "| `dice:1d100` | Encounter |",
+            "| ------------ | --------- |",
+            "| 1-50   | Goblins |",
+            "| 51-100 | Bandits |",
+            "",
+            "^enc",
+        ].join("\n");
+        const t = extractMarkdownContentTables(md)[0];
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("1d100");
+    });
+
+    test("padded trailing empty column still reads as a lookup table", () => {
+        // Real sheets pad every row with a trailing empty column
+        // (`| key | value |     |`). Without trimming it, the table fell
+        // through to multi-column mode and joined the key into the
+        // result ("01-30, Creature, resident").
+        const md = [
+            "| `dice:1d100` | Underworld |     |",
+            "| ----------- | ---------- | --- |",
+            "| 01-30 | Creature, resident |     |",
+            "| 31-100 | Creature, unique |     |",
+            "",
+            "^und",
+        ].join("\n");
+        const t = extractMarkdownContentTables(md)[0];
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("1d100");
+        expect(t.items[0].rawContent).toBe("Creature, resident");
+        expect(t.items[0].rawContent).not.toContain("01-30");
+    });
+
+    test("paragraph block with a ^id becomes a one-item table", () => {
+        // Sheets use small paragraph blocks as aliases: the block's
+        // only content is another roll.
+        const md = [
+            "`dice:[[Encounter Tables#^underworld]]`",
+            "",
+            "^encounter-underworld-lawful-day",
+        ].join("\n");
+        const decls = extractMarkdownContentTables(md, "Encounter Tables");
+        const alias = decls.find(
+            (d) => d.name === "encounter-underworld-lawful-day"
+        );
+        expect(alias).toBeDefined();
+        expect(alias!.items).toHaveLength(1);
+        // Self-note roller → a direct engine call.
+        expect(alias!.items[0].rawContent).toBe("[@underworld]");
+    });
+
+    test("embedded self-note roller becomes a direct [@id] call", () => {
+        const md = [
+            "| dice:1d6 | Result |",
+            "| -------- | ------ |",
+            "| **1** | See `dice:[[Encounter Tables#^sub]]` |",
+            "",
+            "^main",
+        ].join("\n");
+        const items = extractMarkdownContentTables(
+            md,
+            "Encounter Tables"
+        )[0].items;
+        expect(items[0].rawContent).toBe("See [@sub]");
+    });
+
+    test("self-note match is case-insensitive", () => {
+        const md = [
+            "| dice:1d6 | Result |",
+            "| -------- | ------ |",
+            "| **1** | See `dice:[[encounter tables#^sub]]` |",
+            "",
+            "^main",
+        ].join("\n");
+        const items = extractMarkdownContentTables(
+            md,
+            "Encounter Tables"
+        )[0].items;
+        expect(items[0].rawContent).toBe("See [@sub]");
+    });
+
+    test("cross-note embedded roller keeps literal text, backticks stripped", () => {
+        const md = [
+            "| dice:1d6 | Result |",
+            "| -------- | ------ |",
+            "| **1** | See `dice:[[Other Note#^sub]]` |",
+            "",
+            "^main",
+        ].join("\n");
+        const items = extractMarkdownContentTables(
+            md,
+            "Encounter Tables"
+        )[0].items;
+        expect(items[0].rawContent).toBe("See dice:[[Other Note#^sub]]");
     });
 
     test("bare dice header without dice: prefix also triggers lookup", () => {

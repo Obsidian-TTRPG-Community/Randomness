@@ -155,7 +155,10 @@ const LIST_ITEM_RE = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/;
  * Extract every block-id'd markdown table and list in `md` as engine
  * TableDecls. Blocks without a `^block-id` are skipped.
  */
-export function extractMarkdownContentTables(md: string): TableDecl[] {
+export function extractMarkdownContentTables(
+    md: string,
+    selfBase?: string
+): TableDecl[] {
     const lines = md.split(/\r?\n/);
     const out: TableDecl[] = [];
     let i = 0;
@@ -194,13 +197,35 @@ export function extractMarkdownContentTables(md: string): TableDecl[] {
             i = next;
             continue;
         }
+        // Paragraph with a ^block-id: a one-item table. Dice Roller's
+        // roller accepted ANY block, and real sheets use small
+        // paragraph blocks as aliases — a block whose only content is
+        // another roll ("^underworld-lawful-day" → roll underworld).
+        if (isParagraphLine(lines[i])) {
+            const start = i;
+            while (i < lines.length && isParagraphLine(lines[i])) i++;
+            const { id, next } = findBlockId(lines, i);
+            if (id !== null) {
+                const text = lines
+                    .slice(start, i)
+                    .map((l) => l.trim())
+                    .join(" ")
+                    .trim();
+                if (text !== "") out.push(makeTable(id, [text]));
+            }
+            i = next > i ? next : i;
+            continue;
+        }
         i++;
     }
     // Embedded `dice: …` spans in cell text roll as part of the
     // result (see rewriteEmbeddedDiceSpans).
     for (const decl of out) {
         for (const item of decl.items) {
-            item.rawContent = rewriteEmbeddedDiceSpans(item.rawContent);
+            item.rawContent = rewriteEmbeddedDiceSpans(
+                item.rawContent,
+                selfBase
+            );
         }
     }
     return out;
@@ -270,6 +295,21 @@ function makeTable(name: string, items: string[]): TableDecl {
 }
 
 /**
+ * A line that can belong to a plain paragraph block: non-empty and
+ * not one of the structures the extractor handles specially (tables,
+ * lists, headings, quotes/callouts, fences, block-id lines).
+ */
+function isParagraphLine(line: string): boolean {
+    const t = line.trim();
+    if (t === "") return false;
+    if (TABLE_ROW_RE.test(line)) return false;
+    if (LIST_ITEM_RE.test(line)) return false;
+    if (BLOCK_ID_RE.test(t)) return false;
+    if (/^(#{1,6}\s|>|```|~~~|---\s*$)/.test(t)) return false;
+    return true;
+}
+
+/**
  * Rewrite `dice: …` code spans EMBEDDED IN CELL TEXT into engine dice
  * expressions so they roll as part of the result. Dice Roller
  * rendered results through MarkdownRenderer, which revived such spans
@@ -279,16 +319,38 @@ function makeTable(name: string, items: string[]): TableDecl {
  * happens here, at extraction time. Only pure formulas are rewritten;
  * table/tag rollers and untranslatable spans keep their literal text.
  */
-function rewriteEmbeddedDiceSpans(cell: string): string {
+function rewriteEmbeddedDiceSpans(
+    cell: string,
+    selfBase?: string
+): string {
     return cell.replace(/`dice:([^`]*)`/gi, (whole, inner: string) => {
         try {
             const { expr } = translateDiceExpression(inner.trim());
-            return expr.startsWith("{") && expr.endsWith("}")
-                ? expr
-                : whole;
+            // Pure formula → engine dice.
+            if (expr.startsWith("{") && expr.endsWith("}")) return expr;
+            // Table roller pointing back at THIS note → a direct
+            // engine call ([@id], reps and column picks included).
+            // Case-insensitive: Obsidian links are, and corpus files
+            // really do write [[encounter Tables]].
+            const direct = parseDirectWikilinkCall(expr);
+            if (direct !== null && selfBase !== undefined) {
+                const target = wikilinkToPath(direct.fileRef);
+                if (
+                    target !== null &&
+                    noteBaseName(target).toLowerCase() ===
+                        selfBase.toLowerCase()
+                ) {
+                    return direct.tableCall;
+                }
+            }
         } catch {
-            return whole;
+            // fall through to the backtick strip below
         }
+        // Untranslatable (cross-note rollers, unsupported syntax):
+        // drop the backticks so the engine's content parser doesn't
+        // choke on them — the span text shows literally instead of
+        // erroring the whole cell.
+        return "dice:" + inner;
     });
 }
 
@@ -323,12 +385,29 @@ function normaliseLookupKey(s: string): string {
 
 /** Convert one markdown table (with block id) into TableDecl(s). */
 function tableToDecls(id: string, rowLines: string[]): TableDecl[] {
-    const headers = splitRow(rowLines[0]);
-    const body = rowLines
+    let headers = splitRow(rowLines[0]);
+    let body = rowLines
         .slice(2)
         .map(splitRow)
         .filter((cells) => cells.some((c) => c !== ""));
     if (body.length === 0) return [];
+
+    // Real sheets pad every row with a trailing empty column
+    // (`| key | value |     |`). Drop columns that are empty in the
+    // header AND in every body row, so a padded two-column lookup
+    // table is still recognised as one instead of falling through to
+    // the multi-column path (which would join the key cell into the
+    // result — "01-30, Creature, resident").
+    let width = Math.max(headers.length, ...body.map((r) => r.length));
+    while (
+        width > 1 &&
+        (headers[width - 1] ?? "") === "" &&
+        body.every((r) => (r[width - 1] ?? "") === "")
+    ) {
+        width--;
+    }
+    headers = headers.slice(0, width);
+    body = body.map((r) => r.slice(0, width));
 
     // Lookup form: two columns, dice-formula header, range-like keys.
     if (headers.length === 2 && looksLikeDiceFormula(headers[0])) {
@@ -337,7 +416,13 @@ function tableToDecls(id: string, rowLines: string[]): TableDecl[] {
             (k) => RANGE_RE.test(k) || NUM_LIST_RE.test(k) || /^\d+$/.test(k)
         );
         if (rangeLike) {
-            const rollExpr = headers[0].replace(/^dice:\s*/i, "").trim();
+            // Headers arrive as `dice:1d100` (backticked code spans)
+            // in real sheets — strip code wrapping before the prefix.
+            const rollExpr = headers[0]
+                .replace(/`/g, "")
+                .trim()
+                .replace(/^dice:\s*/i, "")
+                .trim();
             const items: TableItem[] = [];
             for (const row of body) {
                 const key = normaliseLookupKey(row[0] ?? "");

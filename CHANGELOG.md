@@ -122,6 +122,36 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   calling note's folder, then the Generator root, then vault-rooted.
 
 ### Fixed
+- **Padded lookup tables no longer leak their range keys.** Sheets
+  that pad every row with a trailing empty column
+  (`| 01-30 | Creature, resident |     |`) failed lookup detection
+  (which required exactly two columns) and fell through to the
+  multi-column path, which joined the key cell into the result — a
+  roll showed "01-30, Creature, resident" and self-referential reroll
+  tables stacked keys ("35-36, 01-30, Creature, resident"). Trailing
+  columns that are empty in the header and every row are now trimmed
+  before the table shape is decided.
+- **Lookup headers written as code spans now parse.** Real sheets
+  write the dice header as `` `dice:1d100` ``; the backticks were fed
+  straight into the engine, erroring x150 with "unexpected character
+  '`' at position 0". Code wrapping is now stripped before the roll
+  expression is read.
+- **Paragraph blocks with a `^block-id` are rollable one-item tables.**
+  Dice Roller rolled any block, and real sheets use small paragraph
+  blocks as aliases (`^encounter-underworld-lawful-day` whose only
+  content is another roll). Such blocks now resolve instead of being
+  skipped.
+- **Embedded rollers that point back at their own note roll.** A
+  `` `dice:[[This Note#^id]]` `` span inside a cell now translates to a
+  direct engine call (`[@id]`, reps and column picks included) so
+  nested rollers actually roll. The self-note match is
+  case-insensitive, matching Obsidian's link resolution
+  (`[[encounter tables]]` finds "Encounter Tables").
+- **Untranslatable embedded rollers degrade instead of erroring.**
+  Cross-note `` `dice:[[Other^id]]` `` spans and unsupported syntax
+  keep their literal text but lose the backticks, so the engine's
+  content parser shows the span verbatim rather than erroring the
+  whole cell.
 - **Unlock now works on duplicated expressions in Live Preview.**
   Live Preview renders each row/widget separately (with no section
   info), and a locked span could pair with its first UNFILLED twin

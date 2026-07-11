@@ -285,7 +285,10 @@ export function parseFileSource(absPath: string, source: string): GeneratorFile 
         // named by their id (see mdContent.ts). Codeblock-defined tables
         // win on name collision, so notes can always override.
         const taken = new Set(file.tables.map((t) => t.name.toLowerCase()));
-        for (const t of extractMarkdownContentTables(source)) {
+        for (const t of extractMarkdownContentTables(
+            source,
+            noteBaseName(absPath)
+        )) {
             if (taken.has(t.name.toLowerCase())) continue;
             taken.add(t.name.toLowerCase());
             file.tables.push(t);

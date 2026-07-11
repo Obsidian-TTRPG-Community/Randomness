@@ -173,7 +173,10 @@ export function buildInlineBundle(
     // calls with no Use: line at all — same-note content Just Works,
     // mirroring how same-note codeblock tables behave. Codeblock-defined
     // tables win on name collision.
-    const mdTables = extractMarkdownContentTables(opts.noteSource);
+    const mdTables = extractMarkdownContentTables(
+        opts.noteSource,
+        noteBaseName(opts.notePath)
+    );
     if (mdTables.length > 0) {
         if (virtualNoteFile === null) {
             virtualNoteFile = parseFileSource(
