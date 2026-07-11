@@ -118,6 +118,29 @@ whatever licence their authors chose. The plugin does not include
 or distribute generator content; the corpus in the dev repo is for
 testing only.
 
+## Network use & privacy
+
+Randomness works fully offline. All core features — dice, table and
+generator rolls, locks, the dice tray, the reference and guide, and the
+scripting API — run entirely on your device and never touch the network.
+
+The plugin only makes network requests when you explicitly ask it to
+download optional content, and only to public GitHub repositories under
+the [Obsidian-TTRPG-Community](https://github.com/Obsidian-TTRPG-Community)
+organisation:
+
+- **Portrait art pack** — clicking "Install portrait pack" downloads a
+  release asset from
+  `github.com/Obsidian-TTRPG-Community/Randomness`. A `data.json`
+  override lets you point at a self-hosted pack instead.
+- **Starter content bundles** — the optional content installers fetch
+  `.rdm` generators and templates from
+  `raw.githubusercontent.com/Obsidian-TTRPG-Community/…`.
+
+These are read-only downloads triggered by a button press. Randomness
+sends no data anywhere, contains no telemetry or analytics, and never
+loads anything over the network on its own.
+
 ## Development
 
 Pure-TypeScript engine and resolver, no Obsidian imports outside
