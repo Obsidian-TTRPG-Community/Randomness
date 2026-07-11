@@ -4,6 +4,19 @@ All notable changes to the Randomness plugin.
 
 ## Unreleased
 
+## 1.3.2
+
+### Fixed
+- **A broken `Use:` no longer breaks every inline roll in a note.** A single
+  unresolvable `Use:` in one `randomness` codeblock used to make *every* inline
+  `rdm:` call in the same note render a "target not found" error. Now a plain
+  `rdm:[@table]` call ignores an unrelated broken import and still rolls; only
+  explicit `rdm:[[Note]]` and `#tag` calls report a genuinely missing target.
+- **Documentation examples stay inert.** A `randomness` codeblock shown inside a
+  larger display fence (e.g. a ````text wrapper) is no longer extracted and run,
+  and inline `rdm:`/`dice:` spans inside fenced code blocks are no longer
+  evaluated — so guide and reference examples display instead of executing.
+
 ## 1.3.1
 
 ### Fixed
