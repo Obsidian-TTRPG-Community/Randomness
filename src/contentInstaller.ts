@@ -25,6 +25,54 @@ export interface BundleDestinations {
     templatesDest: string;
 }
 
+/**
+ * Add a folder to Templater's "excluded folders" (ignore_folders_on_creation)
+ * so its "trigger on new file creation" never runs files created there. Used
+ * before writing a bundle's template files, which contain `<%* … %>` code —
+ * otherwise Templater would execute each template the moment it lands (prompting
+ * for town/size and overwriting the template). No-op when Templater is absent or
+ * the folder is already excluded. Returns true if it added the exclusion.
+ */
+export async function ensureTemplaterIgnoresFolder(
+    plugin: RandomnessPlugin,
+    folder: string
+): Promise<boolean> {
+    try {
+        const app = plugin.app as unknown as {
+            plugins?: {
+                plugins?: Record<
+                    string,
+                    {
+                        settings?: {
+                            ignore_folders_on_creation?: { folder: string }[];
+                        };
+                        save_settings?: () => unknown;
+                        saveSettings?: () => unknown;
+                    }
+                >;
+            };
+        };
+        const tp = app.plugins?.plugins?.["templater-obsidian"];
+        const list = tp?.settings?.ignore_folders_on_creation;
+        if (!tp || !Array.isArray(list)) return false;
+        const norm = normalizePath(folder).replace(/\/+$/, "");
+        if (norm === "") return false;
+        const already = list.some(
+            (e) =>
+                e &&
+                typeof e.folder === "string" &&
+                normalizePath(e.folder).replace(/\/+$/, "") === norm
+        );
+        if (already) return false;
+        list.push({ folder: norm });
+        if (typeof tp.save_settings === "function") await tp.save_settings();
+        else if (typeof tp.saveSettings === "function") await tp.saveSettings();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export async function installContentBundle(
     plugin: RandomnessPlugin,
     baseUrl: string,
@@ -32,6 +80,12 @@ export async function installContentBundle(
 ): Promise<number> {
     const base = baseUrl.replace(/\/+$/, "");
     const adapter = plugin.app.vault.adapter;
+
+    // Keep Templater from executing the template files as we write them: with
+    // "trigger on new file creation" on, it would run each template's `<%* … %>`
+    // the moment it lands, prompting for town/size and overwriting the template.
+    // The templates folder should never auto-run — exclude it before writing.
+    await ensureTemplaterIgnoresFolder(plugin, dests.templatesDest);
 
     const index = JSON.parse(
         (await requestUrl({ url: `${base}/index.json` })).text
@@ -132,7 +186,7 @@ work raw — in any note:
 
 \`\`\`randomness
 Use: shop.rdm
-[@FantasyShop]
+[@TF-Shop]
 \`\`\`
 
 *(This note is rewritten when you re-run the Fantasy Hub install —
