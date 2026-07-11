@@ -179,7 +179,10 @@ describe("scope: Use: from in-note codeblocks", () => {
         expect(out).toBe("Hi Dawn!");
     });
 
-    test("missing Use: target propagates the resolver error", () => {
+    test("a missing Use: in a note codeblock is tolerated for a plain inline call", () => {
+        // Regression: a plain `[@T]` call must not inherit a broken
+        // `Use:` from some codeblock in the same note. The missing
+        // import is skipped and T (defined right here) still rolls.
         const note = [
             "```randomness",
             "Use:missing.ipt",
@@ -187,10 +190,38 @@ describe("scope: Use: from in-note codeblocks", () => {
             "x",
             "```",
         ].join("\n");
+        const out = runInline("[@T]", {
+            notePath: "/v/note.md",
+            noteSource: note,
+        });
+        expect(out).toBe("x");
+    });
+
+    test("a bad Use: in one codeblock doesn't break an unrelated table in another", () => {
+        const note = [
+            "```randomness",
+            "Use:missing.ipt",
+            "```",
+            "",
+            "```randomness",
+            "Table: Foo",
+            "ok",
+            "```",
+        ].join("\n");
+        const out = runInline("[@Foo]", {
+            notePath: "/v/note.md",
+            noteSource: note,
+        });
+        expect(out).toBe("ok");
+    });
+
+    test("an explicit direct wikilink to a missing note still fails loud", () => {
+        // The user pointed AT that note, so a missing target is a real
+        // error they should see — not silently skipped.
         expect(() =>
-            runInline("[@T]", {
+            runInline("[[Missing^block]]", {
                 notePath: "/v/note.md",
-                noteSource: note,
+                noteSource: "# no codeblocks",
             })
         ).toThrow(/not found/);
     });

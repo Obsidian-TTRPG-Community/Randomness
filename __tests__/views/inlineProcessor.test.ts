@@ -420,14 +420,16 @@ describe("buildInlineProcessor: pipeline", () => {
         expect(secondResult).toBe(firstResult);
     });
 
-    test("evaluation error renders an inline error span", async () => {
+    test("a missing Use: in a note codeblock no longer poisons a plain inline call", async () => {
         const p = fakePlugin({
             files: { "note.md": "" },
         });
         const proc = buildInlineProcessor(p as any);
-        // Reference a Use: target that doesn't exist — this propagates
-        // a ResolveError through the prefetcher's resolveBundle pass.
-        // We simulate it by embedding the Use: in the note source.
+        // A codeblock imports a file that doesn't exist AND defines T.
+        // A plain `rdm:[@T]` must NOT inherit the missing-import failure:
+        // the unresolvable Use: is skipped and T (defined right here)
+        // still rolls. (Regression — this used to render an error span
+        // on every inline call in the note.)
         const noteSource = [
             "```randomness",
             "Use:missing-file.ipt",
@@ -440,7 +442,10 @@ describe("buildInlineProcessor: pipeline", () => {
         p.app.vault.adapter = makeFakeAdapter({ "note.md": noteSource });
         const wrap = containerWithCode("rdm:[@T]");
         await proc(wrap, fakeCtx("note.md"));
-        expect(wrap.querySelector(".randomness-inline-error")).not.toBeNull();
+        expect(wrap.querySelector(".randomness-inline-error")).toBeNull();
+        expect(
+            wrap.querySelector(".randomness-inline-result")?.textContent
+        ).toBe("x");
     });
 
     test("inline call to unknown table in a note with no codeblocks renders an error span", async () => {

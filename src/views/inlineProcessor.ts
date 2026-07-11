@@ -74,9 +74,19 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
         el: HTMLElement,
         ctx: MarkdownPostProcessorContext
     ): Promise<void> {
-        // Walk all <code> elements. Each one is a potential inline
+        // Walk inline <code> elements. Each one is a potential inline
         // call. Snapshot the list because we mutate as we go.
-        const codeNodes = Array.from(el.querySelectorAll("code"));
+        //
+        // Skip any <code> inside a <pre>: that's a fenced code block
+        // (a ```text example in the guide/reference, or a ```randomness
+        // block owned by the codeblock processor), NOT an inline call.
+        // Evaluating those would run example syntax that docs only mean
+        // to DISPLAY — turning `rdm:[@Foo]` shown as syntax into a live
+        // roll or a "target not found" error. Inline calls are never
+        // inside a <pre>, so this is safe.
+        const codeNodes = Array.from(el.querySelectorAll("code")).filter(
+            (c) => c.closest("pre") === null
+        );
         // Which prefixes are live: `rdm:` always; the Dice Roller
         // compat prefixes only when the setting is on (merge Phase 3)
         // so the standalone Dice Roller plugin can keep owning

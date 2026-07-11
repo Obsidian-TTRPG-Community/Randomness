@@ -204,10 +204,22 @@ export function buildInlineBundle(
         if (virtualNoteFile.uses.length > 0) {
             // Use resolveBundle to walk the Use: graph from the
             // synthetic in-note file's perspective.
+            //
+            // For a PLAIN inline call (rdm:[@Table]) the note's Use:
+            // lines are ambient — they come from codeblocks that happen
+            // to live in the same note, not from anything the call asked
+            // for. A single broken Use: in one of those must not abort
+            // this call, so resolve tolerantly. For an EXPLICIT call
+            // (rdm:[[Note]] or a #tag roll) the Use: was injected by THIS
+            // call and pointing at a missing note is a real error the
+            // user should see, so keep failing loud.
+            const tolerantMissingUse =
+                direct === null && tagUses.length === 0;
             const subBundle = resolveSubBundle(
                 virtualNotePath,
                 virtualNoteFile,
-                opts
+                opts,
+                tolerantMissingUse
             );
             for (const extra of subBundle.extras) extras.push(extra);
             for (const p of subBundle.loadedPaths) {
@@ -246,7 +258,8 @@ export function buildInlineBundle(
 function resolveSubBundle(
     virtualPath: string,
     virtualFile: GeneratorFile,
-    opts: InlineScopeOptions
+    opts: InlineScopeOptions,
+    tolerantMissingUse: boolean
 ): ResolvedBundle {
     // Reconstruct a minimal source string that, when parsed, yields the
     // same `uses` list. The order matters — declaration order is
@@ -260,6 +273,7 @@ function resolveSubBundle(
         source: opts.source,
         maxImportDepth: opts.maxImportDepth,
         basenameResolver: opts.basenameResolver,
+        onMissingUse: tolerantMissingUse ? "skip" : "throw",
     };
     return resolveBundle(fakePath, fakeSource, resolveOpts);
 }

@@ -105,6 +105,21 @@ export interface ResolveOptions {
         basename: string,
         callerDir: string
     ) => string | null;
+    /**
+     * What to do when a Use: target can't be resolved.
+     *
+     * - "throw" (default): raise a ResolveError. Right for direct file
+     *   rolls, randomness codeblocks, and explicit Use:/wikilink
+     *   references: the user asked for that file, so failing loud is the
+     *   helpful thing.
+     * - "skip": silently drop the unresolvable import and carry on. Used
+     *   for the ambient note scope behind a plain inline rdm: call, so
+     *   one bad Use: in some codeblock elsewhere in the note does not
+     *   abort every unrelated inline call in that note. If the call
+     *   actually needed a table from the missing file, evaluation still
+     *   fails afterwards with a clear "unknown table" error.
+     */
+    onMissingUse?: "throw" | "skip";
 }
 
 const DEFAULT_MAX_IMPORT_DEPTH = 32;
@@ -347,6 +362,13 @@ export function resolveBundle(
                     callerDir: fromDir,
                 });
                 if (resolved === null) {
+                    // Tolerant mode (ambient inline note scope): a Use:
+                    // in one of the note's codeblocks that can't resolve
+                    // must not abort evaluation of unrelated inline calls
+                    // in the same note. Drop the import and keep walking;
+                    // a call that genuinely needs a table from it fails
+                    // later with a clear "unknown table".
+                    if (opts.onMissingUse === "skip") continue;
                     // Missing Use: target — surfaced as an error so the
                     // UI can flag it. (Could be made warning-only via an
                     // option later, but failing loud is the right default.)

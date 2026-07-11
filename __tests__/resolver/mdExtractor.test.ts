@@ -206,3 +206,53 @@ describe("mdExtractor: edge cases", () => {
         expect(extractRandomnessCodeblocks(md)).toBe("A\n``` notclose");
     });
 });
+
+describe("mdExtractor: display fences (nested randomness stays inert)", () => {
+    test("a ```randomness inside a ````text wrapper is NOT extracted", () => {
+        // Regression: guide/reference notes show a ```randomness example
+        // by wrapping it in a ````text fence. That inner block must be
+        // displayed, never extracted-and-run.
+        const md = [
+            "Here's an example:",
+            "",
+            "````text",
+            "```randomness",
+            "Use: [[Missing]]",
+            "Tonight: [@taverns]",
+            "```",
+            "````",
+            "",
+            "Done.",
+        ].join("\n");
+        expect(extractRandomnessCodeblocks(md)).toBe("");
+        expect(findBlocks(md)).toHaveLength(0);
+    });
+
+    test("a real randomness block AFTER a display fence is still extracted", () => {
+        const md = [
+            "````text",
+            "```randomness",
+            "Use: [[Missing]]",
+            "```",
+            "````",
+            "",
+            "```randomness",
+            "Table: T",
+            "ok",
+            "```",
+        ].join("\n");
+        expect(extractRandomnessCodeblocks(md)).toBe("Table: T\nok");
+    });
+
+    test("a randomness fence inside a bare ``` block is NOT extracted", () => {
+        const md = [
+            "```",
+            "```randomness",
+            "Table: T",
+            "x",
+            "```",
+            "```",
+        ].join("\n");
+        expect(extractRandomnessCodeblocks(md)).toBe("");
+    });
+});

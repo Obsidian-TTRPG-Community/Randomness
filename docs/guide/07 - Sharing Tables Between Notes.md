@@ -24,14 +24,13 @@ A note's block-id tables come along when you name the note:
 ```
 
 Or bring ALL of another note's tables into this note with a
-codeblock:
+`randomness` codeblock. Add a `Use:` line naming the note (shown
+here indented so it displays instead of running):
 
-````text
-```randomness
-Use: [[Locations/Taverns]]
-Tonight: [@taverns]
-```
-````
+    ```randomness
+    Use: [[Locations/Taverns]]
+    Tonight: [@taverns]
+    ```
 
 After that `Use:` line, inline calls in the same note can see
 those tables too.

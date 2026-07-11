@@ -23,6 +23,10 @@
  *   - Tab-indented opening fences — NOT supported (CommonMark says no).
  *   - Nested codeblocks — the outer fence wins; inner backticks are
  *     content as long as they don't match the outer fence's length.
+ *   - A `randomness` fence nested inside a LARGER fence of any language
+ *     (e.g. a ````text block showing a ```randomness example) is part
+ *     of that outer block's content and is NOT extracted — so docs can
+ *     display generator syntax without it running.
  */
 
 /** Public entry — returns the concatenated virtual .ipt source. */
@@ -98,8 +102,15 @@ function findBlocksUncached(md: string): CodeblockSpan[] {
                 break;
             }
         }
-        const content = lines.slice(startContent, closeLine).join("\n");
-        out.push({ openLine, closeLine, content, label: open.label });
+        // Only `randomness` fences contribute a block. Any OTHER fence
+        // — ```text, ````text, a bare ``` code block, etc. — is skipped
+        // as a unit, INCLUDING a randomness fence nested inside it. That
+        // is what keeps a ```randomness example shown inside a ````text
+        // display fence inert instead of extracted-and-run.
+        if (open.lang === "randomness") {
+            const content = lines.slice(startContent, closeLine).join("\n");
+            out.push({ openLine, closeLine, content, label: open.label });
+        }
         i = closeLine + 1;
     }
     return out;
@@ -108,31 +119,35 @@ function findBlocksUncached(md: string): CodeblockSpan[] {
 interface OpeningFence {
     fenceChar: "`" | "~";
     fenceLen: number;
+    /** Info-string language, lowercased. "" for a bare fence. */
+    lang: string;
     label?: string;
 }
 
 /**
- * Match an opening fence on a line. Returns null if the line isn't an
- * opening `randomness` fence.
+ * Match an opening code fence on a line — ANY language, or none.
+ * Returns null only if the line isn't an opening fence at all.
+ *
+ * We match every fence (not just `randomness`) so the scanner can skip
+ * OVER a non-randomness fenced block that merely shows a randomness
+ * example (e.g. a ````text wrapper). The info string is optional, so a
+ * bare ``` code block is recognised too.
  *
  * Accepted shapes (with up to 3 leading spaces):
- *   ```randomness
- *   ```randomness:label
- *   ~~~~randomness   ← four tildes is fine
- *   ```RANDOMNESS    ← case-insensitive
+ *   ```randomness  /  ```randomness:label  /  ```text  /  ```  /  ~~~~x
  */
 function matchOpeningFence(line: string): OpeningFence | null {
     // Allow up to 3 spaces of indent, per CommonMark.
-    const m = line.match(/^ {0,3}(`{3,}|~{3,})\s*([A-Za-z][\w:-]*)\s*$/);
+    const m = line.match(/^ {0,3}(`{3,}|~{3,})\s*([A-Za-z][\w:-]*)?\s*$/);
     if (!m) return null;
     const fence = m[1];
-    const info = m[2];
-    // Split label off the info string
+    const info = m[2] ?? "";
+    // Split label off the info string ("randomness:main" -> lang, "main").
     const [lang, ...rest] = info.split(":");
-    if (lang.toLowerCase() !== "randomness") return null;
     return {
         fenceChar: fence[0] === "`" ? "`" : "~",
         fenceLen: fence.length,
+        lang: lang.toLowerCase(),
         label: rest.length > 0 ? rest.join(":") : undefined,
     };
 }
