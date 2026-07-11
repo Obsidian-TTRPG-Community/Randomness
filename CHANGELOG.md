@@ -4,6 +4,20 @@ All notable changes to the Randomness plugin.
 
 ## Unreleased
 
+## 1.3.1
+
+### Fixed
+- **Installing Fantasy Hub content no longer sets off Templater prompts.** The
+  templates destination is now added to Templater's excluded-folders list before
+  the bundle is written, so Templater's "trigger on new file creation" no longer
+  executes the templates as they land — which was prompting for town/size and
+  could overwrite the templates.
+- The Fantasy Hub *Start Here* note rolled `[@FantasyShop]`, a table that does
+  not exist — corrected to `[@TF-Shop]`, clearing the "Unknown table:
+  FantasyShop" render error.
+
+## 1.3.0
+
 The Dice Roller merge, complete (phases 1–7) (see
 `docs/dice-roller-merge-plan.md`). Dice mechanics and syntax ported
 from @javalent/dice-roller (MIT, © Jeremy Valentine).
