@@ -130,6 +130,15 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   once per render instead of once per span (measured ~68x faster on a
   740-span note: 3.5 s of parsing down to ~50 ms). Results are
   unchanged; an edit is a natural cache miss.
+- **Table auto-discovery no longer re-scans the whole note per span.**
+  Resolving `[@table]` references parsed every table cell in scope on
+  every span; the per-table reference set is now cached by table
+  identity (another ~12x on the same note). 
+- **A block's rollers fill together.** Inline spans in a block are now
+  evaluated concurrently instead of one after another, so a big table
+  populates in one paint rather than visibly ticking down row by row.
+  The vault index dedupes concurrent warm-ups so the parallelism
+  doesn't trigger redundant rescans.
 
 ### Fixed
 - **Padded lookup tables no longer leak their range keys.** Sheets

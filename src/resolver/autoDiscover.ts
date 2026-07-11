@@ -163,17 +163,42 @@ function synthFile(tables: GeneratorFile["tables"]): GeneratorFile {
  */
 function collectFileRefs(file: GeneratorFile): string[] {
     const out = new Set<string>();
-    const scan = (text: string | undefined): void => {
-        if (text) collectRefsFromText(text, out);
-    };
-    for (const a of file.topLevelSets) scan(a.valueSource);
+    for (const a of file.topLevelSets) {
+        if (a.valueSource) collectRefsFromText(a.valueSource, out);
+    }
     for (const t of file.tables) {
-        scan(t.rollExpr);
-        scan(t.defaultValue);
-        for (const a of t.inTableSets) scan(a.valueSource);
-        for (const item of t.items) scan(item.rawContent);
+        for (const ref of tableRefs(t)) out.add(ref);
     }
     return [...out];
+}
+
+/**
+ * Per-table reference cache. Auto-discovery runs on every inline span,
+ * and each run re-parses the content of every table in scope to harvest
+ * `[@…]` references — for a big note that means parsing hundreds of
+ * table cells hundreds of times per render. The refs of a given
+ * TableDecl are fixed (the parse is pure and the decl is immutable in
+ * this pipeline, and note-table decls are themselves memoised by
+ * content), so cache them keyed by table identity. A WeakMap lets the
+ * entries be collected as soon as the decl is — no manual eviction.
+ */
+const TABLE_REFS_CACHE = new WeakMap<TableDecl, string[]>();
+
+function tableRefs(t: TableDecl): string[] {
+    const cached = TABLE_REFS_CACHE.get(t);
+    if (cached !== undefined) return cached;
+    const out = new Set<string>();
+    if (t.rollExpr) collectRefsFromText(t.rollExpr, out);
+    if (t.defaultValue) collectRefsFromText(t.defaultValue, out);
+    for (const a of t.inTableSets) {
+        if (a.valueSource) collectRefsFromText(a.valueSource, out);
+    }
+    for (const item of t.items) {
+        if (item.rawContent) collectRefsFromText(item.rawContent, out);
+    }
+    const refs = [...out];
+    TABLE_REFS_CACHE.set(t, refs);
+    return refs;
 }
 
 /** Parse a raw content string and harvest table references from it. */

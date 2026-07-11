@@ -136,9 +136,21 @@ export class VaultIndex {
         }
     }
 
-    /** Ensure the index is built before a lookup. */
+    /**
+     * Ensure the index is built before a lookup. Dedupes concurrent
+     * callers onto one rebuild: inline spans now prewarm() in parallel,
+     * and without this guard every span in a block would kick off its
+     * own full-vault rescan.
+     */
+    private buildInFlight: Promise<void> | null = null;
     private async ensureBuilt(): Promise<void> {
-        if (!this.built) await this.rebuild();
+        if (this.built) return;
+        if (this.buildInFlight === null) {
+            this.buildInFlight = this.rebuild().finally(() => {
+                this.buildInFlight = null;
+            });
+        }
+        await this.buildInFlight;
     }
 
     /**

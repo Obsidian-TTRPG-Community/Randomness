@@ -108,6 +108,17 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
         // the block corresponds to the N-th call in `sourcePositions`
         // restricted to this block's line range — provided the
         // expressions match.
+        //
+        // Phase 1 (synchronous): pair each inline-call node with its
+        // source-level occurrence. This walk must stay sequential —
+        // `sourceIdx` advances monotonically through the source
+        // positions — but it does no async work, so it's cheap.
+        interface SpanJob {
+            code: HTMLElement;
+            text: string;
+            occurrence: number;
+        }
+        const jobs: SpanJob[] = [];
         let sourceIdx = 0;
         for (const code of codeNodes) {
             const text = code.textContent ?? "";
@@ -146,9 +157,18 @@ export function buildInlineProcessor(plugin: RandomnessPlugin) {
             // from the DOM), fall back to occurrence 0. This
             // restores the old behaviour for the edge case — not
             // ideal, but at least nothing crashes.
-            const occurrence = sourcePos?.occurrence ?? 0;
-            await processOne(code, text, ctx, plugin, occurrence);
+            jobs.push({ code, text, occurrence: sourcePos?.occurrence ?? 0 });
         }
+
+        // Phase 2 (async, concurrent): evaluate every span in this
+        // block at once. Each job targets its own <code> node and its
+        // own preview-registry slot, so they're independent — running
+        // them in parallel instead of awaiting one at a time is what
+        // makes a big table of rollers fill together rather than
+        // visibly ticking down row by row.
+        await Promise.all(
+            jobs.map((j) => processOne(j.code, j.text, ctx, plugin, j.occurrence))
+        );
     };
 }
 
