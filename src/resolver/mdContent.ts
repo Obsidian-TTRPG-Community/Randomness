@@ -152,10 +152,59 @@ const TABLE_ROW_RE = /^ {0,3}\|/;
 const LIST_ITEM_RE = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/;
 
 /**
+ * Memoised extraction cache. A big note re-renders every inline span
+ * independently (see inlineProcessor), and each span rebuilds the whole
+ * inline scope — so without this, a 2,000-line note with hundreds of
+ * `dice:` spans re-parses itself hundreds of times per render (measured
+ * at ~4.5 ms x hundreds = multi-second stalls). The parse is a pure
+ * function of (md, selfBase) and the engine never mutates the returned
+ * TableDecls (deck/shuffle state lives on the Evaluator, keyed by table
+ * name), so the same array can be shared across every span in a render
+ * burst. Keyed by the note text, so an edit is a natural cache miss;
+ * a tiny LRU bounds memory when several notes are open.
+ */
+interface ExtractCacheEntry {
+    selfBase: string;
+    result: TableDecl[];
+}
+const EXTRACT_CACHE = new Map<string, ExtractCacheEntry>();
+const EXTRACT_CACHE_MAX = 8;
+
+/**
  * Extract every block-id'd markdown table and list in `md` as engine
- * TableDecls. Blocks without a `^block-id` are skipped.
+ * TableDecls. Blocks without a `^block-id` are skipped. Memoised by
+ * content — see EXTRACT_CACHE.
+ *
+ * Keyed by `md` alone (not `selfBase + md`) to avoid allocating a fresh
+ * ~200 KB copy of the note on every lookup — a big note is looked up
+ * hundreds of times per render. `selfBase` is stored on the entry and
+ * re-checked on a hit; it derives from the note's own path, so it's
+ * stable for a given `md`, and a mismatch simply recomputes.
  */
 export function extractMarkdownContentTables(
+    md: string,
+    selfBase?: string
+): TableDecl[] {
+    const sb = selfBase ?? "";
+    const cached = EXTRACT_CACHE.get(md);
+    if (cached !== undefined && cached.selfBase === sb) {
+        // Refresh recency: delete + re-insert moves it to the newest
+        // slot in Map's insertion order.
+        EXTRACT_CACHE.delete(md);
+        EXTRACT_CACHE.set(md, cached);
+        return cached.result;
+    }
+    const result = extractMarkdownContentTablesUncached(md, selfBase);
+    EXTRACT_CACHE.set(md, { selfBase: sb, result });
+    if (EXTRACT_CACHE.size > EXTRACT_CACHE_MAX) {
+        // Evict the oldest entry (first key in insertion order).
+        const oldest = EXTRACT_CACHE.keys().next().value;
+        if (oldest !== undefined) EXTRACT_CACHE.delete(oldest);
+    }
+    return result;
+}
+
+function extractMarkdownContentTablesUncached(
     md: string,
     selfBase?: string
 ): TableDecl[] {

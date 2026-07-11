@@ -279,6 +279,28 @@ describe("extractMarkdownContentTables", () => {
         expect(items[0].rawContent).toBe("See dice:[[Other Note#^sub]]");
     });
 
+    test("extraction memo honours selfBase (same md, different note)", () => {
+        // The parse is memoised by content; selfBase must still be
+        // respected on a cache hit, or a cross-note roller would pick
+        // up another note's self-translation.
+        const md = [
+            "| dice:1d6 | Result |",
+            "| -------- | ------ |",
+            "| **1** | See `dice:[[Foo#^sub]]` |",
+            "",
+            "^main",
+        ].join("\n");
+        // From Foo's perspective the roller is self-note → [@sub].
+        expect(
+            extractMarkdownContentTables(md, "Foo")[0].items[0].rawContent
+        ).toBe("See [@sub]");
+        // Same md, different note: cross-note, backticks stripped —
+        // must NOT return the cached "Foo" translation.
+        expect(
+            extractMarkdownContentTables(md, "Bar")[0].items[0].rawContent
+        ).toBe("See dice:[[Foo#^sub]]");
+    });
+
     test("bare dice header without dice: prefix also triggers lookup", () => {
         const md = [
             "| 2d6 | Mood |",

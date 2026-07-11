@@ -47,7 +47,33 @@ export interface CodeblockSpan {
     label?: string;
 }
 
+/**
+ * Memoised codeblock scan. Like extractMarkdownContentTables, this is
+ * called once per inline span while building the inline scope, so a big
+ * note is otherwise re-split and re-scanned hundreds of times per
+ * render. The result is a pure function of `md` and callers treat it as
+ * read-only, so a small content-keyed LRU is safe and cheap.
+ */
+const BLOCKS_CACHE = new Map<string, CodeblockSpan[]>();
+const BLOCKS_CACHE_MAX = 8;
+
 export function findBlocks(md: string): CodeblockSpan[] {
+    const cached = BLOCKS_CACHE.get(md);
+    if (cached !== undefined) {
+        BLOCKS_CACHE.delete(md);
+        BLOCKS_CACHE.set(md, cached);
+        return cached;
+    }
+    const result = findBlocksUncached(md);
+    BLOCKS_CACHE.set(md, result);
+    if (BLOCKS_CACHE.size > BLOCKS_CACHE_MAX) {
+        const oldest = BLOCKS_CACHE.keys().next().value;
+        if (oldest !== undefined) BLOCKS_CACHE.delete(oldest);
+    }
+    return result;
+}
+
+function findBlocksUncached(md: string): CodeblockSpan[] {
     const lines = md.split(/\r?\n/);
     const out: CodeblockSpan[] = [];
     let i = 0;

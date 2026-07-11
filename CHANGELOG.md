@@ -121,6 +121,16 @@ from @javalent/dice-roller (MIT, © Jeremy Valentine).
   resolve like Obsidian links written as paths — relative to the
   calling note's folder, then the Generator root, then vault-rooted.
 
+### Performance
+- **Large notes render far faster.** Every inline `dice:`/`rdm:` span
+  rebuilds its scope by parsing the whole note, so a big sheet
+  (2,000+ lines, hundreds of spans) re-parsed itself once per span —
+  several seconds of stalls on load. The note-table extraction and
+  codeblock scan are now memoised by content, so the note is parsed
+  once per render instead of once per span (measured ~68x faster on a
+  740-span note: 3.5 s of parsing down to ~50 ms). Results are
+  unchanged; an edit is a natural cache miss.
+
 ### Fixed
 - **Padded lookup tables no longer leak their range keys.** Sheets
   that pad every row with a trailing empty column
