@@ -4,6 +4,16 @@ All notable changes to the Randomness plugin.
 
 ## Unreleased
 
+## 1.3.3
+
+### Fixed
+- **Dice Roller `|form` and `|text` flags now survive a re-roll.** The formula
+  (`|form`) or label (`|text(…)`) was only applied on first render; clicking
+  🎲 re-roll collapsed the span to the bare rolled number. Both display flags
+  are now re-applied on every roll.
+- **The `|form` flag no longer leaks into the shown formula.** A `2d6+3|form`
+  roll now displays `2d6+3 → 11` instead of `2d6+3|form → 11`.
+
 ## 1.3.2
 
 ### Fixed

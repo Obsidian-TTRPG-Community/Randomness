@@ -63,6 +63,22 @@ const FLAG_RE =
     /\|(nodice|form|noform|render|norender|avg|none|paren|noparen|round|floor|ceil|noround|signed|text\([^()]*\))\s*$/i;
 
 /**
+ * Strip trailing Dice Roller display flags (`|form`, `|nodice`,
+ * `|text(…)`, …) from an expression, returning the bare formula or
+ * roller. Column picks (`|Header`) are NOT display flags, so they are
+ * preserved. The inline renderer uses this to show a clean
+ * `formula → result` for `|form` without the flag leaking in.
+ */
+export function stripDisplayFlags(expr: string): string {
+    let s = expr.trim();
+    for (;;) {
+        const m = s.match(FLAG_RE);
+        if (m === null) return s;
+        s = s.slice(0, m.index).trimEnd();
+    }
+}
+
+/**
  * Translate a Dice Roller expression (the text after the `dice:`
  * prefix) into an rdm expression. Throws DiceCompatError with a
  * user-facing message for unsupported constructs.

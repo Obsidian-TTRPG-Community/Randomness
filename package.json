@@ -1,6 +1,6 @@
 {
   "name": "randomness",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Random generator engine for Obsidian (.rdm generators)",
   "main": "main.js",
   "scripts": {

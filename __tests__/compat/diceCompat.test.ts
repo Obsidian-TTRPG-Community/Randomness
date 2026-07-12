@@ -13,6 +13,7 @@
 
 import {
     translateDiceExpression,
+    stripDisplayFlags,
     DiceCompatError,
 } from "../../src/compat/diceCompat";
 import {
@@ -255,5 +256,28 @@ describe("dice: expressions roll end-to-end", () => {
         const out = roll("2[[Tables^taverns]]");
         // Two rolls of a one-item table, comma-joined for inline prose.
         expect(out).toBe("The Prancing Pony, The Prancing Pony");
+    });
+});
+
+
+describe("stripDisplayFlags", () => {
+    test("removes a trailing display flag", () => {
+        expect(stripDisplayFlags("2d6+3|form")).toBe("2d6+3");
+    });
+    test("removes several stacked flags", () => {
+        expect(stripDisplayFlags("1d20+2|nodice|text(Dex +2)")).toBe("1d20+2");
+    });
+    test("keeps a column pick (not a display flag)", () => {
+        expect(stripDisplayFlags("[[Note^loot]]|Header")).toBe(
+            "[[Note^loot]]|Header"
+        );
+    });
+    test("strips a flag but keeps the column pick before it", () => {
+        expect(stripDisplayFlags("[[Note^loot]]|Header|form")).toBe(
+            "[[Note^loot]]|Header"
+        );
+    });
+    test("leaves a flag-free expression unchanged", () => {
+        expect(stripDisplayFlags("2d6+3")).toBe("2d6+3");
     });
 });

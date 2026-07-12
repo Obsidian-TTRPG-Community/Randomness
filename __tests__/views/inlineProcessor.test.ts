@@ -23,6 +23,7 @@ import {
     buildInlineProcessor,
     replaceCodeElement,
     renderInlineError,
+    decorateDiceResult,
 } from "../../src/views/inlineProcessor";
 import {
     DEFAULT_SETTINGS,
@@ -1010,5 +1011,68 @@ describe("inlineProcessor: multiple identical calls", () => {
 
         // Two distinct cache entries — one per occurrence.
         expect(p.previewRegistry.size()).toBe(2);
+    });
+});
+
+
+describe("decorateDiceResult: Dice Roller display flags", () => {
+    const plugin = { settings: { diceFormulas: {} } } as any;
+
+    test("|form shows the formula and the result, with no flag leak", () => {
+        const r = decorateDiceResult(
+            { expr: "2d6+3|form", prefix: "dice:" } as any,
+            "11",
+            plugin
+        );
+        expect(r.display).toBe("2d6+3 → 11");
+        expect(r.tooltip).toBeUndefined();
+    });
+
+    test("|text shows the label and moves the roll into the tooltip", () => {
+        const r = decorateDiceResult(
+            { expr: "1d20+2|text(Dexterity +2)", prefix: "dice:" } as any,
+            "17",
+            plugin
+        );
+        expect(r.display).toBe("Dexterity +2");
+        expect(r.tooltip).toBe("17");
+    });
+
+    test("native rdm: calls are never decorated", () => {
+        const r = decorateDiceResult({ expr: "[@X]" } as any, "Alice", plugin);
+        expect(r.display).toBe("Alice");
+        expect(r.tooltip).toBeUndefined();
+    });
+
+    test("a dice: call with no display flag shows the bare result", () => {
+        const r = decorateDiceResult(
+            { expr: "2d6", prefix: "dice:" } as any,
+            "7",
+            plugin
+        );
+        expect(r.display).toBe("7");
+    });
+});
+
+describe("Dice Roller display flags survive a re-roll (pipeline)", () => {
+    test("|form keeps showing the formula after clicking re-roll", async () => {
+        const src = "`dice:2d6+3|form`";
+        const p = fakePlugin({
+            files: { "note.md": src },
+            settings: { diceRollerCompatChoice: true },
+        });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("dice:2d6+3|form");
+        await proc(wrap, fakeCtx("note.md"));
+        const text = () =>
+            (wrap.querySelector(".randomness-inline-result") as HTMLElement)
+                ?.textContent ?? "";
+        // First render: formula shown, flag stripped.
+        expect(text()).toMatch(/^2d6\+3 → \d+$/);
+        // Re-roll — the |form decoration must persist, not collapse to
+        // the bare number (the reported bug).
+        getButton(wrap, "reroll")!.click();
+        await new Promise((r) => setTimeout(r, 40));
+        expect(text()).toMatch(/^2d6\+3 → \d+$/);
     });
 });

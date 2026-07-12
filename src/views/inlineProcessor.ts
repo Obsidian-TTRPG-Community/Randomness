@@ -41,7 +41,10 @@ import {
     parseDirectWikilinkCall,
     TAG_FILE_CAP,
 } from "../resolver/mdContent";
-import { translateDiceExpression } from "../compat/diceCompat";
+import {
+    translateDiceExpression,
+    stripDisplayFlags,
+} from "../compat/diceCompat";
 import { diceCompatEnabled } from "./settings";
 import { FileSource } from "../resolver/fileResolver";
 import {
@@ -232,6 +235,49 @@ async function readSourcePositions(
 }
 
 /**
+ * Apply Dice Roller display flags to a rolled result. `|text(label)`
+ * shows the label and moves the rolled value into the hover tooltip;
+ * `|form` shows the source formula next to the result (`2d6+3 -> 11`).
+ * Everything else — and every native `rdm:` call — shows the bare
+ * result. Exported for direct unit testing.
+ *
+ * Called on BOTH first render (processOne) and re-roll (rerollCall) so
+ * the decoration is stable across re-rolls rather than collapsing to
+ * the raw value on the second roll.
+ */
+export function decorateDiceResult(
+    call: InlineCall,
+    result: string,
+    plugin: RandomnessPlugin
+): { display: string; tooltip?: string } {
+    // Display flags only apply to the Dice Roller compat prefixes.
+    if ((call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX) {
+        return { display: result };
+    }
+    try {
+        const { flags } = translateDiceExpression(
+            call.expr,
+            plugin.settings.diceFormulas
+        );
+        const textFlag = flags.find((f) => /^text\(.*\)$/i.test(f));
+        if (textFlag !== undefined) {
+            return {
+                display: textFlag.replace(/^text\(/i, "").slice(0, -1),
+                tooltip: result,
+            };
+        }
+        if (flags.some((f) => f.toLowerCase() === "form")) {
+            // Strip the trailing flags so the `|form` flag itself does
+            // not leak into the displayed formula.
+            return { display: `${stripDisplayFlags(call.expr)} → ${result}` };
+        }
+    } catch {
+        // Translation errors were already surfaced by the caller.
+    }
+    return { display: result };
+}
+
+/**
  * Process a single inline call's <code> element. Replaces it with a
  * span carrying the preview/locked state and the lock/reroll
  * controls.
@@ -307,26 +353,13 @@ async function processOne(
 
     // Display flags (Dice Roller compat): `|text(label)` shows the
     // label with the rolled value in the tooltip; `|form` shows the
-    // formula alongside the result. Other flags stay inert for now.
-    let displayResult = result;
-    let tooltip: string | undefined;
-    if ((call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX) {
-        try {
-            const { flags } = translateDiceExpression(
-                call.expr,
-                plugin.settings.diceFormulas
-            );
-            const textFlag = flags.find((f) => /^text\(.*\)$/i.test(f));
-            if (textFlag !== undefined) {
-                displayResult = textFlag.replace(/^text\(/i, "").slice(0, -1);
-                tooltip = result;
-            } else if (flags.some((f) => f.toLowerCase() === "form")) {
-                displayResult = `${call.expr.trim()} → ${result}`;
-            }
-        } catch {
-            // Translation errors were already surfaced above.
-        }
-    }
+    // formula alongside the result. Applied here AND on re-roll (see
+    // rerollCall) so the decoration survives a re-roll.
+    const { display: displayResult, tooltip } = decorateDiceResult(
+        call,
+        result,
+        plugin
+    );
 
     // Render and keep a handle on the span we built — onReroll for an
     // unfilled call updates it in place without needing a re-render
@@ -763,12 +796,18 @@ async function rerollCall(
     // must be parsed as tags, not displayed as literal characters.
     // Link-aware variant so wiki-syntax in rerolled output renders
     // the same way as on the initial pass.
+    // Re-apply the Dice Roller display flags so `|form` keeps showing
+    // the formula and `|text` keeps its label + tooltip across a
+    // re-roll, instead of collapsing to the bare rolled value.
+    const { display, tooltip } = decorateDiceResult(call, fresh, plugin);
+    if (tooltip !== undefined) span.title = tooltip;
+    else span.removeAttribute("title");
     const resultSpan = span.querySelector<HTMLElement>(
         ".randomness-inline-result"
     );
     setSanitisedHtmlWithLinks(
         resultSpan ?? span,
-        markdownLite(fresh),
+        markdownLite(display),
         plugin,
         ctx.sourcePath
     );
