@@ -656,3 +656,60 @@ describe("self-import and same-note scope", () => {
         ).toThrow(/cycle/i);
     });
 });
+
+
+describe("mdContent: lookup header normalisation (no dice: syntax needed)", () => {
+    const oracle = (header: string) =>
+        [
+            header,
+            "| --- | -------- |",
+            "| 1   | No       |",
+            "| 2   | No, but  |",
+            "| 3   | Maybe    |",
+            "| 4   | Yes, but |",
+            "| 5   | Yes      |",
+            "| 6   | Yes, and |",
+            "",
+            "^oracle",
+        ].join("\n");
+    const first = (header: string) =>
+        extractMarkdownContentTables(oracle(header))[0];
+
+    test("a bare `d6` header becomes a lookup rolling 1d6", () => {
+        const t = first("| d6 | Result |");
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("1d6");
+    });
+
+    test("an uppercase `D6` header normalises to 1d6", () => {
+        const t = first("| D6 | Result |");
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("1d6");
+    });
+
+    test("a `d%` header rolls 1d%", () => {
+        const t = first("| d% | Result |");
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("1d%");
+    });
+
+    test("a header that already carries a count/modifier passes through", () => {
+        const t = first("| 2d6+1 | Result |");
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("2d6+1");
+    });
+
+    test("the explicit `dice: 1d6` form still works unchanged", () => {
+        const t = first("| dice: 1d6 | Result |");
+        expect(t.type).toBe("lookup");
+        expect(t.rollExpr).toBe("1d6");
+    });
+
+    test("a non-die header stays a plain table (not a broken lookup)", () => {
+        const t = first("| Roll | Result |");
+        expect(t.type).not.toBe("lookup");
+        // Whole rows joined, so the label column is included — the user
+        // can pick the Result column explicitly if they want.
+        expect(t.items[0].rawContent).toBe("1, No");
+    });
+});

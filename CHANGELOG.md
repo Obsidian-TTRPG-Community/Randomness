@@ -4,6 +4,17 @@ All notable changes to the Randomness plugin.
 
 ## Unreleased
 
+## 1.3.4
+
+### Fixed
+- **Oracle/lookup tables work with a plain die header — no `dice:` syntax
+  needed.** A two-column table headed `d6`, `D6`, `d100`, or `d%` (not just the
+  explicit `` `dice: 1d20` `` form) is now rolled correctly: the header is
+  normalised to a formula the engine can actually roll (`d6` → `1d6`), so the
+  lookup returns the matching row instead of silently coming back empty. The
+  lookup is only built when the header normalises to a real die, so a plain
+  label header stays an ordinary table rather than a broken lookup.
+
 ## 1.3.3
 
 ### Fixed

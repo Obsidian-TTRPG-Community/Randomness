@@ -403,9 +403,30 @@ function rewriteEmbeddedDiceSpans(
     });
 }
 
-/** Dice-formula sniff for lookup headers: `1d20`, `dice: 2d6+1`, `d%`. */
-function looksLikeDiceFormula(s: string): boolean {
-    return /\b\d*d\d+\b|\bd%|\bdF\b/i.test(s);
+/**
+ * Turn a lookup table's first-column header into an engine-rollable
+ * dice formula, or null if the header isn't a die.
+ *
+ * Accepts the forms real sheets use — a backticked `dice:` span, a bare
+ * `d6`/`D6`, `1d20`, `2d6+1`, `d%`, `dF` — and normalises them: strips
+ * the code wrapping and `dice:` prefix, lower-cases the die letter, and
+ * supplies the implicit count of 1. The engine only rolls dice with an
+ * explicit count (a bare `d6` silently rolls nothing), so `d6`/`D6`
+ * become `1d6`; formulas that already carry a count pass through. A
+ * header that isn't a die returns null, so the caller keeps it a plain
+ * column instead of building a lookup that can never match a row.
+ */
+function normaliseLookupDie(header: string): string | null {
+    const bare = header
+        .replace(/`/g, "")
+        .trim()
+        .replace(/^dice:\s*/i, "")
+        .trim();
+    const m = bare.match(/^(\d*)d(\d+|%|[fF])([+-]\d+)?$/i);
+    if (m === null) return null;
+    const count = m[1] === "" ? "1" : m[1];
+    const sides = m[2].toLowerCase() === "f" ? "F" : m[2];
+    return count + "d" + sides + (m[3] ?? "");
 }
 
 const RANGE_RE = /^(\d+)\s*[-–—]\s*(\d+)$/;
@@ -458,20 +479,20 @@ function tableToDecls(id: string, rowLines: string[]): TableDecl[] {
     headers = headers.slice(0, width);
     body = body.map((r) => r.slice(0, width));
 
-    // Lookup form: two columns, dice-formula header, range-like keys.
-    if (headers.length === 2 && looksLikeDiceFormula(headers[0])) {
+    // Lookup form: two columns, a header that NORMALISES to a rollable
+    // die, and range-like keys. Gating on a rollable die (rather than a
+    // loose "looks like a formula" text sniff) means `d6`/`D6`/`d100`/
+    // `d%` all work with no `dice:` syntax needed, while a plain label
+    // header falls through to a normal table — so we never build a
+    // lookup that silently rolls nothing.
+    const rollExpr =
+        headers.length === 2 ? normaliseLookupDie(headers[0]) : null;
+    if (rollExpr !== null) {
         const keys = body.map((r) => normaliseLookupKey(r[0] ?? ""));
         const rangeLike = keys.every(
             (k) => RANGE_RE.test(k) || NUM_LIST_RE.test(k) || /^\d+$/.test(k)
         );
         if (rangeLike) {
-            // Headers arrive as `dice:1d100` (backticked code spans)
-            // in real sheets — strip code wrapping before the prefix.
-            const rollExpr = headers[0]
-                .replace(/`/g, "")
-                .trim()
-                .replace(/^dice:\s*/i, "")
-                .trim();
             const items: TableItem[] = [];
             for (const row of body) {
                 const key = normaliseLookupKey(row[0] ?? "");

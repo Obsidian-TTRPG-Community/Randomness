@@ -1,7 +1,7 @@
 {
 	"id": "randomness",
 	"name": "Randomness",
-	"version": "1.3.3",
+	"version": "1.3.4",
 	"minAppVersion": "1.7.2",
 	"description": "Random generators for TTRPGs and creative writing: tables, dice, NPC portraits, locked rolls, a sidebar browser, and one-click town content. Reads .rdm generator files (and legacy .ipt).",
 	"author": "Josh",
