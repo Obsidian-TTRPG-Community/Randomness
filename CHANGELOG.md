@@ -2,7 +2,7 @@
 
 All notable changes to the Randomness plugin.
 
-## Unreleased
+## 1.4.0
 
 ### Added
 - **Persistent decks.** Deck state can now survive across rolls, notes, and
