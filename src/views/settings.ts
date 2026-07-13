@@ -541,6 +541,72 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         })();
 
 
+        // ─── Example decks (persistent-decks design) ───────────
+        //
+        // Downloaded on demand — NOT shipped in the plugin — so the
+        // base install stays small. Both bundles are public domain:
+        // the Rider–Waite–Smith tarot (1909; Waite's divinatory
+        // meanings from The Pictorial Key to the Tarot, 1911) and a
+        // plain 54-card playing deck. Consent model matches the
+        // other installers: network only on click.
+        const DECK_BUNDLE_BASE =
+            "https://raw.githubusercontent.com/Obsidian-TTRPG-Community/" +
+            "Randomness/main/content/decks";
+        const deckBundle = (
+            name: string,
+            desc: string,
+            url: string
+        ): void => {
+            new Setting(containerEl)
+                .setName(name)
+                .setDesc(
+                    desc +
+                        ` Downloads from GitHub into "${
+                            // Optional-chained for partial plugin
+                            // fixtures in tests.
+                            this.plugin.decks?.decksFolderPath() ?? "Decks"
+                        }/" when you click — nothing is fetched otherwise.`
+                )
+                .addButton((btn) =>
+                    btn.setButtonText("Download").onClick(async () => {
+                        btn.setDisabled(true);
+                        btn.setButtonText("Downloading…");
+                        try {
+                            const { installDeckBundle } = await import(
+                                "../contentInstaller"
+                            );
+                            const r = await installDeckBundle(
+                                this.plugin,
+                                url
+                            );
+                            new Notice(
+                                `Deck installed: ${r.deckFolder} (${r.written} files). ` +
+                                    `Draw it from the Decks tab or with \`deck:\` in a note.`,
+                                8000
+                            );
+                        } catch (e: unknown) {
+                            new Notice(
+                                "Deck download failed: " + errorMessage(e),
+                                8000
+                            );
+                        }
+                        btn.setDisabled(false);
+                        btn.setButtonText("Download");
+                    })
+                );
+        };
+        deckBundle(
+            "Example deck: standard playing cards",
+            "52 cards plus two jokers as a text deck.",
+            `${DECK_BUNDLE_BASE}/playing-cards`
+        );
+        deckBundle(
+            "Example deck: tarot (Rider–Waite–Smith)",
+            "All 78 cards with Waite's public-domain upright and " +
+                "reversed meanings; reversal chance preset to 50%.",
+            `${DECK_BUNDLE_BASE}/tarot-rws`
+        );
+
         // ─── Community generators ──────────────────────────────
         //
         // Two paths into the same GitHub folder:

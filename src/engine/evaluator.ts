@@ -28,6 +28,27 @@ export interface EvaluatorOptions {
     /** Date for the {date} built-in. Defaults to now. */
     now?: Date;
     /**
+     * Extra variables seeded at construction (after built-ins, before
+     * Set: lines — so generators can still override them). Used by
+     * the deck service to preset {$facing} when rendering card text.
+     */
+    presetVars?: Record<string, string>;
+    /**
+     * Host for `Deck: persistent` tables. When present, deck picks on
+     * a persistent table draw through the host (whose state outlives
+     * this evaluator) instead of the per-run deckState. Absent →
+     * persistent tables silently fall back to per-run semantics,
+     * which keeps tests/API contexts working unchanged.
+     */
+    deckHost?: TableDeckHost;
+    /**
+     * Host for `[!deck:Name]` folder-deck picks. The host owns the
+     * deck data (preloaded — the evaluator is synchronous) and
+     * returns the drawn card's rendered text. Absent → `[!deck:…]`
+     * throws a clear "not available here" error.
+     */
+    folderDeckHost?: FolderDeckHost;
+    /**
      * Maximum nesting depth for table calls before bailing out. Each call
      * to runTable (whether from a subtable roll, pick, deck pick, inline
      * table, or `each` filter) counts as one level. Default 100, which
@@ -57,6 +78,39 @@ export class RecursionLimitError extends Error {
 }
 
 const DEFAULT_MAX_RECURSION_DEPTH = 100;
+
+/**
+ * Host interface for persistent table decks (`Deck: persistent`).
+ * The host owns state that outlives the evaluator — keying,
+ * persistence, and history are its business (see DeckService).
+ */
+export interface TableDeckHost {
+    /**
+     * Draw one item from the persistent deck for `tableName`.
+     * `weights[i]` is item i's weight. Returns the drawn item index,
+     * or null when the deck is exhausted.
+     */
+    draw(tableName: string, weights: number[]): number | null;
+    /** Reset (reshuffle) the persistent deck for `tableName`. */
+    reset(tableName: string): void;
+}
+
+/** Host interface for folder decks referenced as `[!deck:Name]`. */
+export interface FolderDeckHost {
+    /** Whether a folder deck with this name exists. */
+    exists(name: string): boolean;
+    /**
+     * Draw the top card, returning its rendered text (name, image
+     * embed, card text). Null when the deck is empty.
+     */
+    draw(name: string): string | null;
+    /** Reshuffle the named folder deck. */
+    reset(name: string): void;
+}
+
+/** `deck:` prefix marking a folder-deck reference in `[!…]` calls
+ * and `Shuffle:` targets. Case-insensitive. */
+const FOLDER_DECK_PREFIX = /^deck:\s*/i;
 
 export class Evaluator {
     private rng: RNG;
@@ -142,6 +196,15 @@ export class Evaluator {
         this.setVar("docpath", "");
         this.setVar("self", "");
         this.setVar("builddate", "");
+
+        // Preset vars (deck service's {$facing}, etc.). Seeded after
+        // built-ins so they can shadow them, before Set: lines so
+        // generators keep the last word.
+        if (opts.presetVars) {
+            for (const [k, v] of Object.entries(opts.presetVars)) {
+                this.setVar(k, v);
+            }
+        }
 
         // Seed prompts (use defaults or overrides). Each prompt seeds
         // its positional var ({$prompt1}…) and — when the label is a
@@ -457,6 +520,15 @@ export class Evaluator {
 
     /** Pick a single deck-pick item from a table (no duplicates within shuffle). */
     private pickDeckItem(table: TableDecl): TableItem | null {
+        // Persistent table decks (`Deck: persistent`) draw through
+        // the host, whose state outlives this evaluator. Without a
+        // host (tests, API contexts) they fall back to the per-run
+        // path below — same in-run semantics, no persistence.
+        if (table.deckPersistent === true && this.opts.deckHost) {
+            const weights = table.items.map((it) => it.weight ?? 1);
+            const idx = this.opts.deckHost.draw(table.name, weights);
+            return idx === null ? null : table.items[idx] ?? null;
+        }
         const key = table.name.toLowerCase();
         let avail = this.deckState.get(key);
         if (!avail) {
@@ -492,7 +564,20 @@ export class Evaluator {
     }
 
     private shuffleTable(name: string) {
-        // Just clear the deck state for that table; it'll be re-initialised on next deck pick
+        // `Shuffle: deck:Name` resets a folder deck through its host.
+        const deckRef = name.match(FOLDER_DECK_PREFIX);
+        if (deckRef !== null) {
+            this.opts.folderDeckHost?.reset(name.slice(deckRef[0].length));
+            return;
+        }
+        // Persistent table decks reset through the host (state
+        // outlives this evaluator); per-run decks just clear local
+        // state — re-initialised on the next deck pick.
+        const table = this.tables.get(name.toLowerCase());
+        if (table?.deckPersistent === true && this.opts.deckHost) {
+            this.opts.deckHost.reset(table.name);
+            return;
+        }
         this.deckState.delete(name.toLowerCase());
     }
 
@@ -841,6 +926,45 @@ export class Evaluator {
         const reps = n.repsSource ? Math.max(1, this.evalRollExpression(n.repsSource)) : 1;
         const tableName = this.evalRawText(n.tableSource);
         const params = n.withParams.map(p => this.evalRawText(p));
+
+        // `[!deck:Name]` — a folder deck, drawn through the host.
+        // Folder decks are deliberately OUTSIDE the table namespace
+        // (the deck: prefix exists to prevent name collisions and to
+        // signal persistent, interaction-gated semantics).
+        const deckRef = tableName.match(FOLDER_DECK_PREFIX);
+        if (deckRef !== null) {
+            const deckName = tableName.slice(deckRef[0].length);
+            const host = this.opts.folderDeckHost;
+            if (!host) {
+                throw new Error(
+                    `Folder decks aren't available in this context ` +
+                        `(tried to draw from deck:${deckName}).`
+                );
+            }
+            if (!host.exists(deckName)) {
+                throw new Error(
+                    `Unknown deck: ${deckName} — expected a folder ` +
+                        `under the Decks folder.`
+                );
+            }
+            const drawn: string[] = [];
+            for (let i = 0; i < reps; i++) {
+                const card = host.draw(deckName);
+                if (card === null) break; // deck exhausted
+                drawn.push(card);
+            }
+            const filteredDeck = applyFilters(
+                drawn.length > 1 ? drawn : drawn[0] ?? "",
+                n.filters,
+                this.filterContext()
+            );
+            if (n.assignVar) {
+                this.setVar(n.assignVar, filteredDeck);
+                if (n.assignQuiet) return "";
+            }
+            return filteredDeck;
+        }
+
         const table = this.tables.get(tableName.toLowerCase());
         // See runSubtableRollNode: surface missing tables instead of
         // returning empty silently.
@@ -849,6 +973,13 @@ export class Evaluator {
         for (let i = 0; i < reps; i++) {
             const item = this.pickDeckItem(table);
             if (!item) break;
+            // Orientation: a Flip: table sets {$facing} per draw, so
+            // the item's own content can branch on it.
+            if (table.flipChance !== undefined) {
+                const reversed =
+                    this.rng.next() * 100 < table.flipChance;
+                this.setVar("facing", reversed ? "reversed" : "upright");
+            }
             // Render with params
             const savedParams: { name: string; value?: Value }[] = [];
             for (let j = 0; j < params.length; j++) {

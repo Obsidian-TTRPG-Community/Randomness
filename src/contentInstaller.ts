@@ -130,6 +130,75 @@ export async function installContentBundle(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Example deck bundles (persistent-decks design).
+// ─────────────────────────────────────────────────────────────────────
+
+/** File extensions written as binary (card art, card backs). */
+const BINARY_EXT = /\.(avif|bmp|gif|jpe?g|png|webp)$/i;
+
+/**
+ * Install a deck bundle into `<Decks folder>/<deck name>/`.
+ *
+ * Same consent model as the other installers: network is touched only
+ * when the user clicks the settings button — example decks are NOT
+ * shipped inside the plugin, keeping its install size small. The
+ * bundle's index.json carries the deck name and file list; images are
+ * fetched as binary, .rdm/deck.json as text. Returns files written.
+ */
+export async function installDeckBundle(
+    plugin: RandomnessPlugin,
+    baseUrl: string
+): Promise<{ written: number; deckFolder: string }> {
+    const base = baseUrl.replace(/\/+$/, "");
+    const adapter = plugin.app.vault.adapter;
+
+    const index = JSON.parse(
+        (await requestUrl({ url: `${base}/index.json` })).text
+    ) as ContentIndex;
+    if (!index.name || typeof index.name !== "string") {
+        throw new Error("deck bundle index.json is missing a name");
+    }
+    if (!Array.isArray(index.files) || index.files.length === 0) {
+        throw new Error("deck bundle index.json has no files");
+    }
+
+    const deckFolder = normalizePath(
+        `${plugin.decks.decksFolderPath()}/${index.name}`
+    );
+    const ensureFolder = async (folder: string): Promise<void> => {
+        if (folder === "" || (await adapter.exists(folder))) return;
+        const parent = folder.includes("/")
+            ? folder.slice(0, folder.lastIndexOf("/"))
+            : "";
+        await ensureFolder(parent);
+        await adapter.mkdir(folder);
+    };
+    await ensureFolder(deckFolder);
+
+    let written = 0;
+    for (const rel of index.files) {
+        // Path hygiene: flat or one level deep, never escaping.
+        if (rel.includes("..") || rel.startsWith("/")) continue;
+        const target = normalizePath(`${deckFolder}/${rel}`);
+        const relUrl = rel.split("/").map(encodeURIComponent).join("/");
+        const res = await requestUrl({ url: `${base}/${relUrl}` });
+        if (BINARY_EXT.test(rel)) {
+            await adapter.writeBinary(target, res.arrayBuffer);
+        } else {
+            await adapter.write(target, res.text);
+        }
+        written++;
+        if (written % 10 === 0) {
+            new Notice(
+                `${index.name}: ${written}/${index.files.length} files…`,
+                2000
+            );
+        }
+    }
+    return { written, deckFolder };
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Fantasy Hub post-install setup — the "drop-in" finisher.
 // ─────────────────────────────────────────────────────────────────────
 

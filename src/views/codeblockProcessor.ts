@@ -210,9 +210,22 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         const seed = settings.stableCodeblockSeeds
             ? stableSeedFor(this.source, sectionInfo?.lineStart ?? 0)
             : undefined;
+        // Deck hosts, NON-committing: codeblocks re-render passively
+        // (note opened, scrolled into view), and a passive render must
+        // never burn a card. Draws here come from a throwaway copy of
+        // the deck state — plausible previews, no consumption
+        // (persistent-decks design, interaction rule).
+        const hosts = this.plugin.decks
+            ? await this.plugin.decks.buildEvalHosts(
+                  this.ctx.sourcePath,
+                  false
+              )
+            : undefined;
         const evaluator = new Evaluator(bundle.main, extras, {
             seed,
             promptValues: this.promptValues,
+            deckHost: hosts?.deckHost,
+            folderDeckHost: hosts?.folderDeckHost,
         });
         return {
             output: evaluator.run(),

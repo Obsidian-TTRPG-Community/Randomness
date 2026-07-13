@@ -4,6 +4,36 @@ All notable changes to the Randomness plugin.
 
 ## Unreleased
 
+### Added
+- **Persistent decks.** Deck state can now survive across rolls, notes, and
+  restarts (design: `docs/persistent-decks-design.md`):
+  - **Folder decks** — each folder under `<Generator Root>/Decks/<Name>/` is a
+    deck. One image = one card; an optional `.rdm` file (`Type: Dictionary`
+    recommended) adds card text, paired to images by filename ↔ key
+    (`the-tower.png` ↔ `The Tower`). A `_back.*` image is the card back.
+    Settings + state live in `deck.json` inside the folder, so a deck travels
+    (and syncs) with its state.
+  - **`[!deck:Name]`** draws from a folder deck inside any generator; the
+    `deck:` prefix keeps decks out of the table namespace. `Shuffle: deck:Name`
+    resets one.
+  - **`deck:Name` inline spans** in notes render the last drawn card with a
+    🎴 Draw button. Rendering never draws — only the explicit click does, so
+    scrolling a note can't burn cards. The same rule applies everywhere:
+    passive codeblock re-renders draw from a throwaway copy; explicit actions
+    (browser Roll, inline re-roll, Decks tab, commands) commit.
+  - **`Deck: persistent`** table directive — an in-generator table's deck-pick
+    state persists (stored in the plugin folder's `deck-state.json`).
+  - **`Flip: N%`** table/deck orientation — each draw sets `{$facing}` to
+    `upright`/`reversed` so card text can branch (tarot-style), and reversed
+    card images render rotated.
+  - **Decks tab** in the browser pane: per-deck Draw / Peek / Draw & bury /
+    Undo / Shuffle, remaining count, reversal-chance setting, and draw history.
+  - **Commands**: "Draw a card from a deck" and "Shuffle (reset) a deck".
+  - **Example decks in settings** — downloadable on demand (never bundled, to
+    keep the plugin small): a standard 54-card playing deck and the
+    public-domain Rider–Waite–Smith tarot with Waite's 1911 upright/reversed
+    meanings, reversal preset to 50%.
+
 ## 1.3.4
 
 ### Fixed

@@ -42,6 +42,9 @@ import { VaultIndex } from "../resolver/vaultIndex";
 import { PortraitService } from "../portrait/service";
 import { buildPortraitProcessor } from "../portrait/codeblock";
 import { buildPortraitInlineProcessor } from "../portrait/inline";
+import { DeckService } from "../decks/deckService";
+import { buildDeckInlineProcessor } from "./deckInlineProcessor";
+import { FuzzySuggestModal } from "obsidian";
 
 export default class RandomnessPlugin extends Plugin {
     settings: RandomnessSettings = DEFAULT_SETTINGS;
@@ -76,9 +79,36 @@ export default class RandomnessPlugin extends Plugin {
      * being installed (see src/portrait/service.ts).
      */
     portraits!: PortraitService;
+    /**
+     * Persistent decks (persistent-decks design): folder decks under
+     * `<Generator Root>/Decks/`, plus state for `Deck: persistent`
+     * tables. Draw/shuffle/peek all route through here.
+     */
+    decks!: DeckService;
 
     async onload(): Promise<void> {
         await this.loadSettings();
+
+        // Deck service — must exist before any processor that can
+        // reference decks renders.
+        this.decks = new DeckService(this);
+        this.registerMarkdownPostProcessor(buildDeckInlineProcessor(this));
+        // Keep the deck cache honest when deck folders change on disk.
+        this.registerEvent(
+            this.app.vault.on("create", (f) => this.decks.invalidatePath(f.path))
+        );
+        this.registerEvent(
+            this.app.vault.on("delete", (f) => this.decks.invalidatePath(f.path))
+        );
+        this.registerEvent(
+            this.app.vault.on("rename", (f, oldPath) => {
+                this.decks.invalidatePath(f.path);
+                this.decks.invalidatePath(oldPath);
+            })
+        );
+        this.registerEvent(
+            this.app.vault.on("modify", (f) => this.decks.invalidatePath(f.path))
+        );
 
         // Register the codeblock processor for ```randomness blocks.
         this.registerMarkdownCodeBlockProcessor(
@@ -206,6 +236,53 @@ export default class RandomnessPlugin extends Plugin {
         });
 
         this.addCommand({
+            id: "draw-from-deck",
+            name: "Draw a card from a deck",
+            callback: () => {
+                void (async () => {
+                    const decks = await this.decks.listDecks();
+                    if (decks.length === 0) {
+                        new Notice(
+                            `Randomness: no decks found under "${this.decks.decksFolderPath()}/".`
+                        );
+                        return;
+                    }
+                    new DeckPickerModal(this, decks.map((d) => d.name), async (name) => {
+                        const r = await this.decks.draw(name);
+                        if (r === null) {
+                            new Notice(`"${name}" is empty — shuffle to reset.`);
+                            return;
+                        }
+                        new Notice(
+                            `${name}: ${r.card.name}` +
+                                (r.facing === "reversed" ? " (reversed)" : "")
+                        );
+                    }).open();
+                })();
+            },
+        });
+
+        this.addCommand({
+            id: "shuffle-deck",
+            name: "Shuffle (reset) a deck",
+            callback: () => {
+                void (async () => {
+                    const decks = await this.decks.listDecks();
+                    if (decks.length === 0) {
+                        new Notice(
+                            `Randomness: no decks found under "${this.decks.decksFolderPath()}/".`
+                        );
+                        return;
+                    }
+                    new DeckPickerModal(this, decks.map((d) => d.name), async (name) => {
+                        await this.decks.shuffle(name);
+                        new Notice(`Shuffled "${name}".`);
+                    }).open();
+                })();
+            },
+        });
+
+        this.addCommand({
             id: "rebuild-generator-index",
             name: "Rebuild generator index",
             callback: () => {
@@ -220,6 +297,9 @@ export default class RandomnessPlugin extends Plugin {
 
     onunload(): void {
         this.previewRegistry.clear();
+        // Flush any debounced deck-state saves so draws made moments
+        // before quitting aren't lost.
+        void this.decks.flush();
     }
 
     async loadSettings(): Promise<void> {
@@ -409,6 +489,8 @@ export default class RandomnessPlugin extends Plugin {
         }
     }
 
+    // (Deck picker modal lives at the bottom of this file.)
+
     private async rerollAllInActiveNote(): Promise<void> {
         const file = this.app.workspace.getActiveFile();
         if (!file) {
@@ -440,5 +522,30 @@ export default class RandomnessPlugin extends Plugin {
         new Notice(
             `Randomness: rerolled — unlocked ${unlocked} call${unlocked === 1 ? "" : "s"}`
         );
+    }
+}
+
+/**
+ * Fuzzy picker over deck names for the deck commands. Kept here (not
+ * in deckService) because it's pure UI and the service stays
+ * modal-free for tests.
+ */
+class DeckPickerModal extends FuzzySuggestModal<string> {
+    constructor(
+        plugin: RandomnessPlugin,
+        private names: string[],
+        private onPick: (name: string) => Promise<void> | void
+    ) {
+        super(plugin.app);
+        this.setPlaceholder("Pick a deck…");
+    }
+    getItems(): string[] {
+        return this.names;
+    }
+    getItemText(item: string): string {
+        return item;
+    }
+    onChooseItem(item: string): void {
+        void this.onPick(item);
     }
 }

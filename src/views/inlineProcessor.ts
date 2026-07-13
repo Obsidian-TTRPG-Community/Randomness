@@ -396,7 +396,18 @@ export async function evaluateInlineExpression(
     expr: string,
     notePath: string,
     plugin: RandomnessPlugin,
-    opts?: { seed?: number; promptValues?: Record<string, string> }
+    opts?: {
+        seed?: number;
+        promptValues?: Record<string, string>;
+        /**
+         * Whether `[!deck:…]` / `Deck: persistent` draws in this
+         * evaluation consume cards for real. True only for explicit
+         * user actions (re-roll click, API call with the flag) —
+         * passive renders draw from a throwaway copy so scrolling
+         * a note never burns a card (persistent-decks design).
+         */
+        commitDeckDraws?: boolean;
+    }
 ): Promise<string> {
     const { vault } = plugin.app;
     const settings = plugin.settings;
@@ -479,6 +490,18 @@ export async function evaluateInlineExpression(
         }
     }
 
+    // Deck hosts: preloaded so the synchronous evaluator can draw.
+    // Draws only commit for explicit actions (see opts docs). The
+    // optional chaining matters: API-shaped test fixtures (and any
+    // embedder building a partial plugin) may not carry a deck
+    // service, and rolls without `[!deck:…]` must keep working.
+    const hosts = plugin.decks
+        ? await plugin.decks.buildEvalHosts(
+              notePath,
+              opts?.commitDeckDraws === true
+          )
+        : undefined;
+
     const evaluator = new Evaluator(bundle.main, extras, {
         // Thread seed + promptValues through when provided (used by
         // the public API's roll options). Both are first-class
@@ -488,8 +511,14 @@ export async function evaluateInlineExpression(
         // behaviour: random seed, prompt defaults.
         seed: opts?.seed,
         promptValues: opts?.promptValues,
+        deckHost: hosts?.deckHost,
+        folderDeckHost: hosts?.folderDeckHost,
     });
-    return evaluator.run();
+    try {
+        return evaluator.run();
+    } finally {
+        hosts?.commitDraws();
+    }
 }
 
 /**
@@ -777,7 +806,11 @@ async function rerollCall(
             (await evaluateInlineExpression(
                 evalSourceOf(call, plugin.settings.diceFormulas),
                 ctx.sourcePath,
-                plugin
+                plugin,
+                // A re-roll click is an explicit action: persistent
+                // deck draws commit here (and only here, in the
+                // inline pipeline).
+                { commitDeckDraws: true }
             ));
     } catch (err) {
         // Replace the span with an error indicator. The user can edit

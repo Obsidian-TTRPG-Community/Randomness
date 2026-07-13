@@ -52,9 +52,16 @@ import {
 import type RandomnessPlugin from "./main";
 import { renderRollerTab, renderBuilderTab } from "../portrait/panel";
 import { renderDiceTrayTab } from "./diceTrayView";
+import { renderDecksTab } from "./decksTab";
 
 /** Sidebar tabs, in display order. */
-const BROWSER_TABS = ["generators", "portraits", "builder", "dice"] as const;
+const BROWSER_TABS = [
+    "generators",
+    "decks",
+    "portraits",
+    "builder",
+    "dice",
+] as const;
 type BrowserTab = (typeof BROWSER_TABS)[number];
 
 export const VIEW_TYPE_BROWSER = "randomness-browser-view";
@@ -133,6 +140,8 @@ export class BrowserView extends ItemView {
         target.appendChild(wrap);
         this.root = wrap;
 
+        const decksEl = activeDocument.createElement("div");
+        target.appendChild(decksEl);
         const portraitsEl = activeDocument.createElement("div");
         target.appendChild(portraitsEl);
         const builderEl = activeDocument.createElement("div");
@@ -142,6 +151,7 @@ export class BrowserView extends ItemView {
 
         this.tabPanels = {
             generators: wrap,
+            decks: decksEl,
             portraits: portraitsEl,
             builder: builderEl,
             dice: diceEl,
@@ -149,6 +159,7 @@ export class BrowserView extends ItemView {
         this.tabButtons = {};
         const defs: [BrowserTab, string][] = [
             ["generators", "Generators"],
+            ["decks", "Decks"],
             ["portraits", "Portraits"],
             ["builder", "Builder"],
             ["dice", "Dice"],
@@ -173,6 +184,7 @@ export class BrowserView extends ItemView {
     private tabButtons: Partial<Record<string, HTMLElement>> = {};
     /** Lazy tabs render on first activation only. */
     private lazyTabsRendered = {
+        decks: false,
         portraits: false,
         builder: false,
         dice: false,
@@ -186,6 +198,10 @@ export class BrowserView extends ItemView {
             panels[key].style.display = key === id ? "" : "none";
             const btn = this.tabButtons[key];
             if (btn) btn.classList.toggle("is-active", key === id);
+        }
+        if (id === "decks" && !this.lazyTabsRendered.decks) {
+            this.lazyTabsRendered.decks = true;
+            renderDecksTab(this.plugin, panels.decks);
         }
         if (id === "portraits" && !this.lazyTabsRendered.portraits) {
             this.lazyTabsRendered.portraits = true;
@@ -1172,8 +1188,20 @@ export async function rollTable(
         generatorRoot: settings.generatorRoot || undefined,
         source: prefetch.source,
     });
-    const evaluator = new Evaluator(bundle.main, bundle.extras, {});
-    return evaluator.runByName(tableName);
+    // Browser rolls are explicit clicks, so persistent deck draws
+    // commit (interaction rule — persistent-decks design).
+    const hosts = plugin.decks
+        ? await plugin.decks.buildEvalHosts(filePath, true)
+        : undefined;
+    const evaluator = new Evaluator(bundle.main, bundle.extras, {
+        deckHost: hosts?.deckHost,
+        folderDeckHost: hosts?.folderDeckHost,
+    });
+    try {
+        return evaluator.runByName(tableName);
+    } finally {
+        hosts?.commitDraws();
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────

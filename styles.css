@@ -1002,3 +1002,113 @@
 .randomness-dice3d-chip {
     animation-fill-mode: both;
 }
+
+/* ── Persistent decks (Decks tab + inline deck: spans) ──────────── */
+
+.randomness-deck {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 8px 0;
+}
+.randomness-deck-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+.randomness-deck-name {
+    font-weight: 600;
+}
+.randomness-deck-count {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.randomness-deck-card {
+    margin: 6px 0;
+    text-align: center;
+}
+.randomness-deck-card-img {
+    max-width: 100%;
+    max-height: 240px;
+    border-radius: 6px;
+    display: block;
+    margin: 0 auto 4px;
+}
+.randomness-deck-card-img.is-reversed {
+    transform: rotate(180deg);
+}
+.randomness-deck-card-name {
+    font-weight: 600;
+}
+.randomness-deck-card-text {
+    font-size: var(--font-ui-small);
+    color: var(--text-normal);
+    text-align: left;
+    margin-top: 4px;
+}
+.randomness-deck-card-badge {
+    display: inline-block;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-bottom: 4px;
+}
+.randomness-deck-card-hint {
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+}
+.randomness-deck-back-default {
+    font-size: 64px;
+    line-height: 1;
+    color: var(--text-faint);
+}
+.randomness-deck-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 6px 0;
+}
+.randomness-deck-button {
+    font-size: var(--font-ui-small);
+    padding: 2px 8px;
+}
+.randomness-deck-flip {
+    font-size: var(--font-ui-small);
+    color: var(--text-muted);
+}
+.randomness-deck-flip-input {
+    width: 56px;
+    margin-left: 4px;
+}
+.randomness-deck-history {
+    font-size: var(--font-ui-small);
+    margin-top: 4px;
+}
+.randomness-deck-history ol {
+    margin: 4px 0 0;
+    padding-left: 20px;
+}
+
+/* Inline `deck:Name` spans. */
+.randomness-deck-inline-body {
+    margin-left: 2px;
+}
+.randomness-deck-inline-img {
+    max-height: 48px;
+    vertical-align: middle;
+    border-radius: 3px;
+    margin-right: 4px;
+}
+.randomness-deck-inline-img.is-reversed {
+    transform: rotate(180deg);
+}
+.randomness-deck-inline-name {
+    font-weight: 600;
+}
+.randomness-deck-inline-count {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+}

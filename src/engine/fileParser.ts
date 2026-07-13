@@ -28,7 +28,7 @@ export class ParseError extends Error {
 const COMMAND_KEYWORDS = [
     "use", "set", "define", "table", "type", "roll", "default",
     "shuffle", "prompt", "header", "footer", "maxreps", "formatting",
-    "title", "endtable", "with"
+    "title", "endtable", "with", "deck", "flip"
 ] as const;
 
 type CommandKeyword = typeof COMMAND_KEYWORDS[number];
@@ -44,7 +44,7 @@ type CommandKeyword = typeof COMMAND_KEYWORDS[number];
  * relying on undocumented (and inconsistent) IPP3 behaviour; we
  * follow the spec.
  */
-const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable)\s*:/i;
+const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable|Deck|Flip)\s*:/i;
 
 /** Split source into logical lines, applying line continuations (`&` at EOL). */
 function preprocessLines(source: string): { text: string; lineNum: number }[] {
@@ -375,6 +375,41 @@ export function parseGeneratorFile(source: string): GeneratorFile {
             if (keyword === "shuffle") {
                 if (!currentTable) throw new ParseError("Shuffle: outside a Table", lineNum);
                 currentTable.shuffleTargets.push(rest.trim());
+                continue;
+            }
+
+            // Deck: persistent — this table's deck-pick state survives
+            // across runs (persistent-decks design). Anything else is
+            // an error so typos don't silently fall back to per-run
+            // semantics.
+            if (keyword === "deck") {
+                if (!currentTable) throw new ParseError("Deck: outside a Table", lineNum);
+                const mode = rest.trim().toLowerCase();
+                if (mode === "persistent") currentTable.deckPersistent = true;
+                else if (mode === "session") currentTable.deckPersistent = false;
+                else {
+                    throw new ParseError(
+                        `Deck: expected 'persistent' or 'session', got '${rest.trim()}'`,
+                        lineNum
+                    );
+                }
+                continue;
+            }
+
+            // Flip: 50% — deck picks from this table set {$facing} to
+            // upright/reversed with the given percent chance of
+            // reversed (tarot-style orientation, generic mechanism).
+            if (keyword === "flip") {
+                if (!currentTable) throw new ParseError("Flip: outside a Table", lineNum);
+                const m = rest.trim().match(/^(\d+(?:\.\d+)?)\s*%?$/);
+                const pct = m ? parseFloat(m[1]) : NaN;
+                if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+                    throw new ParseError(
+                        `Flip: expected a percentage 0–100, got '${rest.trim()}'`,
+                        lineNum
+                    );
+                }
+                currentTable.flipChance = pct;
                 continue;
             }
 

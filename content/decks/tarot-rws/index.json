@@ -1,0 +1,4 @@
+{
+    "name": "Tarot",
+    "files": ["deck.rdm", "deck.json"]
+}

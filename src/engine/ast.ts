@@ -42,6 +42,12 @@ export type TableDecl = {
     shuffleTargets: string[];             // Names of tables to shuffle before rolling
     inTableSets: Assignment[];            // Set:/Define: that live inside this table
     items: TableItem[];
+    /** `Deck: persistent` — deck-pick state survives across runs
+     * (host-backed; see EvaluatorOptions.deckHost). */
+    deckPersistent?: boolean;
+    /** `Flip: N%` — deck picks set {$facing} to reversed N% of the
+     * time, upright otherwise. Undefined = no orientation. */
+    flipChance?: number;
 };
 
 export type TableItem = {
@@ -124,7 +130,7 @@ export type SubtablePickNode = CallCommon & {
     type: "subtable_pick";
     // [#n table] — index source; if missing, evaluator uses "current row index"
     indexSource?: string;
-    // [#"key with spaces" table] — literal dictionary key, used
+    // [#"key with spaces" Table] — literal dictionary key, used
     // instead of indexSource when the key was quoted. Whitespace,
     // hyphens, punctuation are preserved verbatim. The evaluator
     // takes this as a literal key for dictionary lookup (no
@@ -159,7 +165,7 @@ export type ConditionalNode = {
 };
 
 export type FilterCall = {
-    name: string;              // e.g. "upper", "implode", "replace"
+    name: string;              // e.g. "upper", "implode", "replace".
     // Some filters take args inline after their name (Substr 5 3, replace /a/b/, implode <sep>, etc.)
     // Stored as raw source — filter implementations parse their own args.
     args: string;
