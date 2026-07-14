@@ -6,16 +6,18 @@ install stays small. Each bundle folder contains an `index.json`
 (`{ "name": "<Deck Name>", "files": [...] }`) and the files it
 lists; the installer writes them to `<Generator Root>/Decks/<Deck
 Name>/` in the user's vault. Images listed in `files` are fetched
-as binary — to add card art to a bundle, drop the images in the
-bundle folder (named to slug-match the card keys, e.g.
-`the-tower.png` ↔ `The Tower`) and list them in `index.json`.
+as binary; card art pairs with the `.rdm` card keys by slug
+(`the-tower.jpg` ↔ `The Tower`), and `_back.*` is the card back.
 
 Licensing:
 
-- `playing-cards` — a standard 54-card deck as text; no copyrightable
-  content.
-- `tarot-rws` — the Rider–Waite–Smith tarot (first published 1909,
-  public domain). Card meanings are condensed from A. E. Waite,
-  *The Pictorial Key to the Tarot* (1911), public domain. Any card
-  scans added here must come from a public-domain source (e.g. the
-  Wikimedia Commons RWS scans).
+- `playing-cards` — a standard 54-card deck. The SVG card faces and
+  backs are original artwork generated for this plugin (MIT, same as
+  the plugin).
+- `tarot-rws` — the Rider–Waite–Smith tarot, all 78 cards. The card
+  scans reproduce the deck first published in 1909 (art by Pamela
+  Colman Smith), which is in the public domain in the United States
+  and, since 2022, in the United Kingdom and European Union. Card
+  meanings are condensed from A. E. Waite, *The Pictorial Key to the
+  Tarot* (1911), also public domain. The `_back.svg` is original
+  artwork (MIT).
