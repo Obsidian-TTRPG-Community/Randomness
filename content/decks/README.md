@@ -11,9 +11,10 @@ as binary; card art pairs with the `.rdm` card keys by slug
 
 Licensing:
 
-- `playing-cards` — a standard 54-card deck. The SVG card faces and
-  backs are original artwork generated for this plugin (MIT, same as
-  the plugin).
+- `playing-cards` — a standard 54-card deck. The SVG card faces,
+  jokers, and back are Adrian Kennard's classic playing-card designs
+  (released into the public domain at me.uk/cards), taken from the
+  CC0-licensed letele/playing-cards repository.
 - `tarot-rws` — the Rider–Waite–Smith tarot, all 78 cards. The card
   scans reproduce the deck first published in 1909 (art by Pamela
   Colman Smith), which is in the public domain in the United States
