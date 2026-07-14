@@ -200,6 +200,8 @@ function withReps(repsRaw: string, target: string): string {
  * Roller's `|-` single-note mode, our only mode); `#tag|link` → link
  * to a random tagged note. `|+` (a result from EVERY tagged file) has
  * no equivalent yet. Block-type filters approximate to the block roll.
+ * Randomness filter segments (`|#tag`, `|prop=value`) pass through
+ * unchanged so they work under the dice: prefix too.
  */
 function translateTagRoller(s: string): string {
     const m = s.match(/^#([^|\s]+)((?:\|[^|]*)*)$/);
@@ -209,16 +211,33 @@ function translateTagRoller(s: string): string {
     const tagName = m[1];
     const suffixes = (m[2] ?? "")
         .split("|")
-        .map((x) => x.trim().toLowerCase())
+        .map((x) => x.trim())
         .filter((x) => x !== "");
-    if (suffixes.includes("+")) {
-        throw new DiceCompatError(
-            "The every-file tag mode (#tag|+) isn't supported yet — " +
-                "#tag rolls one result from one random tagged note."
-        );
+    let link = false;
+    const filters: string[] = [];
+    for (const suf of suffixes) {
+        const low = suf.toLowerCase();
+        if (low === "+") {
+            throw new DiceCompatError(
+                "The every-file tag mode (#tag|+) isn't supported yet — " +
+                    "#tag rolls one result from one random tagged note."
+            );
+        }
+        if (low === "link") {
+            link = true;
+            continue;
+        }
+        if (suf.startsWith("#") || suf.includes("=")) {
+            filters.push(suf);
+            continue;
+        }
+        // Block-type filters (`paragraph`, `-`, …) approximate to the
+        // default block roll: drop them.
     }
-    if (suffixes.includes("link")) return `#${tagName}|link`;
-    return `#${tagName}`;
+    let out = `#${tagName}`;
+    for (const f of filters) out += `|${f}`;
+    if (link) out += "|link";
+    return out;
 }
 
 // ────────────────────────────────────────────────────────────────────

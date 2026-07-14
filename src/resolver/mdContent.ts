@@ -655,23 +655,205 @@ export function extractNoteBlocks(md: string): string[] {
 // Tag rolls (merge Phase 4)
 // ────────────────────────────────────────────────────────────────────
 
-export interface DirectTagCall {
-    /** Tag without the leading `#`. */
-    tag: string;
-    /** What to produce: a random block from a tagged note, or a link. */
-    mode: "block" | "link";
+/** One frontmatter-property constraint of a tag-roll filter. */
+export interface TagPropFilter {
+    /** Property name (matched case-insensitively). */
+    key: string;
+    /**
+     * Accepted values (OR). `"*"` means "the property exists with any
+     * non-empty value".
+     */
+    values: string[];
 }
 
 /**
- * Detect a direct tag-roll expression: `#tag`, `#tag|link`. Dice
- * Roller's `|-` (single random note) matches our default behaviour and
- * is accepted as plain mode; block-type filters are approximated to
- * the block mode. Returns null for anything that isn't a tag call.
+ * The full note filter behind a tag roll. A note matches when it
+ * carries at least one tag from EVERY tag group (groups AND together;
+ * tags within a group OR) and satisfies EVERY property constraint
+ * (values within one constraint OR).
+ */
+export interface TagRollFilter {
+    /** Lowercased tag names without the leading `#`. */
+    tagGroups: string[][];
+    props: TagPropFilter[];
+}
+
+export interface DirectTagCall {
+    /** Canonical human-readable form of the filter, for messages. */
+    label: string;
+    /** What to produce: a random block from a matching note, or a link. */
+    mode: "block" | "link";
+    filter: TagRollFilter;
+}
+
+const TAG_NAME_RE = /^#([A-Za-z0-9_/-]+)$/;
+
+/**
+ * Detect a direct tag-roll expression. Grammar (pipe-separated
+ * segments):
+ *
+ *   `#tag`                          random block from a random tagged note
+ *   `#tag|link`                     wikilink to a random tagged note
+ *   `#npc|#merchant`                both tags required (AND)
+ *   `#npc,#monster`                 either tag (OR within a segment)
+ *   `#npc|universe=Eldara`          frontmatter property filter
+ *   `#npc|universe=Eldara,Vex`      property is Eldara OR Vex
+ *   `#npc|universe=*`               property exists (any value)
+ *   `*|universe=Eldara`             all notes with the property, no tag
+ *
+ * Dice Roller's `|-` (single random note) matches our default
+ * behaviour and is accepted as plain mode; unknown word suffixes
+ * (block-type filters like `paragraph`) are approximated to the block
+ * mode, as before. Returns null for anything that isn't a tag call.
  */
 export function parseDirectTagCall(expr: string): DirectTagCall | null {
-    const m = expr.trim().match(/^#([A-Za-z0-9_/-]+)(?:\|(.*))?$/);
-    if (!m) return null;
-    const suffix = (m[2] ?? "").trim().toLowerCase();
-    if (suffix === "link") return { tag: m[1], mode: "link" };
-    return { tag: m[1], mode: "block" };
+    const s = expr.trim();
+    if (!s.startsWith("#") && !s.startsWith("*")) return null;
+    const segments = s.split("|").map((x) => x.trim());
+    const first = segments.shift() ?? "";
+
+    const filter: TagRollFilter = { tagGroups: [], props: [] };
+
+    const parseTagGroup = (seg: string): string[] | null => {
+        const parts = seg
+            .split(",")
+            .map((x) => x.trim())
+            .filter((x) => x !== "");
+        if (parts.length === 0) return null;
+        const group: string[] = [];
+        for (const p of parts) {
+            const m = (p.startsWith("#") ? p : "#" + p).match(TAG_NAME_RE);
+            if (!m) return null;
+            group.push(m[1].toLowerCase());
+        }
+        return group;
+    };
+
+    if (first === "*") {
+        // "All notes" source is only meaningful with at least one
+        // filter segment; a bare `*` stays available to other syntax.
+        if (segments.length === 0) return null;
+    } else {
+        const g = parseTagGroup(first);
+        if (g === null) return null;
+        filter.tagGroups.push(g);
+    }
+
+    let mode: "block" | "link" = "block";
+    for (const seg of segments) {
+        if (seg === "") continue;
+        const low = seg.toLowerCase();
+        if (low === "link") {
+            mode = "link";
+            continue;
+        }
+        if (low === "block" || low === "-") {
+            mode = "block";
+            continue;
+        }
+        if (seg.startsWith("#")) {
+            const g = parseTagGroup(seg);
+            if (g === null) return null;
+            filter.tagGroups.push(g);
+            continue;
+        }
+        const eq = seg.indexOf("=");
+        if (eq > 0) {
+            const key = seg.slice(0, eq).trim();
+            const values = seg
+                .slice(eq + 1)
+                .split(",")
+                .map((v) => v.trim())
+                .filter((v) => v !== "");
+            if (key === "" || values.length === 0) return null;
+            filter.props.push({ key, values });
+            continue;
+        }
+        // Unknown plain-word suffix (Dice Roller block-type filters
+        // like `paragraph`): approximate to the block mode, as before.
+        if (/^[A-Za-z ]+$/.test(seg)) continue;
+        return null;
+    }
+
+    if (filter.tagGroups.length === 0 && filter.props.length === 0) {
+        return null;
+    }
+    return { label: describeTagFilter(filter), mode, filter };
+}
+
+/** Canonical `#tag|prop=value` rendering of a filter, for messages. */
+export function describeTagFilter(f: TagRollFilter): string {
+    const parts: string[] = [];
+    for (const g of f.tagGroups) {
+        parts.push(g.map((t) => "#" + t).join(","));
+    }
+    for (const p of f.props) {
+        parts.push(`${p.key}=${p.values.join(",")}`);
+    }
+    return parts.length > 0 ? parts.join("|") : "*";
+}
+
+/**
+ * Pure matcher behind the vault tag lookup: does a note carrying
+ * `tags` (lowercased, no `#`; nested tags NOT expanded — parents match
+ * via prefix) with frontmatter `fm` satisfy `filter`? Kept here,
+ * Obsidian-free, so it's directly testable.
+ */
+export function matchesTagRollFilter(
+    tags: ReadonlySet<string>,
+    fm: Record<string, unknown> | undefined,
+    filter: TagRollFilter
+): boolean {
+    for (const group of filter.tagGroups) {
+        let groupOk = false;
+        outer: for (const want of group) {
+            for (const t of tags) {
+                if (t === want || t.startsWith(want + "/")) {
+                    groupOk = true;
+                    break outer;
+                }
+            }
+        }
+        if (!groupOk) return false;
+    }
+    if (filter.props.length === 0) return true;
+    if (!fm) return false;
+    const byKey = new Map<string, unknown>();
+    for (const k of Object.keys(fm)) byKey.set(k.toLowerCase(), fm[k]);
+    for (const p of filter.props) {
+        const raw = byKey.get(p.key.toLowerCase());
+        const list = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+        const forms = new Set<string>();
+        for (const v of list) {
+            for (const c of frontmatterValueForms(v)) forms.add(c);
+        }
+        if (forms.size === 0) return false;
+        const ok = p.values.some((want) =>
+            want === "*" ? true : forms.has(want.toLowerCase())
+        );
+        if (!ok) return false;
+    }
+    return true;
+}
+
+/**
+ * Normalised comparison forms for one frontmatter value: the plain
+ * lowercased string, plus — for wikilink values like
+ * `[[Worlds/Eldara|The Realm]]` — the link target's basename and the
+ * alias, so `universe=Eldara` matches `universe: "[[Worlds/Eldara]]"`.
+ */
+function frontmatterValueForms(v: unknown): string[] {
+    const s = String(v).trim();
+    if (s === "") return [];
+    const out = [s.toLowerCase()];
+    const m = s.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+    if (m) {
+        const target = m[1].trim();
+        const base = target
+            .slice(target.lastIndexOf("/") + 1)
+            .replace(/\.md$/i, "");
+        out.push(base.toLowerCase());
+        if (m[2]) out.push(m[2].trim().toLowerCase());
+    }
+    return out;
 }

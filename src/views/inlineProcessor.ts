@@ -447,7 +447,7 @@ export async function evaluateInlineExpression(
     const tagCall = parseDirectTagCall(expr);
     if (tagCall !== null) {
         const tagged: Map<string, string> = new Map();
-        for (const p of tagLookup(tagCall.tag).slice(0, TAG_FILE_CAP)) {
+        for (const p of tagLookup(tagCall.filter).slice(0, TAG_FILE_CAP)) {
             try {
                 tagged.set(p, await vault.adapter.read(p));
             } catch {

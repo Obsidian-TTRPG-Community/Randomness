@@ -10,6 +10,7 @@
  *   3. End-to-end: line/block/tag rolls through scope + engine,
  *      seeded and deterministic.
  *   4. dice: compat translation for the newly supported forms.
+ *   5. Tag/property filters (tags AND/OR, frontmatter properties).
  */
 
 import {
@@ -17,6 +18,8 @@ import {
     extractNoteBlocks,
     parseDirectWikilinkCall,
     parseDirectTagCall,
+    matchesTagRollFilter,
+    TagRollFilter,
     LINES_PREFIX,
     BLOCKS_PREFIX,
 } from "../../src/resolver/mdContent";
@@ -99,19 +102,129 @@ describe("parseDirectWikilinkCall: |line and |block", () => {
 
 describe("parseDirectTagCall", () => {
     test("tag and tag|link forms", () => {
-        expect(parseDirectTagCall("#rumour")).toEqual({
-            tag: "rumour",
+        expect(parseDirectTagCall("#rumour")).toMatchObject({
             mode: "block",
+            filter: { tagGroups: [["rumour"]], props: [] },
         });
-        expect(parseDirectTagCall("#town/north|link")).toEqual({
-            tag: "town/north",
+        expect(parseDirectTagCall("#town/north|link")).toMatchObject({
             mode: "link",
+            filter: { tagGroups: [["town/north"]], props: [] },
         });
+    });
+
+    test("tag AND / OR groups", () => {
+        expect(parseDirectTagCall("#npc|#merchant")?.filter.tagGroups).toEqual(
+            [["npc"], ["merchant"]]
+        );
+        expect(parseDirectTagCall("#npc,#monster")?.filter.tagGroups).toEqual([
+            ["npc", "monster"],
+        ]);
+    });
+
+    test("property filters, with OR values and link mode", () => {
+        const c = parseDirectTagCall("#npc|universe=Eldara,Vex|link");
+        expect(c).toMatchObject({
+            mode: "link",
+            filter: {
+                tagGroups: [["npc"]],
+                props: [{ key: "universe", values: ["Eldara", "Vex"] }],
+            },
+        });
+        expect(c?.label).toBe("#npc|universe=Eldara,Vex");
+    });
+
+    test("* source rolls on properties alone", () => {
+        expect(parseDirectTagCall("*|universe=Eldara")).toMatchObject({
+            mode: "block",
+            filter: {
+                tagGroups: [],
+                props: [{ key: "universe", values: ["Eldara"] }],
+            },
+        });
+        // A bare * (no filters) is NOT a tag call.
+        expect(parseDirectTagCall("*")).toBeNull();
+        expect(parseDirectTagCall("*|link")).toBeNull();
+    });
+
+    test("dice-compat and unknown word suffixes approximate to block", () => {
+        expect(parseDirectTagCall("#rumour|-")?.mode).toBe("block");
+        expect(parseDirectTagCall("#rumour|paragraph")?.mode).toBe("block");
     });
 
     test("non-tags are null", () => {
         expect(parseDirectTagCall("[@table]")).toBeNull();
         expect(parseDirectTagCall("# heading text")).toBeNull();
+        expect(parseDirectTagCall("#npc|=broken")).toBeNull();
+        expect(parseDirectTagCall("#npc|universe=")).toBeNull();
+    });
+});
+
+describe("matchesTagRollFilter", () => {
+    const f = (
+        tagGroups: string[][],
+        props: TagRollFilter["props"] = []
+    ): TagRollFilter => ({ tagGroups, props });
+    const tags = new Set(["npc", "town/north"]);
+
+    test("tag groups AND together; tags in a group OR", () => {
+        expect(matchesTagRollFilter(tags, undefined, f([["npc"]]))).toBe(true);
+        expect(
+            matchesTagRollFilter(tags, undefined, f([["npc"], ["merchant"]]))
+        ).toBe(false);
+        expect(
+            matchesTagRollFilter(tags, undefined, f([["merchant", "npc"]]))
+        ).toBe(true);
+        // Nested tags match their parent.
+        expect(matchesTagRollFilter(tags, undefined, f([["town"]]))).toBe(true);
+    });
+
+    test("property values match case-insensitively, OR'd", () => {
+        const fm = { universe: "Eldara", Level: 3 };
+        expect(
+            matchesTagRollFilter(tags, fm, f([], [{ key: "universe", values: ["eldara"] }]))
+        ).toBe(true);
+        expect(
+            matchesTagRollFilter(tags, fm, f([], [{ key: "universe", values: ["Vex", "Eldara"] }]))
+        ).toBe(true);
+        expect(
+            matchesTagRollFilter(tags, fm, f([], [{ key: "universe", values: ["Vex"] }]))
+        ).toBe(false);
+        // Case-insensitive keys; non-string values stringify.
+        expect(
+            matchesTagRollFilter(tags, fm, f([], [{ key: "level", values: ["3"] }]))
+        ).toBe(true);
+        // Missing property / no frontmatter fails.
+        expect(
+            matchesTagRollFilter(tags, fm, f([], [{ key: "region", values: ["x"] }]))
+        ).toBe(false);
+        expect(
+            matchesTagRollFilter(tags, undefined, f([], [{ key: "universe", values: ["Eldara"] }]))
+        ).toBe(false);
+    });
+
+    test("list-valued properties match if any entry hits", () => {
+        const fm = { universe: ["Eldara", "Vex"] };
+        expect(
+            matchesTagRollFilter(tags, fm, f([], [{ key: "universe", values: ["vex"] }]))
+        ).toBe(true);
+    });
+
+    test("wikilink values match target basename and alias", () => {
+        const fm = { universe: "[[Worlds/Eldara|The Realm]]" };
+        for (const want of ["Eldara", "the realm", "[[Worlds/Eldara|The Realm]]"]) {
+            expect(
+                matchesTagRollFilter(tags, fm, f([], [{ key: "universe", values: [want] }]))
+            ).toBe(true);
+        }
+    });
+
+    test("* value means property exists", () => {
+        expect(
+            matchesTagRollFilter(tags, { universe: "x" }, f([], [{ key: "universe", values: ["*"] }]))
+        ).toBe(true);
+        expect(
+            matchesTagRollFilter(tags, {}, f([], [{ key: "universe", values: ["*"] }]))
+        ).toBe(false);
     });
 });
 
@@ -133,8 +246,19 @@ describe("line/block/tag rolls end-to-end", () => {
         "Camp/Rumours.md": NOTE,
         "Camp/Sightings.md": "A dragon overhead.\n\nStrange lights.",
     });
-    const tagFiles = (tag: string) =>
-        tag === "rumour" ? ["Camp/Rumours.md", "Camp/Sightings.md"] : [];
+    // Mirrors the plugin's metadata-cache lookup over two fake notes:
+    // both tagged #rumour, only Sightings carries universe: Eldara.
+    const meta: Record<string, { tags: Set<string>; fm?: Record<string, unknown> }> = {
+        "Camp/Rumours.md": { tags: new Set(["rumour"]) },
+        "Camp/Sightings.md": {
+            tags: new Set(["rumour"]),
+            fm: { universe: "Eldara" },
+        },
+    };
+    const tagFiles = (filter: TagRollFilter) =>
+        Object.keys(meta)
+            .filter((p) => matchesTagRollFilter(meta[p].tags, meta[p].fm, filter))
+            .sort();
 
     function roll(expr: string, seed = 1): string {
         const bundle = buildInlineBundle(expr, {
@@ -186,6 +310,23 @@ describe("line/block/tag rolls end-to-end", () => {
         expect(roll("#rumour", 7)).toBe(roll("#rumour", 7));
     });
 
+    test("property filter narrows the candidates", () => {
+        for (let seed = 1; seed <= 10; seed++) {
+            expect(roll("#rumour|universe=Eldara|link", seed)).toBe(
+                "[[Camp/Sightings]]"
+            );
+            expect(roll("*|universe=Eldara|link", seed)).toBe(
+                "[[Camp/Sightings]]"
+            );
+            expect(["A dragon overhead.", "Strange lights."]).toContain(
+                roll("#rumour|universe=Eldara", seed)
+            );
+        }
+        expect(() => roll("#rumour|universe=Vex")).toThrow(
+            /No notes found matching #rumour\|universe=Vex/
+        );
+    });
+
     test("unknown tag and missing lookup error clearly", () => {
         expect(() => roll("#nope")).toThrow(/No notes found/);
         expect(() =>
@@ -216,5 +357,15 @@ describe("dice: compat for sections, lines, and tags", () => {
         expect(t("#rumour|link")).toBe("#rumour|link");
         expect(t("#rumour|paragraph")).toBe("#rumour");
         expect(() => t("#rumour|+")).toThrow(/every-file/i);
+    });
+
+    test("filter segments pass through the dice: prefix", () => {
+        expect(t("#npc|universe=Eldara|link")).toBe(
+            "#npc|universe=Eldara|link"
+        );
+        expect(t("#npc|#merchant")).toBe("#npc|#merchant");
+        expect(t("#npc|link|universe=Eldara")).toBe(
+            "#npc|universe=Eldara|link"
+        );
     });
 });

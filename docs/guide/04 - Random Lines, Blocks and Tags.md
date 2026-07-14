@@ -25,6 +25,24 @@ Tag some notes `#rumour` (in the text or in frontmatter). Then:
 
 No extra plugins needed — tags come from Obsidian itself.
 
+## Narrowing by tags and properties
+
+Running several campaigns in one vault? Filter the candidates with
+extra pipe segments — more tags, or frontmatter properties:
+
+```text
+`rdm:#npc|universe=Eldara|link`   only NPCs whose `universe` property
+                                  is Eldara
+`rdm:#npc|#merchant`              notes with BOTH tags
+`rdm:#npc,#monster`               notes with EITHER tag
+`rdm:#npc|universe=Eldara,Vex`    property is Eldara OR Vex
+`rdm:*|universe=Eldara|link`      any note with the property, no tag
+```
+
+Values match case-insensitively, lists in frontmatter match if any
+entry hits, and link-style values (`universe: "[[Eldara]]"`) match
+their note name. `prop=*` means "the property exists".
+
 ## Why this is handy
 
 - A `#quest-hook` tag across your campaign notes = instant

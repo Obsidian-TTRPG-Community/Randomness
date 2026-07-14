@@ -32,6 +32,7 @@ import {
     noteBaseName,
     parseDirectTagCall,
     parseDirectWikilinkCall,
+    TagRollFilter,
 } from "./mdContent";
 import {
     FileSource,
@@ -62,12 +63,13 @@ export interface InlineScopeOptions {
         callerDir: string
     ) => string | null;
     /**
-     * Optional tag lookup: vault paths of notes carrying `#tag`
-     * (merge Phase 4). Required for `#tag` roll expressions; the
-     * plugin backs it with the metadata cache. When absent, tag
-     * rolls throw a descriptive error.
+     * Optional tag-roll lookup: vault paths of notes matching a
+     * TagRollFilter — tags and/or frontmatter properties (merge
+     * Phase 4). Required for `#tag` roll expressions; the plugin
+     * backs it with the metadata cache. When absent, tag rolls throw
+     * a descriptive error.
      */
-    tagFiles?: (tag: string) => string[];
+    tagFiles?: (filter: TagRollFilter) => string[];
 }
 
 /**
@@ -101,13 +103,13 @@ export function buildInlineBundle(
     if (tag !== null) {
         if (!opts.tagFiles) {
             throw new Error(
-                `Tag rolls (#${tag.tag}) need the vault's tag index, ` +
+                `Tag rolls (${tag.label}) need the vault's tag index, ` +
                     `which isn't available in this context.`
             );
         }
-        const files = opts.tagFiles(tag.tag).slice(0, TAG_FILE_CAP);
+        const files = opts.tagFiles(tag.filter).slice(0, TAG_FILE_CAP);
         if (files.length === 0) {
-            throw new Error(`No notes found with #${tag.tag}.`);
+            throw new Error(`No notes found matching ${tag.label}.`);
         }
         if (tag.mode === "link") {
             tagTable = makeTagTable(

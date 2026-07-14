@@ -117,17 +117,22 @@ export function makeLinkAwareBasenameResolver(
     };
 }
 
+import {
+    TagRollFilter,
+    matchesTagRollFilter,
+} from "../resolver/mdContent";
+
 /**
- * Vault-wide tag lookup backed by the metadata cache: returns the
- * paths of markdown notes carrying `#tag` (inline or frontmatter;
- * nested tags `#tag/sub` match their parent). Sorted for
- * deterministic seeded rolls. No Dataview required.
+ * Vault-wide tag-roll lookup backed by the metadata cache: returns
+ * the paths of markdown notes matching a TagRollFilter — tags (inline
+ * or frontmatter; nested tags `#tag/sub` match their parent) AND/OR
+ * frontmatter properties. Sorted for deterministic seeded rolls. No
+ * Dataview required.
  */
 export function makeTagFilesLookup(
     plugin: RandomnessPlugin
-): (tag: string) => string[] {
-    return (tag) => {
-        const want = tag.replace(/^#/, "").toLowerCase();
+): (filter: TagRollFilter) => string[] {
+    return (filter) => {
         const out: string[] = [];
         try {
             const cache = plugin.app.metadataCache;
@@ -147,16 +152,16 @@ export function makeTagFilesLookup(
                 for (const t of fmList) {
                     tags.add(String(t).trim().replace(/^#/, "").toLowerCase());
                 }
-                for (const t of tags) {
-                    if (t === want || t.startsWith(want + "/")) {
-                        out.push(f.path);
-                        break;
-                    }
+                const fmAll = fc.frontmatter as
+                    | Record<string, unknown>
+                    | undefined;
+                if (matchesTagRollFilter(tags, fmAll, filter)) {
+                    out.push(f.path);
                 }
             }
         } catch {
             // Defensive: metadata cache API drift degrades to "no
-            // tagged notes" (a clear error upstream), not a crash.
+            // matching notes" (a clear error upstream), not a crash.
         }
         return out.sort();
     };

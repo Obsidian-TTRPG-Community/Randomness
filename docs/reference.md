@@ -625,10 +625,29 @@ block ids at all:
 `rdm:#rumour|link`         a link to a random #rumour note
 ```
 
+Tag rolls can be narrowed with extra pipe segments — additional tags
+and/or frontmatter properties:
+
+```text
+`rdm:#npc|universe=Eldara|link`   only notes whose `universe`
+                                  property is Eldara
+`rdm:#npc|#merchant`              both tags required (AND)
+`rdm:#npc,#monster`               either tag (OR)
+`rdm:#npc|universe=Eldara,Vex`    property is Eldara OR Vex
+`rdm:#npc|universe=*`             property exists, any value
+`rdm:*|universe=Eldara`           all notes with the property, no tag
+```
+
+Segments AND together; commas within a segment OR. Property keys and
+values match case-insensitively; list-valued properties match if any
+entry hits; wikilink values (`universe: "[[Worlds/Eldara]]"`) match
+their target's name or alias. These filters also work under the
+`dice:` compatibility prefix.
+
 Tag rolls use Obsidian's own metadata cache — no Dataview required —
-and cap at 50 tagged notes per roll. The note pick happens inside the
-engine, so seeded rolls are reproducible and every re-roll may pick a
-different note.
+and cap at 50 matching notes per roll. The note pick happens inside
+the engine, so seeded rolls are reproducible and every re-roll may
+pick a different note.
 
 ### How wikilinks resolve
 
