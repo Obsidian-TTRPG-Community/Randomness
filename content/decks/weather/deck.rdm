@@ -1,0 +1,20 @@
+// Weather deck — draw one card each morning. Upright: the weather
+// passes by nightfall. Reversed: it settles in — keep the card on the
+// table and apply its effect until a new card replaces it.
+// Reversal chance lives in deck.json (40%). One card per day keeps a
+// natural rhythm: the deck runs mild-to-harsh 4/3/3, and reversals
+// give storms their staying power. Shuffle the deck when the season
+// turns (Decks tab, or the "Shuffle a deck" command).
+Title: Weather
+Table: Weather
+Type: Dictionary
+High Sun: [when]{$facing}=reversed[do]<b>Heatwave.</b> The heat digs in for days — water goes twice as fast, and armour is a punishment. Lingers until the next card.[else]Hot, bright, and glorious. Fine travel, but shade is scarce at noon.[end]
+Clear Skies: [when]{$facing}=reversed[do]<b>Dead calm.</b> Not a breath of wind for days. Sails hang slack; sound carries alarmingly far. Lingers until the next card.[else]Crisp blue from horizon to horizon. Perfect going — spirits lift.[end]
+Gentle Breeze: [when]{$facing}=reversed[do]<b>Rising wind.</b> By evening it is a hard, steady blow. Ranged shots suffer; campfires want watching. Lingers until the next card.[else]A fair wind at your back all day. Swift travel and clean air.[end]
+Scattered Clouds: [when]{$facing}=reversed[do]<b>Gathering front.</b> The clouds knit together through the day — whatever comes next, it comes early and stays. Lingers until the next card.[else]Sun and shadow chase each other across the land. Unremarkable, pleasant going.[end]
+Mist: [when]{$facing}=reversed[do]<b>Fogbound.</b> A white wall to twenty paces, day after day. Easy to get lost, easier to be ambushed. Lingers until the next card.[else]Morning mist pools in the low ground and burns off by midday.[end]
+Overcast: [when]{$facing}=reversed[do]<b>Leaden days.</b> A grey lid seals the sky and stays. No sun for navigation; moods sour. Lingers until the next card.[else]Grey and heavy, but dry. The light is flat and distances deceive.[end]
+Drizzle: [when]{$facing}=reversed[do]<b>Soaking damp.</b> Fine rain that never quite stops. Everything is wet: bowstrings, bedrolls, tempers. Lingers until the next card.[else]A soft rain passes through. Cloaks up for an hour, then it is gone.[end]
+Downpour: [when]{$facing}=reversed[do]<b>The rains set in.</b> Roads to mud, fords impassable, tracks erased. Travel at half pace. Lingers until the next card.[else]A hammering rain sweeps over and is gone by dusk, leaving the world washed and dripping.[end]
+Thunderstorm: [when]{$facing}=reversed[do]<b>Storm season.</b> Storm after storm rolls through. Camp early, rope everything down; the rivers are rising. Lingers until the next card.[else]One violent hour — lightning, wind, and stinging rain — then an eerie, rinsed calm.[end]
+Cold Snap: [when]{$facing}=reversed[do]<b>Deep freeze.</b> A killing cold settles. Water skins freeze, wounds mend slowly, fire is life. Lingers until the next card.[else]Frost overnight and a raw morning wind. Cold hands, quick marches.[end]

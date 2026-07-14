@@ -13,9 +13,10 @@
  * locking service would only entangle two unrelated state machines.
  */
 
-import { MarkdownPostProcessorContext, TFile } from "obsidian";
+import { MarkdownPostProcessorContext, Notice, TFile } from "obsidian";
 import { markdownLite, setSanitisedHtml } from "./sanitiser";
 import type { DrawResult, FolderDeck } from "../decks/deckService";
+import { paintCard } from "./decksTab";
 import type RandomnessPlugin from "./main";
 
 export const DECK_INLINE_PREFIX = "deck:";
@@ -26,6 +27,105 @@ export function parseDeckSpan(text: string): string | null {
     const name = text.slice(DECK_INLINE_PREFIX.length).trim();
     // A bare `deck:` mention in prose is documentation, not a call.
     return name === "" ? null : name;
+}
+
+/**
+ * Parse a ```randomness codeblock whose entire body is one
+ * `deck:Name` line (comments allowed). Null when the block is a
+ * normal generator — the caller falls through to the engine.
+ */
+export function parseDeckBlock(source: string): string | null {
+    const lines = source
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l !== "" && !l.startsWith("//"));
+    if (lines.length !== 1) return null;
+    return parseDeckSpan(lines[0]);
+}
+
+/**
+ * Block-sized deck display for a `deck:Name` codeblock: the last
+ * drawn card at full card size (image, name, meaning — the Decks
+ * tab's card renderer, overlay copy buttons included) plus a Draw
+ * button and remaining count. Same rule as the inline span:
+ * rendering NEVER draws — only the explicit click does.
+ */
+export async function renderDeckBlock(
+    plugin: RandomnessPlugin,
+    container: HTMLElement,
+    deckName: string
+): Promise<void> {
+    const deck = await plugin.decks.getDeck(deckName);
+    const box = activeDocument.createElement("div");
+    box.className = "randomness-deck-block";
+    container.appendChild(box);
+
+    if (!deck) {
+        box.classList.add("randomness-error");
+        box.textContent = `Unknown deck: ${deckName}`;
+        return;
+    }
+
+    const cardArea = activeDocument.createElement("div");
+    cardArea.className = "randomness-deck-card randomness-deck-block-card";
+    box.appendChild(cardArea);
+
+    const controls = activeDocument.createElement("div");
+    controls.className = "randomness-deck-block-controls";
+    box.appendChild(controls);
+    const drawBtn = activeDocument.createElement("button");
+    drawBtn.className = "randomness-deck-button";
+    drawBtn.type = "button";
+    drawBtn.textContent = "🎴 Draw";
+    drawBtn.title = `Draw from ${deck.name}`;
+    drawBtn.setAttribute("aria-label", drawBtn.title);
+    controls.appendChild(drawBtn);
+    const count = activeDocument.createElement("span");
+    count.className = "randomness-deck-count";
+    count.title = "Cards remaining / total";
+    controls.appendChild(count);
+
+    const paint = async (): Promise<void> => {
+        const fresh = await plugin.decks.getDeck(deckName);
+        if (!fresh) return;
+        const last = await plugin.decks.lastDrawn(deckName);
+        count.textContent = `${fresh.state.remaining.length}/${fresh.cards.length}`;
+        paintCard(
+            plugin,
+            cardArea,
+            fresh,
+            last,
+            last === null ? null : "drawn"
+        );
+    };
+
+    drawBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        void (async () => {
+            const r = await plugin.decks.draw(deckName);
+            if (r === null) {
+                new Notice(
+                    `"${deck.name}" is empty — shuffle to reset (Decks tab).`
+                );
+            }
+            // The change notification repaints; call anyway so a
+            // failed draw still refreshes the count.
+            await paint();
+        })();
+    });
+
+    // Track changes from anywhere (Decks tab, inline spans, commands)
+    // while this block is in the document.
+    const unsubscribe = plugin.decks.onChange(() => {
+        if (!box.isConnected) {
+            unsubscribe();
+            return;
+        }
+        void paint();
+    });
+
+    await paint();
 }
 
 export function buildDeckInlineProcessor(plugin: RandomnessPlugin) {

@@ -60,7 +60,7 @@ export interface DiceTranslation {
 
 /** Trailing display flags. `text(...)` may contain anything but parens. */
 const FLAG_RE =
-    /\|(nodice|form|noform|render|norender|avg|none|paren|noparen|round|floor|ceil|noround|signed|text\([^()]*\))\s*$/i;
+    /\|(nodice|dice|form|noform|render|norender|avg|none|paren|noparen|round|floor|ceil|noround|signed|text\([^()]*\))\s*$/i;
 
 /**
  * Strip trailing Dice Roller display flags (`|form`, `|nodice`,

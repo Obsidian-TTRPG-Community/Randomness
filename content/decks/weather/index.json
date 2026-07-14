@@ -1,0 +1,18 @@
+{
+    "name": "Weather",
+    "files": [
+        "deck.rdm",
+        "deck.json",
+        "_back.svg",
+        "clear-skies.svg",
+        "cold-snap.svg",
+        "downpour.svg",
+        "drizzle.svg",
+        "gentle-breeze.svg",
+        "high-sun.svg",
+        "mist.svg",
+        "overcast.svg",
+        "scattered-clouds.svg",
+        "thunderstorm.svg"
+    ]
+}

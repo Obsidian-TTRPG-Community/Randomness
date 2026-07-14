@@ -10,7 +10,13 @@
 
 import { translateDiceExpression } from "../../src/compat/diceCompat";
 import { evalSourceOf } from "../../src/views/lockingService";
-import { replaceCodeElement } from "../../src/views/inlineProcessor";
+import {
+    applyVisibleFaces,
+    decorateDiceResult,
+    replaceCodeElement,
+} from "../../src/views/inlineProcessor";
+import { DiceTraceEntry } from "../../src/engine/dice";
+import type RandomnessPlugin from "../../src/views/main";
 
 describe("formula aliases", () => {
     const aliases = {
@@ -85,5 +91,126 @@ describe("display flags rendering", () => {
             onReroll: () => undefined,
         });
         expect(span.title).toBe("");
+    });
+
+    test("breakdown prop lands in the result span's hover title", () => {
+        const code = document.createElement("code");
+        document.body.appendChild(code);
+        const span = replaceCodeElement(code, {
+            result: "10",
+            breakdown: "2d10 → 7, 3",
+            isLocked: false,
+            expr: "{2d10}",
+            onLock: () => undefined,
+            onReroll: () => undefined,
+        });
+        const result = span.querySelector<HTMLElement>(
+            ".randomness-inline-result"
+        );
+        expect(result?.title).toBe("{2d10}\n2d10 → 7, 3");
+    });
+});
+
+describe("dice breakdown display", () => {
+    const fakePlugin = (showDiceBreakdown: boolean): RandomnessPlugin =>
+        ({
+            settings: { diceFormulas: {}, showDiceBreakdown },
+        }) as unknown as RandomnessPlugin;
+
+    const trace = (
+        notation: string,
+        values: number[],
+        total = values.reduce((a, b) => a + b, 0)
+    ): DiceTraceEntry[] => [
+        {
+            notation,
+            total,
+            dice: values.map((value) => ({
+                value,
+                kept: true,
+                exploded: false,
+                rerolled: false,
+            })),
+        },
+    ];
+
+    test("tooltip breakdown is always returned when dice rolled", () => {
+        const r = decorateDiceResult(
+            { expr: "{2d10}" },
+            "10",
+            fakePlugin(false),
+            trace("2d10", [7, 3])
+        );
+        expect(r.breakdown).toBe("2d10 → 7, 3");
+        expect(r.display).toBe("10"); // setting off → not visible
+    });
+
+    test("setting on appends the face list, rdm: and dice: alike", () => {
+        expect(
+            decorateDiceResult(
+                { expr: "{2d10}" },
+                "10",
+                fakePlugin(true),
+                trace("2d10", [7, 3])
+            ).display
+        ).toBe("10 (7, 3)");
+        expect(
+            decorateDiceResult(
+                { expr: "2d10", prefix: "dice:" },
+                "10",
+                fakePlugin(true),
+                trace("2d10", [7, 3])
+            ).display
+        ).toBe("10 (7, 3)");
+    });
+
+    test("|dice flag opts a compat span in with the setting off", () => {
+        expect(
+            decorateDiceResult(
+                { expr: "2d10|dice", prefix: "dice:" },
+                "10",
+                fakePlugin(false),
+                trace("2d10", [7, 3])
+            ).display
+        ).toBe("10 (7, 3)");
+    });
+
+    test("single bare die is not repeated: no '14 (14)'", () => {
+        expect(
+            applyVisibleFaces(
+                { expr: "{1d20}" },
+                "14",
+                fakePlugin(true),
+                trace("1d20", [14])
+            )
+        ).toBe("14");
+        // …but a modifier makes the face informative again.
+        expect(
+            applyVisibleFaces(
+                { expr: "{1d20+5}" },
+                "19",
+                fakePlugin(true),
+                trace("1d20+5", [14])
+            )
+        ).toBe("19 (14)");
+    });
+
+    test("no trace → display untouched", () => {
+        expect(
+            decorateDiceResult({ expr: "[@Names]" }, "Alice", fakePlugin(true))
+                .display
+        ).toBe("Alice");
+    });
+
+    test("|text label keeps faces out of the visible display", () => {
+        const r = decorateDiceResult(
+            { expr: "1d20+2|text(Dex +2)", prefix: "dice:" },
+            "17",
+            fakePlugin(true),
+            trace("1d20+2", [15])
+        );
+        expect(r.display).toBe("Dex +2");
+        expect(r.tooltip).toBe("17");
+        expect(r.breakdown).toBe("1d20+2 → 15");
     });
 });

@@ -130,7 +130,7 @@ export type SubtablePickNode = CallCommon & {
     type: "subtable_pick";
     // [#n table] — index source; if missing, evaluator uses "current row index"
     indexSource?: string;
-    // [#"key with spaces" Table] — literal dictionary key, used
+    // [#"key with spaces" table] — literal dictionary key, used
     // instead of indexSource when the key was quoted. Whitespace,
     // hyphens, punctuation are preserved verbatim. The evaluator
     // takes this as a literal key for dictionary lookup (no

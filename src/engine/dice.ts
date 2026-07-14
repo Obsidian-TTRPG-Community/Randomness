@@ -89,6 +89,57 @@ export interface DiceRollOutcome {
     dice: DieDetail[];
 }
 
+/**
+ * One dice term captured during an evaluation, in roll order. The
+ * evaluator reports these through EvaluatorOptions.onDice so the UI
+ * can show what each die rolled instead of only the sum (Ironsworn
+ * challenge dice, stat arrays, …).
+ */
+export interface DiceTraceEntry {
+    /** The term as written in the expression, e.g. "4d6dl1". */
+    notation: string;
+    /** The term's contribution (sum of kept dice / success count). */
+    total: number;
+    dice: DieDetail[];
+}
+
+/**
+ * Long form of one trace entry: `4d6dl1 → 5, 3, (1), 6`. Dropped
+ * dice are parenthesised, exploded dice marked with `!`, re-rolled
+ * dice with `r`.
+ */
+export function formatDiceTraceEntry(e: DiceTraceEntry): string {
+    return `${e.notation} → ${diceFaceList(e.dice)}`;
+}
+
+/** Long form of a whole trace, entries joined with `; `. */
+export function formatDiceBreakdown(entries: DiceTraceEntry[]): string {
+    return entries.map(formatDiceTraceEntry).join("; ");
+}
+
+/**
+ * Compact face list for visible display next to a result: one term
+ * gives `7, 3`; several give `2d10: 7, 3; 1d6: 4`.
+ */
+export function formatDiceFacesInline(entries: DiceTraceEntry[]): string {
+    if (entries.length === 1) return diceFaceList(entries[0].dice);
+    return entries
+        .map((e) => `${e.notation}: ${diceFaceList(e.dice)}`)
+        .join("; ");
+}
+
+function diceFaceList(dice: DieDetail[]): string {
+    return dice
+        .map((d) => {
+            let s = String(d.value);
+            if (d.exploded) s += "!";
+            if (d.rerolled) s += "r";
+            if (!d.kept) s = `(${s})`;
+            return s;
+        })
+        .join(", ");
+}
+
 /** Cap for `i` (infinite) explode/re-roll and for unique attempts. */
 const INFINITE_CAP = 100;
 

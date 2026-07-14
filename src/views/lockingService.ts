@@ -25,6 +25,7 @@
  */
 
 import { translateDiceExpression } from "../compat/diceCompat";
+import { DiceTraceEntry } from "../engine/dice";
 
 // ────────────────────────────────────────────────────────────────────
 // Text-level transforms — pure, no DOM, no state.
@@ -388,19 +389,33 @@ function keyString(key: PreviewKey): string {
 export class PreviewRegistry {
     private map = new Map<string, string>();
 
+    private traces = new Map<string, DiceTraceEntry[]>();
+
     /** Look up a stored preview. Returns undefined if none recorded. */
     get(key: PreviewKey): string | undefined {
         return this.map.get(keyString(key));
     }
 
+    /**
+     * The dice trace recorded alongside a preview, if the evaluation
+     * rolled any dice. Lets cached re-renders keep their breakdown.
+     */
+    getTrace(key: PreviewKey): DiceTraceEntry[] | undefined {
+        return this.traces.get(keyString(key));
+    }
+
     /** Record a preview result. Overwrites any existing entry. */
-    set(key: PreviewKey, result: string): void {
-        this.map.set(keyString(key), result);
+    set(key: PreviewKey, result: string, trace?: DiceTraceEntry[]): void {
+        const k = keyString(key);
+        this.map.set(k, result);
+        if (trace !== undefined && trace.length > 0) this.traces.set(k, trace);
+        else this.traces.delete(k);
     }
 
     /** Drop a preview entry. Used by Reroll. */
     delete(key: PreviewKey): void {
         this.map.delete(keyString(key));
+        this.traces.delete(keyString(key));
     }
 
     /** Drop every preview for a given note. */
@@ -409,11 +424,15 @@ export class PreviewRegistry {
         for (const k of [...this.map.keys()]) {
             if (k.startsWith(prefix)) this.map.delete(k);
         }
+        for (const k of [...this.traces.keys()]) {
+            if (k.startsWith(prefix)) this.traces.delete(k);
+        }
     }
 
     /** Drop everything. Used for full plugin teardown. */
     clear(): void {
         this.map.clear();
+        this.traces.clear();
     }
 
     /** Number of entries. Test helper. */

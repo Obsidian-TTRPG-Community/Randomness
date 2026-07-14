@@ -2,6 +2,52 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.6.0
+
+### Added
+- **Dice breakdown — see what each die rolled.** The engine now reports
+  every die's face alongside the sum (Ironsworn challenge dice, stat
+  arrays, …):
+  - **Hover any inline roll** for the per-die breakdown
+    (`4d6dl1 → 5, 3, (1), 6` — dropped dice in parens, explosions `!`,
+    re-rolls `r`). Always on; works for `rdm:` and `dice:` spans alike,
+    including dice inside table results.
+  - **Settings → Randomness → Show dice breakdown** appends the faces to
+    the visible result — `13 (7, 6)` instead of just `13`. Individual
+    `dice:` spans can opt in with the new `|dice` flag instead.
+  - **Locks commit the faces when they're visible**, so the record
+    survives in the note.
+  - **Dice tray history** shows the breakdown under each roll, and the
+    big result's tooltip carries it too.
+  - For scripts: `EvaluatorOptions.onDice` receives each dice term's
+    notation, per-die detail, and total during evaluation.
+- **Deck display blocks.** A ```` ```randomness ```` codeblock whose
+  whole body is `deck:Name` renders the deck's last-drawn card at full
+  card size with a 🎴 Draw button and remaining count — the big-card
+  companion to the compact inline span. Rendering never draws.
+- **Card copy buttons.** Hovering a drawn card (Decks tab or deck
+  block) shows portrait-style icon buttons: copy the card image as an
+  `![[embed]]`, copy a ready-to-paste deck block, copy the card as
+  text, or copy the inline `deck:` span.
+- **Weather example deck.** Ten illustrated cards for day-by-day
+  weather: upright passes by nightfall, reversed settles in until the
+  next card (reversal chance preset to 40%). Downloadable from
+  settings alongside the playing cards and tarot decks, which now
+  share one compact "Example decks" row.
+
+### Fixed
+- **Initiative Tracker / Fantasy Statblocks encounter counts.**
+  `encounter: 1d6: [[Monster]]` no longer collapses to a flat 1 when
+  Dice Roller is disabled mid-session: the `window.DiceRoller` shim
+  now takes over live when Dice Roller unloads (and when the compat
+  toggle flips), and its rollers gained the `isStatic` /
+  `containerEl` surface the encounter line renders — including
+  click-to-re-roll counts.
+- **Decks tab quality of life.** Decks collapse to their title row
+  (click the title; persisted, with Collapse all/Expand all), the tab
+  no longer resets its scroll position on every draw, and drawn cards
+  no longer flash their text while the image loads.
+
 ## 1.5.0
 
 ### Added

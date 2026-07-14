@@ -15,6 +15,7 @@
 import { Notice, TFile } from "obsidian";
 import type { DrawResult, FolderDeck } from "../decks/deckService";
 import { markdownLite, setSanitisedHtmlWithLinks } from "./sanitiser";
+import { overlayIconButton } from "../portrait/ui";
 import type RandomnessPlugin from "./main";
 
 export function renderDecksTab(
@@ -39,6 +40,16 @@ async function paintAll(
     container: HTMLElement
 ): Promise<void> {
     const decks = await plugin.decks.listDecks();
+
+    // Anchor the scroll position: the whole tab repaints on every
+    // deck action, and emptying the container collapses the content
+    // height, which clamps the scrolling ancestor's scrollTop to 0 —
+    // the "every button press jumps back to the top" bug. Capture
+    // before clearing, restore after painting (and once more on the
+    // next frame, for card images that lay out late).
+    const scroller = findScroller(container);
+    const scrollTop = scroller?.scrollTop ?? 0;
+
     // The list call is async; the tab may have been detached or
     // re-painted meanwhile. Last writer wins is fine for a sidebar.
     while (container.firstChild) container.removeChild(container.firstChild);
@@ -59,9 +70,49 @@ async function paintAll(
         return;
     }
 
+    // Collapse all / expand all — with several decks the tab gets
+    // long; collapsed decks shrink to their title row. Per-deck
+    // state persists in settings (collapsedDecks) so it survives
+    // reloads.
+    const actions = el(header, "div", "randomness-browser-header-actions");
+    const allCollapsed = decks.every((d) =>
+        plugin.settings.collapsedDecks.includes(d.name)
+    );
+    const toggleAll = activeDocument.createElement("button");
+    toggleAll.className = "randomness-browser-collapse-all";
+    toggleAll.textContent = allCollapsed ? "Expand all" : "Collapse all";
+    toggleAll.addEventListener("click", () => {
+        plugin.settings.collapsedDecks = allCollapsed
+            ? []
+            : decks.map((d) => d.name).sort();
+        void plugin.saveSettings().then(() => paintAll(plugin, container));
+    });
+    actions.appendChild(toggleAll);
+
     for (const deck of decks) {
         await paintDeck(plugin, container, deck);
     }
+
+    if (scroller !== null) {
+        scroller.scrollTop = scrollTop;
+        activeWindow.requestAnimationFrame(() => {
+            scroller.scrollTop = scrollTop;
+        });
+    }
+}
+
+/**
+ * Nearest ancestor that actually scrolls this element (including the
+ * element itself). Heuristic: the first node whose content overflows
+ * its box. In the sidebar that's Obsidian's view content element.
+ */
+function findScroller(fromEl: HTMLElement): HTMLElement | null {
+    let node: HTMLElement | null = fromEl;
+    while (node !== null) {
+        if (node.scrollHeight > node.clientHeight + 1) return node;
+        node = node.parentElement;
+    }
+    return null;
 }
 
 async function paintDeck(
@@ -69,15 +120,32 @@ async function paintDeck(
     container: HTMLElement,
     deck: FolderDeck
 ): Promise<void> {
+    const collapsed = plugin.settings.collapsedDecks.includes(deck.name);
     const box = el(container, "div", "randomness-deck");
+    if (collapsed) box.classList.add("is-collapsed");
 
-    // ── Title row ───────────────────────────────────────────────────
+    // ── Title row (click to collapse/expand) ────────────────────────
     const titleRow = el(box, "div", "randomness-deck-title");
+    titleRow.title = collapsed
+        ? "Click to expand this deck"
+        : "Click to collapse this deck";
+    const chevron = el(titleRow, "span", "randomness-deck-chevron");
+    chevron.textContent = collapsed ? "▸" : "▾";
     const name = el(titleRow, "span", "randomness-deck-name");
     name.textContent = deck.name;
     const count = el(titleRow, "span", "randomness-deck-count");
     count.textContent = `${deck.state.remaining.length}/${deck.cards.length}`;
     count.title = "Cards remaining / total";
+    titleRow.addEventListener("click", () => {
+        const set = new Set(plugin.settings.collapsedDecks);
+        if (set.has(deck.name)) set.delete(deck.name);
+        else set.add(deck.name);
+        plugin.settings.collapsedDecks = [...set].sort();
+        void plugin.saveSettings().then(() => paintAll(plugin, container));
+    });
+
+    // Collapsed: just the title row — name and remaining count.
+    if (collapsed) return;
 
     // ── Card display: last drawn ────────────────────────────────────
     const cardArea = el(box, "div", "randomness-deck-card");
@@ -184,9 +252,11 @@ async function paintDeck(
 /**
  * Paint a card into the display area. `mode` labels where the card
  * came from (drawn / peek / buried) so peeks are visibly not draws;
- * null mode = empty state ("card back" placeholder).
+ * null mode = empty state ("card back" placeholder). Exported for
+ * the `deck:` codeblock display, which shows the same card at block
+ * size.
  */
-function paintCard(
+export function paintCard(
     plugin: RandomnessPlugin,
     area: HTMLElement,
     deck: FolderDeck,
@@ -224,6 +294,63 @@ function paintCard(
     }
 
     const { card, facing, text } = result;
+
+    // ── Overlay actions — same affordance as portrait tiles: icon
+    // buttons fade in when hovering the card. ──────────────────────
+    if (card.imagePath !== undefined) {
+        const imagePath = card.imagePath;
+        overlayIconButton(
+            area,
+            "image",
+            "Copy this card as an ![[image]] embed",
+            "top-left",
+            () => {
+                void navigator.clipboard.writeText(`![[${imagePath}]]`);
+                new Notice("Card image embed copied.");
+            }
+        );
+    }
+    overlayIconButton(
+        area,
+        "copy",
+        "Copy as a ```randomness deck block (big card + Draw button)",
+        "top-right",
+        () => {
+            void navigator.clipboard.writeText(
+                "```randomness\ndeck:" + deck.name + "\n```"
+            );
+            new Notice("Deck block copied — paste it into a note.");
+        }
+    );
+    overlayIconButton(
+        area,
+        "file-text",
+        "Copy the card as text (name + meaning)",
+        "bottom-left",
+        () => {
+            const label =
+                card.name + (facing === "reversed" ? " (reversed)" : "");
+            const body =
+                text !== undefined && text.trim() !== ""
+                    ? ` — ${text.trim()}`
+                    : "";
+            void navigator.clipboard.writeText(`**${label}**${body}`);
+            new Notice("Card copied as text.");
+        },
+        true
+    );
+    overlayIconButton(
+        area,
+        "code",
+        "Copy an inline `deck:" + deck.name + "` span (compact 🎴 in a line)",
+        "bottom-right",
+        () => {
+            void navigator.clipboard.writeText("`deck:" + deck.name + "`");
+            new Notice("Inline deck span copied.");
+        },
+        true
+    );
+
     if (card.imagePath !== undefined) {
         const file = plugin.app.vault.getAbstractFileByPath(card.imagePath);
         if (file instanceof TFile) {

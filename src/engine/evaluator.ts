@@ -15,6 +15,7 @@
 
 import { GeneratorFile, Node, TableDecl, TableItem } from "./ast";
 import { parseContent } from "./contentParser";
+import { DiceTraceEntry } from "./dice";
 import { ExprContext, evaluateExpression, Value } from "./expressions";
 import { FilterContext, applyFilters } from "./filters";
 import { RNG } from "./rng";
@@ -57,6 +58,14 @@ export interface EvaluatorOptions {
      * before it blows the JS stack.
      */
     maxRecursionDepth?: number;
+    /**
+     * Optional sink for individual dice terms rolled during this
+     * evaluation. Each `{NdX…}` term reports its notation, per-die
+     * faces, and total, in roll order — including dice rolled inside
+     * sub-table calls. Used by the inline renderer and dice tray to
+     * show what each die rolled instead of only the sum.
+     */
+    onDice?: (entry: DiceTraceEntry) => void;
 }
 
 /**
@@ -1052,7 +1061,8 @@ export class Evaluator {
                 const nodes = parseContent("[" + raw + "]");
                 return this.renderNodes(nodes);
             },
-            rng: this.rng
+            rng: this.rng,
+            onDice: this.opts.onDice
         };
     }
 

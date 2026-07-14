@@ -23,6 +23,7 @@ import { Modal, Notice } from "obsidian";
 import type RandomnessPlugin from "./main";
 import { evaluateInlineExpression } from "./inlineProcessor";
 import { translateDiceExpression } from "../compat/diceCompat";
+import { DiceTraceEntry, formatDiceBreakdown } from "../engine/dice";
 import {
     parsePureDiceFormula,
     rollPureDiceFormula,
@@ -76,6 +77,8 @@ export function trayFormula(state: TrayState): string {
 interface HistoryEntry {
     formula: string;
     result: string;
+    /** Per-die breakdown ("2d10 → 7, 3"), when the roll had dice. */
+    detail?: string;
 }
 
 const HISTORY_CAP = 20;
@@ -211,13 +214,29 @@ export function renderDiceTrayTab(
         const source = formula.trim();
         if (source === "") return;
         let result: string;
+        let detail: string | undefined;
         try {
             if (plugin.settings.graphicalDice) {
                 const terms = parsePureDiceFormula(source);
                 if (terms !== null) {
                     const rolled = rollPureDiceFormula(terms);
                     await showDiceOverlay(rolled.dice, rolled.total);
-                    finishRoll(source, String(rolled.total));
+                    finishRoll(
+                        source,
+                        String(rolled.total),
+                        formatDiceBreakdown([
+                            {
+                                notation: source,
+                                total: rolled.total,
+                                dice: rolled.dice.map((d) => ({
+                                    value: d.value,
+                                    kept: d.kept,
+                                    exploded: false,
+                                    rerolled: false,
+                                })),
+                            },
+                        ])
+                    );
                     return;
                 }
             }
@@ -225,15 +244,18 @@ export function renderDiceTrayTab(
                 source,
                 plugin.settings.diceFormulas
             ).expr;
+            const trace: DiceTraceEntry[] = [];
             result = await evaluateInlineExpression(
                 translated,
                 plugin.app.workspace.getActiveFile()?.path ?? "",
-                plugin
+                plugin,
+                { diceTrace: trace }
             );
+            if (trace.length > 0) detail = formatDiceBreakdown(trace);
         } catch (err) {
             result = `⚠ ${err instanceof Error ? err.message : String(err)}`;
         }
-        finishRoll(source, result);
+        finishRoll(source, result, detail);
     }
 
     async function rollPool(): Promise<void> {
@@ -260,9 +282,16 @@ export function renderDiceTrayTab(
         }).open();
     }
 
-    function finishRoll(formula: string, result: string): void {
+    function finishRoll(
+        formula: string,
+        result: string,
+        detail?: string
+    ): void {
         resultEl.textContent = result;
-        history.unshift({ formula, result });
+        // Hover the big result to see what each die rolled.
+        if (detail !== undefined) resultEl.setAttribute("title", detail);
+        else resultEl.removeAttribute("title");
+        history.unshift({ formula, result, detail });
         if (history.length > HISTORY_CAP) history.pop();
         renderHistory();
     }
@@ -305,11 +334,20 @@ export function renderDiceTrayTab(
         title.textContent = "History";
         for (const entry of history) {
             const row = el(historyEl, "div", "randomness-tray-history-row");
-            row.setAttribute("title", "Click to re-roll");
+            row.setAttribute(
+                "title",
+                entry.detail !== undefined
+                    ? `${entry.detail}\nClick to re-roll`
+                    : "Click to re-roll"
+            );
             const f = el(row, "span", "randomness-tray-history-formula");
             f.textContent = entry.formula;
             const r = el(row, "span", "randomness-tray-history-result");
             r.textContent = entry.result;
+            if (entry.detail !== undefined) {
+                const d = el(row, "span", "randomness-tray-history-detail");
+                d.textContent = entry.detail;
+            }
             row.addEventListener("click", () => void roll(entry.formula));
         }
     }

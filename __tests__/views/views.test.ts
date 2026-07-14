@@ -152,6 +152,8 @@ describe("settings: defaults", () => {
             portraitPackUrl: "",
             diceFormulas: {},
             graphicalDice: true,
+            showDiceBreakdown: false,
+            collapsedDecks: [],
         });
     });
 });
@@ -179,6 +181,8 @@ describe("settings: load merge", () => {
             diceRollerCompatChoice: false,
             diceFormulas: {},
             graphicalDice: false,
+            showDiceBreakdown: false,
+            collapsedDecks: [],
         };
         await p.saveSettings();
         await p.loadSettings();
@@ -193,6 +197,8 @@ describe("settings: load merge", () => {
             diceRollerCompatChoice: false,
             diceFormulas: {},
             graphicalDice: false,
+            showDiceBreakdown: false,
+            collapsedDecks: [],
         });
     });
 

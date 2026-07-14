@@ -238,6 +238,17 @@ Modifiers work on these too: `{4dF!}` explodes +1s,
 still means "sides from a table roll", as before — a face range
 is recognised only when the brackets hold exactly `min,max`.)
 
+### Seeing what each die rolled
+
+Hover any inline roll for the per-die breakdown —
+`4d6dl1 → 5, 3, (1), 6` (dropped dice in parens, explosions
+marked `!`, re-rolls `r`). To put the faces right in the visible
+result — `13 (7, 6)`, the Ironsworn challenge-dice case — turn on
+**Settings → Randomness → Show dice breakdown**, or add the
+`|dice` flag to an individual `dice:` span. Locking commits the
+faces when they're visible, so the record survives in the note.
+The dice tray shows the same breakdown under each history row.
+
 ## Variables
 
 The `Set:` directive assigns a value to a variable. Reference it
@@ -660,6 +671,40 @@ picks the table; the whole note's tables come into scope either
 way. Codeblock-defined tables win when a name collides, so a note
 can always override.
 
+## Card decks
+
+(Added in v1.4.0; block display and card copy buttons in v1.6.0.)
+Folder decks live under `<Generator Root>/Decks/<Name>/` — one image
+per card, an optional `.rdm` dictionary for card text (branch on
+`{$facing}` for tarot-style reversals), a `_back` image, and
+`deck.json` (per-deck settings + state, so a deck travels and syncs
+with its vault).
+
+Three ways to use one:
+
+```text
+`deck:Weather`       inline span — last drawn card + 🎴 Draw button
+[!deck:Weather]      draw inside any generator table
+```
+
+````text
+```randomness
+deck:Weather
+```
+````
+
+The codeblock form shows the last drawn card at full card size with
+a Draw button and remaining count. Rendering NEVER draws — only the
+explicit 🎴 click advances the deck, so scrolling a note can't burn
+cards.
+
+The sidebar **Decks tab** manages every deck: draw / peek /
+draw-&-bury / undo / shuffle, reversal chance, and history. Click a
+deck's title to collapse it. Hover a drawn card (tab or codeblock)
+for copy buttons: image embed, ready-to-paste deck block, card text,
+and the inline span. Example decks — playing cards, tarot, weather —
+download on demand from **Settings → Randomness → Example decks**.
+
 ## Dice tray
 
 (Added in the Dice Roller merge.) A sidebar tray for quick rolls —
@@ -719,7 +764,8 @@ the durable replacement for Dice Roller's result saving and
 
 `|text(label)` shows your label and puts the rolled value in the
 hover tooltip (`dice: 1d20+2|text(Dexterity +2)`); `|form` shows
-the formula with the result. `dice-mod:` spans commit their roll
+the formula with the result; `|dice` appends what each die rolled
+(`13 (7, 6)` — see "Seeing what each die rolled" above). `dice-mod:` spans commit their roll
 into the note on first render — the lock form of Dice Roller's
 note-modifying roll. **Formula aliases** from Settings → Randomness
 → Dice formula aliases work for every compat prefix: define
@@ -1036,6 +1082,10 @@ and branch on the surface they need.
   derived from their position so re-rendering the same note
   doesn't shuffle results. Useful for "this codeblock should
   stay consistent until I edit it".
+- **Show dice breakdown** — append each die's face to inline
+  roll results (`13 (7, 6)`). Off by default; hover tooltips
+  always show the breakdown, and `dice:` spans can opt in
+  per-roll with `|dice`.
 - **Install Fantasy Portrait Pack** — one click: downloads the
   official art pack (~7 MB) into a folder under your Generator
   root and switches every portrait feature on. Portraits stay off until a pack is

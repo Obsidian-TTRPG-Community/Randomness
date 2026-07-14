@@ -43,6 +43,7 @@ import { stableSeedFor } from "./settings";
 import { renderPromptControls, initialPromptValues } from "./promptUI";
 import type { PromptDecl } from "../engine/ast";
 import { setSanitisedHtmlWithLinks } from "./sanitiser";
+import { parseDeckBlock, renderDeckBlock } from "./deckInlineProcessor";
 
 /**
  * Build the codeblock-processor function to pass to
@@ -98,6 +99,17 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
     }
 
     async render(): Promise<void> {
+        // Deck display block (persistent-decks design): a codeblock
+        // whose whole body is one `deck:Name` line renders the deck's
+        // last-drawn card at full size with a Draw button, instead of
+        // running the engine. Rendering never draws.
+        const deckName = parseDeckBlock(this.source);
+        if (deckName !== null && this.plugin.decks) {
+            clearElement(this.containerEl);
+            await renderDeckBlock(this.plugin, this.containerEl, deckName);
+            return;
+        }
+
         // Use a placeholder while async work runs. Replaced (or
         // discarded if we unload first) before this function returns.
         clearElement(this.containerEl);

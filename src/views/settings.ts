@@ -134,6 +134,19 @@ export interface RandomnessSettings {
      * the engine.
      */
     graphicalDice: boolean;
+    /**
+     * Show the per-die breakdown next to inline roll results —
+     * `13 (7, 6)` instead of just `13`. Hovering a roll always shows
+     * the breakdown regardless of this setting; compat spans can also
+     * opt in per-roll with the `|dice` flag. Locks commit the face
+     * list when it's visible.
+     */
+    showDiceBreakdown: boolean;
+    /**
+     * Deck names collapsed to their title row in the Decks tab.
+     * Toggled by clicking a deck's title; persists across reloads.
+     */
+    collapsedDecks: string[];
 }
 
 export const DEFAULT_SETTINGS: RandomnessSettings = {
@@ -146,6 +159,8 @@ export const DEFAULT_SETTINGS: RandomnessSettings = {
     portraitPackUrl: "",
     diceFormulas: {},
     graphicalDice: true,
+    showDiceBreakdown: false,
+    collapsedDecks: [],
 };
 
 /**
@@ -552,60 +567,51 @@ export class RandomnessSettingsTab extends PluginSettingTab {
         const DECK_BUNDLE_BASE =
             "https://raw.githubusercontent.com/Obsidian-TTRPG-Community/" +
             "Randomness/main/content/decks";
-        const deckBundle = (
-            name: string,
-            desc: string,
-            url: string
-        ): void => {
-            new Setting(containerEl)
-                .setName(name)
-                .setDesc(
-                    desc +
-                        ` Downloads from GitHub into "${
-                            // Optional-chained for partial plugin
-                            // fixtures in tests.
-                            this.plugin.decks?.decksFolderPath() ?? "Decks"
-                        }/" when you click — nothing is fetched otherwise.`
-                )
-                .addButton((btn) =>
-                    btn.setButtonText("Download").onClick(async () => {
-                        btn.setDisabled(true);
-                        btn.setButtonText("Downloading…");
-                        try {
-                            const { installDeckBundle } = await import(
-                                "../contentInstaller"
-                            );
-                            const r = await installDeckBundle(
-                                this.plugin,
-                                url
-                            );
-                            new Notice(
-                                `Deck installed: ${r.deckFolder} (${r.written} files). ` +
-                                    `Draw it from the Decks tab or with \`deck:\` in a note.`,
-                                8000
-                            );
-                        } catch (e: unknown) {
-                            new Notice(
-                                "Deck download failed: " + errorMessage(e),
-                                8000
-                            );
-                        }
-                        btn.setDisabled(false);
-                        btn.setButtonText("Download");
-                    })
-                );
+        // One compact row for all example decks: name buttons side by
+        // side instead of a settings entry per deck.
+        const deckRow = new Setting(containerEl)
+            .setName("Example decks")
+            .setDesc(
+                "Playing cards — 52 cards plus two jokers. " +
+                    "Tarot — all 78 Rider–Waite–Smith cards with Waite's " +
+                    "public-domain meanings, reversals preset to 50%. " +
+                    "Weather — one card per day; upright passes by " +
+                    "nightfall, reversed settles in. Each downloads from " +
+                    `GitHub into "${
+                        // Optional-chained for partial plugin
+                        // fixtures in tests.
+                        this.plugin.decks?.decksFolderPath() ?? "Decks"
+                    }/" only when clicked — nothing is fetched otherwise.`
+            );
+        const deckBundle = (label: string, url: string): void => {
+            deckRow.addButton((btn) =>
+                btn.setButtonText(label).onClick(async () => {
+                    btn.setDisabled(true);
+                    btn.setButtonText("Downloading…");
+                    try {
+                        const { installDeckBundle } = await import(
+                            "../contentInstaller"
+                        );
+                        const r = await installDeckBundle(this.plugin, url);
+                        new Notice(
+                            `Deck installed: ${r.deckFolder} (${r.written} files). ` +
+                                `Draw it from the Decks tab or with \`deck:\` in a note.`,
+                            8000
+                        );
+                    } catch (e: unknown) {
+                        new Notice(
+                            "Deck download failed: " + errorMessage(e),
+                            8000
+                        );
+                    }
+                    btn.setDisabled(false);
+                    btn.setButtonText(label);
+                })
+            );
         };
-        deckBundle(
-            "Example deck: standard playing cards",
-            "52 cards plus two jokers as a text deck.",
-            `${DECK_BUNDLE_BASE}/playing-cards`
-        );
-        deckBundle(
-            "Example deck: tarot (Rider–Waite–Smith)",
-            "All 78 cards with Waite's public-domain upright and " +
-                "reversed meanings; reversal chance preset to 50%.",
-            `${DECK_BUNDLE_BASE}/tarot-rws`
-        );
+        deckBundle("Playing cards", `${DECK_BUNDLE_BASE}/playing-cards`);
+        deckBundle("Tarot", `${DECK_BUNDLE_BASE}/tarot-rws`);
+        deckBundle("Weather", `${DECK_BUNDLE_BASE}/weather`);
 
         // ─── Community generators ──────────────────────────────
         //
@@ -791,6 +797,14 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                         // nothing" is exactly the confusion this
                         // setting doesn't need.
                         rerenderMarkdownViews(this.app);
+                        // The window.DiceRoller shim (Fantasy
+                        // Statblocks / Initiative Tracker) follows
+                        // the same switch — install it now rather
+                        // than on the next app restart.
+                        const { tryInstallDiceRollerShim } = await import(
+                            "./diceRollerShim"
+                        );
+                        tryInstallDiceRollerShim(this.plugin);
                         if (value && isDiceRollerPluginEnabled(this.app)) {
                             new Notice(
                                 "Randomness: the Dice Roller plugin is " +
@@ -817,6 +831,26 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     .setValue(this.plugin.settings.graphicalDice)
                     .onChange(async (value) => {
                         this.plugin.settings.graphicalDice = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Show dice breakdown")
+            .setDesc(
+                "Append what each die rolled to inline results — " +
+                    "'13 (7, 6)' instead of just '13'. Handy for games " +
+                    "like Ironsworn where individual dice matter. " +
+                    "Hovering a roll always shows the breakdown; with " +
+                    "this off, dice: spans can still opt in per-roll " +
+                    "with the |dice flag. Locking commits the faces " +
+                    "when they're visible."
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.showDiceBreakdown)
+                    .onChange(async (value) => {
+                        this.plugin.settings.showDiceBreakdown = value;
                         await this.plugin.saveSettings();
                     })
             );

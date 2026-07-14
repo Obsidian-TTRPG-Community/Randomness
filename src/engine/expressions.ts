@@ -23,7 +23,13 @@
  */
 
 import { RNG } from "./rng";
-import { FaceSpec, parseDiceModifiers, rollModifiedDice } from "./dice";
+import {
+    DiceTraceEntry,
+    DieDetail,
+    FaceSpec,
+    parseDiceModifiers,
+    rollModifiedDice,
+} from "./dice";
 
 export type Value = number | string;
 
@@ -36,6 +42,13 @@ export interface ExprContext {
     evalEmbeddedCall(rawBracketBody: string): string;
     /** RNG for dice */
     rng: RNG;
+    /**
+     * Optional sink for individual dice terms rolled while
+     * evaluating. Called once per `NdX[mods]` term, in roll order,
+     * with the notation, per-die faces, and term total. Lets the UI
+     * show a breakdown instead of only the summed result.
+     */
+    onDice?(entry: DiceTraceEntry): void;
 }
 
 export class ExpressionError extends Error {
@@ -332,6 +345,9 @@ class ExprParser {
     }
 
     private parseNumberOrDice(): Value {
+        // Remember where this term starts so a dice roll can report
+        // its notation ("4d6dl1") to the trace sink verbatim.
+        const termStart = this.pos;
         // Read digits (and dot for decimals)
         let numStr = "";
         while (this.pos < this.source.length && /[0-9.]/.test(this.source[this.pos])) {
@@ -413,7 +429,11 @@ class ExprParser {
                     // Custom percent dice (Traveller d66 etc.): one die per
                     // face digit, digits concatenated into the result.
                     this.pos++;
-                    return this.rollCustomPercent(n, sidesStr);
+                    return this.rollCustomPercent(
+                        n,
+                        sidesStr,
+                        this.source.slice(termStart, this.pos)
+                    );
                 }
                 faces = { kind: "sides", sides: parseInt(sidesStr, 10) };
             }
@@ -422,7 +442,13 @@ class ExprParser {
             // place for the grammar to reject as before.
             const { mods, pos } = parseDiceModifiers(this.source, this.pos);
             this.pos = pos;
-            return rollModifiedDice(n, faces, mods, this.ctx.rng).total;
+            const outcome = rollModifiedDice(n, faces, mods, this.ctx.rng);
+            this.ctx.onDice?.({
+                notation: this.source.slice(termStart, this.pos).trim(),
+                total: outcome.total,
+                dice: outcome.dice,
+            });
+            return outcome.total;
         }
         return n;
     }
@@ -432,16 +458,24 @@ class ExprParser {
      * the face string (d6, d6) and reads the results as digits (e.g. 63).
      * Multiple sets sum.
      */
-    private rollCustomPercent(count: number, faceDigits: string): number {
+    private rollCustomPercent(
+        count: number,
+        faceDigits: string,
+        notation: string
+    ): number {
         let total = 0;
+        const dice: DieDetail[] = [];
         for (let i = 0; i < count; i++) {
             let digits = "";
             for (const digitChar of faceDigits) {
                 const face = parseInt(digitChar, 10);
                 digits += String(this.ctx.rng.rollDie(face));
             }
-            total += parseInt(digits, 10);
+            const value = parseInt(digits, 10);
+            dice.push({ value, kept: true, exploded: false, rerolled: false });
+            total += value;
         }
+        this.ctx.onDice?.({ notation: notation.trim(), total, dice });
         return total;
     }
 

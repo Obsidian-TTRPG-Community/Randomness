@@ -64,16 +64,51 @@ export interface ShimSourceOptions {
  */
 export class ShimStackRoller {
     result = 0;
+    /**
+     * Mirrors StackRoller.isStatic: true when the formula contains no
+     * dice (a flat number). Consumers branch on it — Initiative
+     * Tracker renders static encounter counts as plain text and
+     * dice-rolled ones through `containerEl`.
+     */
+    isStatic: boolean;
     #terms: PureDiceTerm[];
     #listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+    #el: HTMLElement | null = null;
 
     constructor(terms: PureDiceTerm[], public original: string) {
         this.#terms = terms;
+        this.isStatic = terms.every((t) => t.sides === null);
+    }
+
+    /**
+     * Mirrors StackRoller.containerEl: a span showing the latest
+     * result that re-rolls on click. Initiative Tracker appends this
+     * element for `encounter:` counts like `1d6: [[Monster]]`. Built
+     * lazily so headless consumers never touch the DOM.
+     */
+    get containerEl(): HTMLElement {
+        if (this.#el === null) {
+            const el = activeDocument.createElement("span");
+            el.className = "dice-roller";
+            el.setAttribute("aria-label", this.original);
+            el.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.rollSync();
+            });
+            this.#el = el;
+            this.#paint();
+        }
+        return this.#el;
+    }
+
+    #paint(): void {
+        if (this.#el !== null) this.#el.textContent = String(this.result);
     }
 
     rollSync(): number {
         const { total } = rollPureDiceFormula(this.#terms);
         this.result = total;
+        this.#paint();
         for (const cb of this.#listeners.get("new-result") ?? []) {
             try {
                 cb(this);
@@ -196,8 +231,10 @@ export class DiceRollerApiShim {
  * Install the shim if the coast is clear: compat on, standalone Dice
  * Roller not enabled, nothing already occupying the global. Fires
  * `dice-roller:loaded` so consumers that loaded first re-register.
+ * Safe to call repeatedly — the settings toggle and the live
+ * takeover below both re-attempt through here.
  */
-export function installDiceRollerShim(plugin: RandomnessPlugin): void {
+export function tryInstallDiceRollerShim(plugin: RandomnessPlugin): void {
     if (!diceCompatEnabled(plugin)) return;
     if (isDiceRollerPluginEnabled(plugin.app)) return;
     if (window.DiceRoller != null) return;
@@ -207,4 +244,29 @@ export function installDiceRollerShim(plugin: RandomnessPlugin): void {
         if (window.DiceRoller === shim) delete window.DiceRoller;
     });
     plugin.app.workspace.trigger("dice-roller:loaded");
+}
+
+/**
+ * One-time wiring (plugin onload): install if possible now, and take
+ * over LIVE when the standalone Dice Roller plugin is disabled later
+ * — it fires `dice-roller:unloaded` on unload. Without this, users
+ * who flip Dice Roller off mid-session lose `window.DiceRoller`
+ * until the next app restart, and consumers quietly degrade
+ * (Initiative Tracker parses `1d6: [[Monster]]` counts as a flat 1).
+ * The timeout lets Dice Roller finish deleting its global first.
+ */
+export function installDiceRollerShim(plugin: RandomnessPlugin): void {
+    tryInstallDiceRollerShim(plugin);
+    try {
+        plugin.registerEvent(
+            (plugin.app.workspace as unknown as {
+                on(name: string, cb: () => void): import("obsidian").EventRef;
+            }).on("dice-roller:unloaded", () => {
+                window.setTimeout(() => tryInstallDiceRollerShim(plugin), 100);
+            })
+        );
+    } catch {
+        // Partial plugin fixtures (tests, embedders) may lack the
+        // workspace event surface; the startup install still ran.
+    }
 }

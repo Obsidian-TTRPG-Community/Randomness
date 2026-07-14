@@ -1,4 +1,8 @@
 /**
+ * @jest-environment jsdom
+ */
+
+/**
  * Tests for the window.DiceRoller API shim — the surface Fantasy
  * Statblocks (and other Dice Roller consumers) actually use.
  */
@@ -67,6 +71,31 @@ describe("shim flag output survives our own compat translation", () => {
     ])("%s translates without error", (raw) => {
         const { expr } = translateDiceExpression(raw);
         expect(expr).not.toContain("|");
+    });
+});
+
+describe("ShimStackRoller: Initiative Tracker surface", () => {
+    // Initiative Tracker's encounter line branches on isStatic and
+    // appends containerEl for dice-rolled counts (`1d6: [[Monster]]`).
+    const shim = new DiceRollerApiShim();
+
+    test("isStatic is false for dice, true for flat numbers", () => {
+        expect(shim.getRollerSync("1d6")?.isStatic).toBe(false);
+        expect(shim.getRollerSync("3")?.isStatic ?? true).toBe(true);
+    });
+
+    test("containerEl shows the result and re-rolls on click", () => {
+        const roller = shim.getRollerSync("1d6")!;
+        roller.rollSync();
+        const el = roller.containerEl;
+        expect(el.textContent).toBe(String(roller.result));
+        let notified = 0;
+        roller.on("new-result", () => notified++);
+        el.dispatchEvent(new MouseEvent("click"));
+        expect(notified).toBe(1);
+        expect(el.textContent).toBe(String(roller.result));
+        expect(roller.result).toBeGreaterThanOrEqual(1);
+        expect(roller.result).toBeLessThanOrEqual(6);
     });
 });
 

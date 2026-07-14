@@ -31,6 +31,15 @@ Add `|render` and the dice animate: `dice: 4d6dl1|render`
 (Turn animations on or off in Settings → Randomness →
 Graphical dice.)
 
+## See what each die rolled
+
+Hover any roll — the tooltip shows every die's face (dropped
+dice in parens). Want it right in the result, like `13 (7, 6)`?
+Add `|dice`: `dice: 2d10|dice` — or flip **Settings → Randomness
+→ Show dice breakdown** to make every roll do it. Perfect for
+Ironsworn-style challenge dice, where the individual faces are
+the whole point.
+
 ## Dice inside sentences and tables
 
 Inside generator text, dice go in curly braces:

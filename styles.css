@@ -809,6 +809,20 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Per-die breakdown under a history row ("2d10 → 7, 3"). Full-width
+   line below formula+result, muted and small so it reads as detail. */
+.randomness-tray-history-detail {
+    flex-basis: 100%;
+    color: var(--text-faint);
+    font-family: var(--font-monospace);
+    font-size: 0.75em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.randomness-tray-history-row {
+    flex-wrap: wrap;
+}
 
 /* ── Graphical dice overlay (Dice Roller merge, Phase 6) ────────── */
 
@@ -1016,9 +1030,21 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+.randomness-deck-chevron {
+    color: var(--text-muted);
+    font-size: 0.75em;
+    flex-shrink: 0;
 }
 .randomness-deck-name {
     font-weight: 600;
+    flex: 1;
+}
+.randomness-deck.is-collapsed {
+    padding-top: 5px;
+    padding-bottom: 5px;
 }
 .randomness-deck-count {
     color: var(--text-muted);
@@ -1027,10 +1053,40 @@
 .randomness-deck-card {
     margin: 6px 0;
     text-align: center;
+    /* Anchor for the portrait-style overlay icon buttons. */
+    position: relative;
+}
+.randomness-deck-card:hover .randomness-portrait-iconbtn {
+    opacity: 0.9;
+}
+/* deck: codeblock display — the tab's card renderer at block size */
+.randomness-deck-block {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 8px 0;
+    max-width: 420px;
+}
+.randomness-deck-block .randomness-deck-card-img {
+    height: 340px;
+}
+.randomness-deck-block-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
 }
 .randomness-deck-card-img {
     max-width: 100%;
-    max-height: 240px;
+    /* Fixed box (not max-height): the tab repaints on every draw and
+       a fresh <img> has zero height until it decodes, so the name and
+       text below flashed at the top and jumped down when the image
+       arrived. Reserving the full box up front keeps the layout
+       stable; object-fit letterboxes non-5:7 card art without
+       distortion. */
+    height: 240px;
+    object-fit: contain;
     border-radius: 6px;
     display: block;
     margin: 0 auto 4px;

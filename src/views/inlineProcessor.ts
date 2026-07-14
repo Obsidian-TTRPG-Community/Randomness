@@ -45,6 +45,11 @@ import {
     translateDiceExpression,
     stripDisplayFlags,
 } from "../compat/diceCompat";
+import {
+    DiceTraceEntry,
+    formatDiceBreakdown,
+    formatDiceFacesInline,
+} from "../engine/dice";
 import { diceCompatEnabled } from "./settings";
 import { FileSource } from "../resolver/fileResolver";
 import {
@@ -248,11 +253,22 @@ async function readSourcePositions(
 export function decorateDiceResult(
     call: InlineCall,
     result: string,
-    plugin: RandomnessPlugin
-): { display: string; tooltip?: string } {
+    plugin: RandomnessPlugin,
+    trace?: DiceTraceEntry[]
+): { display: string; tooltip?: string; breakdown?: string } {
+    // Per-die breakdown (Ironsworn & co): always available as a hover
+    // tooltip when the evaluation rolled dice; appended visibly when
+    // the setting or the |dice flag asks for it.
+    const breakdown =
+        trace !== undefined && trace.length > 0
+            ? formatDiceBreakdown(trace)
+            : undefined;
     // Display flags only apply to the Dice Roller compat prefixes.
     if ((call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX) {
-        return { display: result };
+        return {
+            display: applyVisibleFaces(call, result, plugin, trace),
+            breakdown,
+        };
     }
     try {
         const { flags } = translateDiceExpression(
@@ -261,20 +277,76 @@ export function decorateDiceResult(
         );
         const textFlag = flags.find((f) => /^text\(.*\)$/i.test(f));
         if (textFlag !== undefined) {
+            // |text controls the display outright — faces stay in the
+            // tooltip breakdown only.
             return {
                 display: textFlag.replace(/^text\(/i, "").slice(0, -1),
                 tooltip: result,
+                breakdown,
             };
         }
         if (flags.some((f) => f.toLowerCase() === "form")) {
             // Strip the trailing flags so the `|form` flag itself does
             // not leak into the displayed formula.
-            return { display: `${stripDisplayFlags(call.expr)} → ${result}` };
+            return {
+                display: applyVisibleFaces(
+                    call,
+                    `${stripDisplayFlags(call.expr)} → ${result}`,
+                    plugin,
+                    trace
+                ),
+                breakdown,
+            };
         }
     } catch {
         // Translation errors were already surfaced by the caller.
     }
-    return { display: result };
+    return {
+        display: applyVisibleFaces(call, result, plugin, trace),
+        breakdown,
+    };
+}
+
+/**
+ * Append the compact face list to a display string when the visible
+ * dice breakdown is active — via the global "Show dice breakdown"
+ * setting, or the `|dice` flag on a compat span. `13` becomes
+ * `13 (7, 6)`. Skipped when it would be pure noise: a single die
+ * whose face IS the whole displayed result. Exported for lockCall,
+ * which commits the same text a visible span shows.
+ */
+export function applyVisibleFaces(
+    call: InlineCall,
+    display: string,
+    plugin: RandomnessPlugin,
+    trace?: DiceTraceEntry[]
+): string {
+    if (trace === undefined || trace.length === 0) return display;
+    if (!plugin.settings.showDiceBreakdown && !hasDiceFlag(call, plugin)) {
+        return display;
+    }
+    if (
+        trace.length === 1 &&
+        trace[0].dice.filter((d) => d.kept).length === 1 &&
+        display.trim() === String(trace[0].total)
+    ) {
+        return display; // "14 (14)" helps nobody
+    }
+    return `${display} (${formatDiceFacesInline(trace)})`;
+}
+
+/** True when a compat span carries the `|dice` display flag. */
+function hasDiceFlag(call: InlineCall, plugin: RandomnessPlugin): boolean {
+    if ((call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX) return false;
+    try {
+        const { flags } = translateDiceExpression(
+            call.expr,
+            plugin.settings.diceFormulas
+        );
+        return flags.some((f) => f.toLowerCase() === "dice");
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -313,6 +385,7 @@ async function processOne(
     // Determine the result to display.
     let result: string;
     let isLocked: boolean;
+    let trace: DiceTraceEntry[] | undefined;
     if (call.locked !== undefined) {
         // Locked: source-of-truth is the text, ignore any stale preview.
         result = call.locked;
@@ -322,7 +395,9 @@ async function processOne(
         const cached = plugin.previewRegistry.get(previewKey);
         if (cached !== undefined) {
             result = cached;
+            trace = plugin.previewRegistry.getTrace(previewKey);
         } else {
+            const collected: DiceTraceEntry[] = [];
             try {
                 // Dice Roller prefixes are translated to rdm grammar
                 // here (evalSourceOf); unsupported constructs throw a
@@ -331,13 +406,15 @@ async function processOne(
                 result = await evaluateExpression(
                     evalSourceOf(call, plugin.settings.diceFormulas),
                     ctx,
-                    plugin
+                    plugin,
+                    { diceTrace: collected }
                 );
             } catch (err) {
                 renderInlineError(codeEl, err);
                 return;
             }
-            plugin.previewRegistry.set(previewKey, result);
+            trace = collected;
+            plugin.previewRegistry.set(previewKey, result, collected);
         }
         isLocked = false;
     }
@@ -355,11 +432,11 @@ async function processOne(
     // label with the rolled value in the tooltip; `|form` shows the
     // formula alongside the result. Applied here AND on re-roll (see
     // rerollCall) so the decoration survives a re-roll.
-    const { display: displayResult, tooltip } = decorateDiceResult(
-        call,
-        result,
-        plugin
-    );
+    const {
+        display: displayResult,
+        tooltip,
+        breakdown,
+    } = decorateDiceResult(call, result, plugin, trace);
 
     // Render and keep a handle on the span we built — onReroll for an
     // unfilled call updates it in place without needing a re-render
@@ -367,6 +444,7 @@ async function processOne(
     const span = replaceCodeElement(codeEl, {
         result: displayResult,
         tooltip,
+        breakdown,
         isLocked,
         expr: call.expr,
         onLock: () => lockCall(ctx, plugin, call, occurrence),
@@ -407,6 +485,13 @@ export async function evaluateInlineExpression(
          * a note never burns a card (persistent-decks design).
          */
         commitDeckDraws?: boolean;
+        /**
+         * When present, every dice term rolled during evaluation is
+         * pushed here (notation + per-die faces + total, in roll
+         * order) so callers can show a breakdown of what each die
+         * rolled instead of only the sum.
+         */
+        diceTrace?: DiceTraceEntry[];
     }
 ): Promise<string> {
     const { vault } = plugin.app;
@@ -513,6 +598,9 @@ export async function evaluateInlineExpression(
         promptValues: opts?.promptValues,
         deckHost: hosts?.deckHost,
         folderDeckHost: hosts?.folderDeckHost,
+        onDice: opts?.diceTrace
+            ? (e) => opts.diceTrace!.push(e)
+            : undefined,
     });
     try {
         return evaluator.run();
@@ -528,9 +616,10 @@ export async function evaluateInlineExpression(
 async function evaluateExpression(
     expr: string,
     ctx: MarkdownPostProcessorContext,
-    plugin: RandomnessPlugin
+    plugin: RandomnessPlugin,
+    opts?: Parameters<typeof evaluateInlineExpression>[3]
 ): Promise<string> {
-    return evaluateInlineExpression(expr, ctx.sourcePath, plugin);
+    return evaluateInlineExpression(expr, ctx.sourcePath, plugin, opts);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -542,6 +631,11 @@ interface InlineRenderProps {
     result: string;
     /** Optional hover text (e.g. the rolled value behind a |text label). */
     tooltip?: string;
+    /**
+     * Optional per-die breakdown ("2d10 → 7, 3"). Shown in the result
+     * span's hover title beneath the expression.
+     */
+    breakdown?: string;
     isLocked: boolean;
     expr: string;
     onLock: () => Promise<void> | void;
@@ -638,7 +732,12 @@ export function replaceCodeElement(
     } else {
         setSanitisedHtml(resultSpan, markdownLite(props.result));
     }
-    resultSpan.title = props.expr; // hover shows the expression
+    // Hover shows the expression — plus what each die rolled, when
+    // the evaluation involved dice.
+    resultSpan.title =
+        props.breakdown !== undefined
+            ? `${props.expr}\n${props.breakdown}`
+            : props.expr;
     span.appendChild(resultSpan);
 
     // Swap into the DOM.
@@ -709,18 +808,41 @@ async function lockCall(
         // Lock button. If it does happen, evaluate on the fly so the
         // click does *something* useful.
         try {
+            const collected: DiceTraceEntry[] = [];
             const fresh = await evaluateInlineExpression(
                 evalSourceOf(call, plugin.settings.diceFormulas),
                 ctx.sourcePath,
-                plugin
+                plugin,
+                { diceTrace: collected }
             );
-            plugin.previewRegistry.set(previewKey, fresh);
-            return lockWithResult(ctx, plugin, call, occurrence, fresh);
+            plugin.previewRegistry.set(previewKey, fresh, collected);
+            return lockWithResult(
+                ctx,
+                plugin,
+                call,
+                occurrence,
+                applyVisibleFaces(call, fresh, plugin, collected)
+            );
         } catch {
             return; // give up silently
         }
     }
-    return lockWithResult(ctx, plugin, call, occurrence, cached);
+    // Locks commit the same text the visible span shows: when the
+    // dice-breakdown display is active, the face list goes into the
+    // source too (that's the durable "what did I roll" record).
+    // Tooltip-only breakdowns are ephemeral by design.
+    return lockWithResult(
+        ctx,
+        plugin,
+        call,
+        occurrence,
+        applyVisibleFaces(
+            call,
+            cached,
+            plugin,
+            plugin.previewRegistry.getTrace(previewKey)
+        )
+    );
 }
 
 async function lockWithResult(
@@ -799,8 +921,9 @@ async function rerollCall(
     // the overlay and the span (same contract as the dice tray) — so
     // what the dice show always matches what the span says.
     let fresh: string;
+    const collected: DiceTraceEntry[] = [];
     try {
-        const rendered = await renderRollIfEligible(call, plugin);
+        const rendered = await renderRollIfEligible(call, plugin, collected);
         fresh =
             rendered ??
             (await evaluateInlineExpression(
@@ -810,7 +933,7 @@ async function rerollCall(
                 // A re-roll click is an explicit action: persistent
                 // deck draws commit here (and only here, in the
                 // inline pipeline).
-                { commitDeckDraws: true }
+                { commitDeckDraws: true, diceTrace: collected }
             ));
     } catch (err) {
         // Replace the span with an error indicator. The user can edit
@@ -818,7 +941,7 @@ async function rerollCall(
         renderInlineError(span, err);
         return;
     }
-    plugin.previewRegistry.set(previewKey, fresh);
+    plugin.previewRegistry.set(previewKey, fresh, collected);
 
     // Update the visible result. Find the result subspan we created
     // in replaceCodeElement; if it's missing (DOM was restructured by
@@ -832,12 +955,23 @@ async function rerollCall(
     // Re-apply the Dice Roller display flags so `|form` keeps showing
     // the formula and `|text` keeps its label + tooltip across a
     // re-roll, instead of collapsing to the bare rolled value.
-    const { display, tooltip } = decorateDiceResult(call, fresh, plugin);
+    const { display, tooltip, breakdown } = decorateDiceResult(
+        call,
+        fresh,
+        plugin,
+        collected
+    );
     if (tooltip !== undefined) span.title = tooltip;
     else span.removeAttribute("title");
     const resultSpan = span.querySelector<HTMLElement>(
         ".randomness-inline-result"
     );
+    if (resultSpan !== null) {
+        resultSpan.title =
+            breakdown !== undefined
+                ? `${call.expr}\n${breakdown}`
+                : call.expr;
+    }
     setSanitisedHtmlWithLinks(
         resultSpan ?? span,
         markdownLite(display),
@@ -874,7 +1008,8 @@ async function modifyNote(
  */
 async function renderRollIfEligible(
     call: InlineCall,
-    plugin: RandomnessPlugin
+    plugin: RandomnessPlugin,
+    traceOut?: DiceTraceEntry[]
 ): Promise<string | null> {
     try {
         if ((call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX) return null;
@@ -893,6 +1028,17 @@ async function renderRollIfEligible(
         const terms = parsePureDiceFormula(stripped);
         if (terms === null) return null;
         const rolled = rollPureDiceFormula(terms);
+        // The overlay's roll IS the result, so it is also the trace.
+        traceOut?.push({
+            notation: stripped,
+            total: rolled.total,
+            dice: rolled.dice.map((d) => ({
+                value: d.value,
+                kept: d.kept,
+                exploded: false,
+                rerolled: false,
+            })),
+        });
         await showDiceOverlay(rolled.dice, rolled.total);
         return String(rolled.total);
     } catch {
