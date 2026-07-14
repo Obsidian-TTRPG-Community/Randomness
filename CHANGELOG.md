@@ -2,6 +2,24 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.5.0
+
+### Added
+- **Tag rolls can filter by tags AND/OR frontmatter properties.** Extra
+  pipe segments narrow the candidate notes — ideal for multi-universe
+  vaults:
+  - `` `rdm:#npc|universe=Eldara|link` `` — only notes whose `universe`
+    property is Eldara.
+  - `` `rdm:#npc|#merchant` `` — both tags required; `#npc,#monster` —
+    either tag.
+  - `` `rdm:#npc|universe=Eldara,Vex` `` — property is Eldara OR Vex;
+    `universe=*` — property exists with any value.
+  - `` `rdm:*|universe=Eldara` `` — filter by property alone, no tag.
+  - Matching is case-insensitive; list-valued properties match if any
+    entry hits; wikilink values (`universe: "[[Worlds/Eldara]]"`) match
+    their target's name or alias. Works under the `dice:` compatibility
+    prefix too. Still metadata-cache only — no Dataview required.
+
 ## 1.4.0
 
 ### Added
