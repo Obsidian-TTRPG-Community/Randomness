@@ -155,7 +155,7 @@ export function makeTagFilesLookup(
                 const fmAll = fc.frontmatter as
                     | Record<string, unknown>
                     | undefined;
-                if (matchesTagRollFilter(tags, fmAll, filter)) {
+                if (matchesTagRollFilter(tags, fmAll, filter, f.path)) {
                     out.push(f.path);
                 }
             }

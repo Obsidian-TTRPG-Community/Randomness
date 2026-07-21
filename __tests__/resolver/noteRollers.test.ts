@@ -133,6 +133,25 @@ describe("parseDirectTagCall", () => {
         expect(c?.label).toBe("#npc|universe=Eldara,Vex");
     });
 
+    test("folder= segments become folder filters, not props", () => {
+        const c = parseDirectTagCall("*|folder=Bestiary/Undead|cr=3|link");
+        expect(c).toMatchObject({
+            mode: "link",
+            filter: {
+                tagGroups: [],
+                folders: ["Bestiary/Undead"],
+                props: [{ key: "cr", values: ["3"] }],
+            },
+        });
+        expect(c?.label).toBe("folder=Bestiary/Undead|cr=3");
+        // Comma = OR; slashes normalised.
+        expect(
+            parseDirectTagCall("#monster|folder=A,/B/")?.filter.folders
+        ).toEqual(["A", "B"]);
+        // A folder alone is a valid filter for the * source.
+        expect(parseDirectTagCall("*|folder=Bestiary")).not.toBeNull();
+    });
+
     test("* source rolls on properties alone", () => {
         expect(parseDirectTagCall("*|universe=Eldara")).toMatchObject({
             mode: "block",
@@ -218,6 +237,28 @@ describe("matchesTagRollFilter", () => {
         }
     });
 
+    test("folder filters match by path prefix, case-insensitively", () => {
+        const filt: TagRollFilter = {
+            tagGroups: [],
+            props: [],
+            folders: ["Bestiary/Undead"],
+        };
+        expect(
+            matchesTagRollFilter(tags, undefined, filt, "Bestiary/Undead/Wight.md")
+        ).toBe(true);
+        expect(
+            matchesTagRollFilter(tags, undefined, filt, "bestiary/undead/deep/Ghast.md")
+        ).toBe(true);
+        expect(
+            matchesTagRollFilter(tags, undefined, filt, "Bestiary/UndeadX/Wight.md")
+        ).toBe(false);
+        expect(
+            matchesTagRollFilter(tags, undefined, filt, "Elsewhere/Wight.md")
+        ).toBe(false);
+        // No path available → folder filters can't match.
+        expect(matchesTagRollFilter(tags, undefined, filt)).toBe(false);
+    });
+
     test("* value means property exists", () => {
         expect(
             matchesTagRollFilter(tags, { universe: "x" }, f([], [{ key: "universe", values: ["*"] }]))
@@ -257,7 +298,9 @@ describe("line/block/tag rolls end-to-end", () => {
     };
     const tagFiles = (filter: TagRollFilter) =>
         Object.keys(meta)
-            .filter((p) => matchesTagRollFilter(meta[p].tags, meta[p].fm, filter))
+            .filter((p) =>
+                matchesTagRollFilter(meta[p].tags, meta[p].fm, filter, p)
+            )
             .sort();
 
     function roll(expr: string, seed = 1): string {
@@ -324,6 +367,20 @@ describe("line/block/tag rolls end-to-end", () => {
         }
         expect(() => roll("#rumour|universe=Vex")).toThrow(
             /No notes found matching #rumour\|universe=Vex/
+        );
+    });
+
+    test("folder filter narrows to notes under that folder", () => {
+        for (let seed = 1; seed <= 6; seed++) {
+            expect(["[[Camp/Rumours]]", "[[Camp/Sightings]]"]).toContain(
+                roll("*|folder=Camp|link", seed)
+            );
+            expect(roll("*|folder=Camp|universe=Eldara|link", seed)).toBe(
+                "[[Camp/Sightings]]"
+            );
+        }
+        expect(() => roll("*|folder=Elsewhere|link")).toThrow(
+            /No notes found matching folder=Elsewhere/
         );
     });
 

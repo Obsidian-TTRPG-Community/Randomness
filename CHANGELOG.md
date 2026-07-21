@@ -2,6 +2,29 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.7.0
+
+### Fixed
+- **Copy button on Android pasted a `tempNNNN.html` attachment link
+  instead of the result.** The sidebar's Copy button used to put an
+  HTML flavour on the clipboard and let Obsidian convert it to
+  markdown on paste. Android's WebView hands that flavour back as a
+  file, so Obsidian saved it into the attachment folder and linked to
+  it. Copy now converts to markdown itself and writes plain text only
+  — formatting is preserved on every platform, and there's no HTML
+  flavour left to be mishandled.
+
+### Added
+- **Folder filters on tag rolls.** `folder=` is a reserved filter
+  segment restricting candidates to notes under a folder (recursive;
+  comma for OR) — combine with tag and property filters:
+  `` `rdm:*|folder=Bestiary|cr=3|link` `` rolls a random CR 3 monster
+  note, ready to drop into an `encounter:` line.
+- **Visible re-roll die on API-shim rollers.** Encounter counts
+  rendered through the `window.DiceRoller` shim (Initiative Tracker's
+  `1d6: [[Monster]]`) now show a small die icon; clicking the count
+  re-rolls it.
+
 ## 1.6.0
 
 ### Added
@@ -892,38 +915,4 @@ proposed the public JS API that this release builds on and documents.
   `promptValues`, and `filePath` (to disambiguate name collisions).
 - **Vault index** — basename and table-name index over the generator
   library, powering bare-filename `Use:` resolution and faster
-  `rollUnscoped`. Invalidates on vault create/delete/rename/modify.
-- **"Rebuild generator index" command** — manual rescan of the
-  generator library, as an escape hatch if the index looks stale.
-- **Ambiguity warning** — when `rollUnscoped` finds multiple files
-  defining the same table name, it logs a one-time console warning
-  naming the colliding files and the one chosen, and points to the
-  `filePath` option.
-- **`promptValues` and `seed` wired through** the public roll methods to
-  the engine (real prompt overrides and deterministic rolls, not no-ops).
-- **`API.md`** — full reference for the public API: every method, the
-  `RollResult`/`TableSource` shapes, scoped vs. unscoped guidance,
-  prompts, collision handling, and recipes.
-
-### Notes
-- The public API surface version is `1.0.0`. The plugin version (this
-  `1.0.0`) and the API version are tracked separately; read `api.version`
-  for the latter.
-
-### Fixed
-- CSS lint: the broken-link style now uses a dashed `border-bottom`
-  instead of an underline decoration, clearing the community-plugin
-  linter's "partially supported on minAppVersion" warning. Identical
-  visual result.
-
-## 0.6.0
-- Vault index for basename and table-name lookup.
-
-## 0.5.x
-- Public JS API introduced (`roll`, `rollExpression`, `tables`,
-  `tablesWithSources`, `onRoll`, `version`), then `rollUnscoped` added.
-
-## 0.4.4
-- Community-plugin review fixes: replaced `builtin-modules` dependency
-  with Node's `module.builtinModules`; CSS `text-decoration` shorthand
-  split into longhand for Electron compatibility.
+  `rollUnscoped`. Invalidates on vault create/delete/r

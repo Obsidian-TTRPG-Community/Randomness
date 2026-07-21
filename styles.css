@@ -1059,6 +1059,26 @@
 .randomness-deck-card:hover .randomness-portrait-iconbtn {
     opacity: 0.9;
 }
+/* window.DiceRoller shim rollers (Initiative Tracker encounter
+   counts and other API consumers): result + a small re-roll die. */
+.randomness-shim-roller {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.randomness-shim-roller-die {
+    display: inline-flex;
+    color: var(--text-muted);
+}
+.randomness-shim-roller-die svg {
+    width: 0.9em;
+    height: 0.9em;
+}
+.randomness-shim-roller:hover .randomness-shim-roller-die {
+    color: var(--text-normal);
+}
+
 /* deck: codeblock display — the tab's card renderer at block size */
 .randomness-deck-block {
     border: 1px solid var(--background-modifier-border);

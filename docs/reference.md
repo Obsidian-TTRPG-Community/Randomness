@@ -647,13 +647,19 @@ and/or frontmatter properties:
 `rdm:#npc|universe=Eldara,Vex`    property is Eldara OR Vex
 `rdm:#npc|universe=*`             property exists, any value
 `rdm:*|universe=Eldara`           all notes with the property, no tag
+`rdm:*|folder=Bestiary|cr=3|link` a random note from a folder
+                                  (recursive) matching a property —
+                                  e.g. a CR 3 monster for an encounter
 ```
 
 Segments AND together; commas within a segment OR. Property keys and
 values match case-insensitively; list-valued properties match if any
 entry hits; wikilink values (`universe: "[[Worlds/Eldara]]"`) match
-their target's name or alias. These filters also work under the
-`dice:` compatibility prefix.
+their target's name or alias. `folder=` is a reserved segment key: it
+restricts candidates to notes under that folder (recursive,
+case-insensitive; comma for OR) rather than filtering a frontmatter
+property. These filters also work under the `dice:` compatibility
+prefix.
 
 Tag rolls use Obsidian's own metadata cache — no Dataview required —
 and cap at 50 matching notes per roll. The note pick happens inside
@@ -1082,26 +1088,3 @@ and branch on the surface they need.
   derived from their position so re-rendering the same note
   doesn't shuffle results. Useful for "this codeblock should
   stay consistent until I edit it".
-- **Show dice breakdown** — append each die's face to inline
-  roll results (`13 (7, 6)`). Off by default; hover tooltips
-  always show the breakdown, and `dice:` spans can opt in
-  per-roll with `|dice`.
-- **Install Fantasy Portrait Pack** — one click: downloads the
-  official art pack (~7 MB) into a folder under your Generator
-  root and switches every portrait feature on. Portraits stay off until a pack is
-  installed. (Self-hosting? Set `portraitPackUrl` in the
-  plugin's data.json — there's deliberately no UI for it.)
-- **Install Fantasy Hub content** — the showcase bundle: town
-  generators into your generator root, ready-to-run Templater
-  templates into your Templater folder. Wants the portrait pack
-  first; pairs well with Town Forge and Heraldry Weaver (buttons
-  link to both).
-
-## More
-
-- Project: [github.com/obsidian-ttrpg-community/randomness](https://github.com/obsidian-ttrpg-community/randomness)
-- Generators are plain-text `.rdm` files; the older `.ipt`
-  extension is read identically, so community generator
-  libraries written for other tools load as-is.
-- File a bug: open an issue on the GitHub repo with a minimal
-  reproducing `.rdm` file if you can.

@@ -23,6 +23,7 @@
  * clobber an existing one).
  */
 
+import { setIcon } from "obsidian";
 import type RandomnessPlugin from "./main";
 import { diceCompatEnabled, isDiceRollerPluginEnabled } from "./settings";
 import { translateDiceExpression } from "../compat/diceCompat";
@@ -81,28 +82,48 @@ export class ShimStackRoller {
     }
 
     /**
-     * Mirrors StackRoller.containerEl: a span showing the latest
-     * result that re-rolls on click. Initiative Tracker appends this
+     * Mirrors StackRoller.containerEl: the latest result plus a small
+     * die icon; clicking re-rolls. Initiative Tracker appends this
      * element for `encounter:` counts like `1d6: [[Monster]]`. Built
      * lazily so headless consumers never touch the DOM.
      */
     get containerEl(): HTMLElement {
         if (this.#el === null) {
             const el = activeDocument.createElement("span");
-            el.className = "dice-roller";
-            el.setAttribute("aria-label", this.original);
+            el.className = "dice-roller randomness-shim-roller";
+            el.setAttribute(
+                "aria-label",
+                `${this.original} — click to re-roll`
+            );
+            el.title = `${this.original} — click to re-roll`;
+            const value = activeDocument.createElement("span");
+            value.className = "randomness-shim-roller-value";
+            el.appendChild(value);
+            const die = activeDocument.createElement("span");
+            die.className = "randomness-shim-roller-die";
+            try {
+                setIcon(die, "dices");
+            } catch {
+                die.textContent = "🎲";
+            }
+            el.appendChild(die);
             el.addEventListener("click", (e) => {
                 e.stopPropagation();
                 this.rollSync();
             });
             this.#el = el;
+            this.#valueEl = value;
             this.#paint();
         }
         return this.#el;
     }
 
+    #valueEl: HTMLElement | null = null;
+
     #paint(): void {
-        if (this.#el !== null) this.#el.textContent = String(this.result);
+        if (this.#valueEl !== null) {
+            this.#valueEl.textContent = String(this.result);
+        }
     }
 
     rollSync(): number {

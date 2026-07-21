@@ -31,10 +31,8 @@ import { Evaluator } from "../engine/evaluator";
 import { resolveBundle } from "../resolver/fileResolver";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
 import { vaultFileSource } from "./vaultFileSource";
-import {
-    setSanitisedHtmlWithLinks,
-    engineOutputToHtml,
-} from "./sanitiser";
+import { setSanitisedHtmlWithLinks } from "./sanitiser";
+import { htmlToMarkdown } from "./htmlToMarkdown";
 import {
     buildFolderTree,
     filterTree,
@@ -835,32 +833,29 @@ export class BrowserView extends ItemView {
     }
 
     /**
-     * Copy the last roll's result to the clipboard, preserving
-     * formatting where the paste target supports it.
+     * Copy the last roll's result to the clipboard as markdown.
      *
-     * We write both `text/html` and `text/plain` simultaneously:
-     * Obsidian's markdown editor receives the HTML and converts to
-     * markdown on paste (so `<b>` becomes `**`, `<li>` becomes `-`,
-     * etc.), while plain-text targets get the stripped text. See
-     * writeRichClipboard for the dual-format details and fallback.
+     * We convert the engine's HTML to markdown ourselves and write a
+     * single `text/plain` flavour. The obvious alternative — putting
+     * `text/html` on the clipboard and letting Obsidian's editor
+     * convert it on paste — is what we used to do, and it broke on
+     * Android: the WebView hands the HTML flavour back to the paste
+     * handler as a *file*, so Obsidian saves it into the attachment
+     * folder as `tempNNNN.html` and inserts a link to the attachment
+     * instead of the text. Doing the conversion here removes the
+     * `text/html` flavour entirely, so no platform can mishandle it,
+     * and formatting still survives — see htmlToMarkdown.
      *
-     * The HTML format goes through `engineOutputToHtml` so that
-     * `\n` in the engine output becomes `<br>` — without that,
-     * Obsidian's HTML parser collapses newlines into spaces during
-     * paste conversion and a multi-rep table (e.g. five altars
-     * joined with `\n`) ends up as one wall of text. The
-     * `text/plain` format keeps real `\n` characters because plain
-     * targets need them.
-     *
-     * The HTML input here is already sanitised — it came from the
-     * roll result that we displayed via setSanitisedHtml. Putting
-     * it back on the clipboard introduces no new XSS surface.
+     * Line breaks need no special handling on this path: the engine
+     * emits real `\n` characters and markdown treats those as line
+     * breaks, so they carry straight through. (The display path
+     * still needs `engineOutputToHtml`, because the *HTML* parser is
+     * the thing that collapses newlines.)
      */
     private async copyResult(html: string): Promise<void> {
-        const richHtml = engineOutputToHtml(html);
-        const plain = htmlToPlainText(html);
+        const markdown = htmlToMarkdown(html);
         try {
-            await writeRichClipboard(richHtml, plain);
+            await navigator.clipboard.writeText(markdown);
             new Notice("Result copied with formatting");
         } catch (err) {
             new Notice(
@@ -1318,91 +1313,6 @@ function countFiles(folder: FolderNode): number {
     let n = folder.files.length;
     for (const sub of folder.folders) n += countFiles(sub);
     return n;
-}
-
-/**
- * Strip HTML tags from a sanitised string, producing plain text for
- * clipboard paste. Uses the DOM as the parser so entity decoding
- * happens correctly (e.g. `&amp;` becomes `&`).
- *
- * Exported for tests.
- */
-export function htmlToPlainText(html: string): string {
-    // Parse via DOMParser into a detached activeDocument, then read
-    // textContent. This is the safer pattern than `tmp.innerHTML =
-    // html` — DOMParser-built documents are fully detached and
-    // never wired to the live page, so even unsanitised input can't
-    // trigger script execution or resource loads. (Callers always
-    // pass sanitised HTML anyway, but defence in depth is cheap.)
-    if (typeof DOMParser === "undefined") {
-        return html; // node/test fallback
-    }
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    return doc.body.textContent ?? "";
-}
-
-/**
- * Write to the clipboard in both rich (text/html) and plain
- * (text/plain) formats, so that rich-text paste targets like
- * Obsidian's markdown editor (which converts pasted HTML to
- * markdown) receive formatted content, while plain-text targets
- * still get readable text.
- *
- * Why both: Obsidian's editor accepts text/html on paste and
- * converts to markdown automatically — so `<b>X</b>` becomes
- * `**X**`, `<li>` becomes `-`, etc. That conversion is what
- * preserves formatting from a roll across the clipboard
- * boundary. But not every paste target does that conversion;
- * terminals, input fields, and so on want plain text. The
- * Clipboard API's multi-format write lets each target pick.
- *
- * Falls back to writeText(plain) if the multi-format API isn't
- * available — older Electron versions and some testing
- * environments (jsdom) don't ship `clipboard.write` or
- * `ClipboardItem`. Tests stub one or the other to exercise both
- * paths.
- *
- * Exported for tests.
- */
-export async function writeRichClipboard(
-    html: string,
-    plain: string
-): Promise<void> {
-    // Feature-detect the rich-write path. `ClipboardItem` is the
-    // capability that gates dual-format writes; navigator.clipboard
-    // is present without it in some environments.
-    const supportsRich =
-        typeof navigator !== "undefined" &&
-        navigator.clipboard !== undefined &&
-        typeof (navigator.clipboard as { write?: unknown }).write ===
-            "function" &&
-        typeof (window as unknown as { ClipboardItem?: unknown }).ClipboardItem ===
-            "function";
-
-    if (supportsRich) {
-        try {
-            const Ctor = (window as unknown as {
-                ClipboardItem: new (items: Record<string, Blob>) => unknown;
-            }).ClipboardItem;
-            const item = new Ctor({
-                "text/html": new Blob([html], { type: "text/html" }),
-                "text/plain": new Blob([plain], { type: "text/plain" }),
-            });
-            await (
-                navigator.clipboard as {
-                    write: (items: unknown[]) => Promise<void>;
-                }
-            ).write([item]);
-            return;
-        } catch {
-            // Fall through to writeText fallback. Some platforms
-            // advertise `write` but reject HTML payloads at runtime;
-            // we'd rather paste plain than not paste at all.
-        }
-    }
-
-    // Fallback: plain text only. Better than nothing.
-    await navigator.clipboard.writeText(plain);
 }
 
 // Suppress unused warnings — TFolder is imported for potential

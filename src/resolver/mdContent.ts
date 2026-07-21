@@ -676,6 +676,13 @@ export interface TagRollFilter {
     /** Lowercased tag names without the leading `#`. */
     tagGroups: string[][];
     props: TagPropFilter[];
+    /**
+     * Folder prefixes (OR); when non-empty, only notes under one of
+     * these folders (recursive) match. Normalised: forward slashes,
+     * no leading/trailing slash. From `folder=Bestiary/Undead`
+     * segments — `folder` is a reserved segment key.
+     */
+    folders?: string[];
 }
 
 export interface DirectTagCall {
@@ -766,7 +773,18 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
                 .map((v) => v.trim())
                 .filter((v) => v !== "");
             if (key === "" || values.length === 0) return null;
-            filter.props.push({ key, values });
+            if (key.toLowerCase() === "folder") {
+                // Folder source restriction, not a frontmatter prop.
+                const folders = values
+                    .map((v) =>
+                        v.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").trim()
+                    )
+                    .filter((v) => v !== "");
+                if (folders.length === 0) return null;
+                filter.folders = [...(filter.folders ?? []), ...folders];
+            } else {
+                filter.props.push({ key, values });
+            }
             continue;
         }
         // Unknown plain-word suffix (Dice Roller block-type filters
@@ -775,7 +793,11 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
         return null;
     }
 
-    if (filter.tagGroups.length === 0 && filter.props.length === 0) {
+    if (
+        filter.tagGroups.length === 0 &&
+        filter.props.length === 0 &&
+        (filter.folders?.length ?? 0) === 0
+    ) {
         return null;
     }
     return { label: describeTagFilter(filter), mode, filter };
@@ -786,6 +808,9 @@ export function describeTagFilter(f: TagRollFilter): string {
     const parts: string[] = [];
     for (const g of f.tagGroups) {
         parts.push(g.map((t) => "#" + t).join(","));
+    }
+    if (f.folders !== undefined && f.folders.length > 0) {
+        parts.push(`folder=${f.folders.join(",")}`);
     }
     for (const p of f.props) {
         parts.push(`${p.key}=${p.values.join(",")}`);
@@ -802,8 +827,22 @@ export function describeTagFilter(f: TagRollFilter): string {
 export function matchesTagRollFilter(
     tags: ReadonlySet<string>,
     fm: Record<string, unknown> | undefined,
-    filter: TagRollFilter
+    filter: TagRollFilter,
+    /** Vault path of the note — required to match `folder=` filters. */
+    path?: string
 ): boolean {
+    const folders = filter.folders ?? [];
+    if (folders.length > 0) {
+        const p = (path ?? "")
+            .replace(/\\/g, "/")
+            .replace(/^\/+/, "")
+            .toLowerCase();
+        if (p === "") return false;
+        const inFolder = folders.some((f) =>
+            p.startsWith(f.toLowerCase() + "/")
+        );
+        if (!inFolder) return false;
+    }
     for (const group of filter.tagGroups) {
         let groupOk = false;
         outer: for (const want of group) {

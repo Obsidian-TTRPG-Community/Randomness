@@ -37,6 +37,8 @@ extra pipe segments — more tags, or frontmatter properties:
 `rdm:#npc,#monster`               notes with EITHER tag
 `rdm:#npc|universe=Eldara,Vex`    property is Eldara OR Vex
 `rdm:*|universe=Eldara|link`      any note with the property, no tag
+`rdm:*|folder=Bestiary|cr=3|link` a random CR-3 monster note from
+                                  your Bestiary folder
 ```
 
 Values match case-insensitively, lists in frontmatter match if any

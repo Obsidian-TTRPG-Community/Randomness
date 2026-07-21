@@ -13,11 +13,9 @@
 import {
     discoverGenerators,
     rollTable,
-    htmlToPlainText,
     buildInlineSyntax,
     buildSelfContainedSnippet,
     noteImportsFile,
-    writeRichClipboard,
 } from "../../src/views/browserView";
 import { DEFAULT_SETTINGS, RandomnessSettings } from "../../src/views/settings";
 import { TFile } from "obsidian";
@@ -320,48 +318,20 @@ describe("rollTable", () => {
     });
 });
 
-// ────────── htmlToPlainText ──────────
-
-describe("htmlToPlainText", () => {
-    test("strips simple tags, preserves text", () => {
-        expect(htmlToPlainText("<b>hello</b>")).toBe("hello");
-        expect(htmlToPlainText("<i>world</i>")).toBe("world");
-    });
-
-    test("preserves nested text content", () => {
-        expect(
-            htmlToPlainText("<b>bold <i>and italic</i></b>")
-        ).toBe("bold and italic");
-    });
-
-    test("decodes HTML entities", () => {
-        expect(htmlToPlainText("Smith &amp; Jones")).toBe("Smith & Jones");
-        expect(htmlToPlainText("&lt;not a tag&gt;")).toBe("<not a tag>");
-    });
-
-    test("plain text passes through unchanged", () => {
-        expect(htmlToPlainText("just words")).toBe("just words");
-    });
-
-    test("handles empty input", () => {
-        expect(htmlToPlainText("")).toBe("");
-    });
-});
-
-// ────────── writeRichClipboard ──────────
+// ────────── Result-panel Copy ──────────
 
 /**
- * Helper to stub the global clipboard surface for one test, then
- * restore it. Lets each test choose whether `clipboard.write`,
- * `clipboard.writeText`, and the `ClipboardItem` constructor are
- * present, so we exercise both the rich path and the fallback
- * without state leaking between tests.
+ * Stub the clipboard for one test, then restore it.
+ *
+ * We assert on `writeText` only. The copy path deliberately writes a
+ * single `text/plain` flavour — a `text/html` flavour comes back from
+ * Android's WebView as a file and Obsidian saves it as a
+ * `tempNNNN.html` attachment instead of pasting the text. To catch a
+ * regression back to the old behaviour, `write` and `ClipboardItem`
+ * are exposed and recorded: if anything starts using them again,
+ * `writtenItems` will be non-empty and the tests below fail.
  */
-function stubGlobalClipboard(opts: {
-    supportRichWrite: boolean;
-    supportClipboardItem?: boolean;
-    richThrows?: boolean;
-}): {
+function stubGlobalClipboard(): {
     writtenItems: unknown[];
     writtenText: string[];
     restore: () => void;
@@ -369,43 +339,27 @@ function stubGlobalClipboard(opts: {
     const writtenItems: unknown[] = [];
     const writtenText: string[] = [];
 
-    const supportClipboardItem =
-        opts.supportClipboardItem ?? opts.supportRichWrite;
     const originalClip = (navigator as { clipboard?: unknown }).clipboard;
     const originalCI = (globalThis as { ClipboardItem?: unknown })
         .ClipboardItem;
 
-    const clipImpl: {
-        writeText: (s: string) => Promise<void>;
-        write?: (items: unknown[]) => Promise<void>;
-    } = {
-        writeText: async (s) => {
-            writtenText.push(s);
-        },
-    };
-    if (opts.supportRichWrite) {
-        clipImpl.write = async (items) => {
-            if (opts.richThrows) {
-                throw new Error("rich write rejected by platform");
-            }
-            for (const i of items) writtenItems.push(i);
-        };
-    }
     Object.defineProperty(navigator, "clipboard", {
         configurable: true,
-        value: clipImpl,
+        value: {
+            writeText: async (s: string) => {
+                writtenText.push(s);
+            },
+            write: async (items: unknown[]) => {
+                for (const i of items) writtenItems.push(i);
+            },
+        },
     });
-
-    if (supportClipboardItem) {
-        // Stand-in for the real ClipboardItem. We just capture
-        // whatever was passed to the constructor so we can assert.
-        (globalThis as { ClipboardItem?: unknown }).ClipboardItem =
-            function (this: unknown, parts: Record<string, Blob>) {
-                (this as { parts: Record<string, Blob> }).parts = parts;
-            };
-    } else {
-        delete (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
-    }
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = function (
+        this: unknown,
+        parts: Record<string, Blob>
+    ) {
+        (this as { parts: Record<string, Blob> }).parts = parts;
+    };
 
     return {
         writtenItems,
@@ -430,91 +384,13 @@ function stubGlobalClipboard(opts: {
     };
 }
 
-describe("writeRichClipboard", () => {
-    test("when both write and ClipboardItem are available, writes a multi-format item", async () => {
-        const clip = stubGlobalClipboard({ supportRichWrite: true });
-        try {
-            await writeRichClipboard("<b>hi</b>", "hi");
-            expect(clip.writtenItems.length).toBe(1);
-            const parts = (clip.writtenItems[0] as { parts: Record<string, Blob> })
-                .parts;
-            // Both formats present.
-            expect(parts["text/html"]).toBeDefined();
-            expect(parts["text/plain"]).toBeDefined();
-            // Verify the Blob content by reading it back. jsdom
-            // doesn't reliably implement Blob.text(), so use the
-            // FileReader API which is more widely supported.
-            const readBlob = (b: Blob) =>
-                new Promise<string>((resolve, reject) => {
-                    const r = new FileReader();
-                    r.onload = () => resolve(r.result as string);
-                    r.onerror = () => reject(r.error);
-                    r.readAsText(b);
-                });
-            const htmlText = await readBlob(parts["text/html"]);
-            const plainText = await readBlob(parts["text/plain"]);
-            expect(htmlText).toBe("<b>hi</b>");
-            expect(plainText).toBe("hi");
-            // Did NOT fall back to writeText.
-            expect(clip.writtenText).toEqual([]);
-        } finally {
-            clip.restore();
-        }
-    });
-
-    test("when ClipboardItem isn't available, falls back to writeText with plain", async () => {
-        // Some older Electron / test environments expose
-        // clipboard.write but not the ClipboardItem constructor.
-        // Without the constructor we can't build the multi-format
-        // payload, so we should fall back to plain.
-        const clip = stubGlobalClipboard({
-            supportRichWrite: true,
-            supportClipboardItem: false,
-        });
-        try {
-            await writeRichClipboard("<b>hi</b>", "hi");
-            expect(clip.writtenItems).toEqual([]);
-            expect(clip.writtenText).toEqual(["hi"]);
-        } finally {
-            clip.restore();
-        }
-    });
-
-    test("when clipboard.write isn't available, falls back to writeText with plain", async () => {
-        const clip = stubGlobalClipboard({ supportRichWrite: false });
-        try {
-            await writeRichClipboard("<b>hi</b>", "hi");
-            expect(clip.writtenItems).toEqual([]);
-            expect(clip.writtenText).toEqual(["hi"]);
-        } finally {
-            clip.restore();
-        }
-    });
-
-    test("when clipboard.write rejects at runtime, falls back to writeText with plain", async () => {
-        // Defensive: some platforms advertise write() but reject
-        // HTML payloads. We catch and degrade rather than throw.
-        const clip = stubGlobalClipboard({
-            supportRichWrite: true,
-            richThrows: true,
-        });
-        try {
-            await writeRichClipboard("<b>hi</b>", "hi");
-            // Item was attempted but rejected.
-            expect(clip.writtenItems).toEqual([]);
-            // Fallback engaged.
-            expect(clip.writtenText).toEqual(["hi"]);
-        } finally {
-            clip.restore();
-        }
-    });
-
-    test("end-to-end: Roll then click result panel Copy writes both formats", async () => {
+describe("result-panel Copy", () => {
+    test("end-to-end: Roll then click result panel Copy writes markdown as plain text", async () => {
         // Driving the BrowserView through a real roll and then
         // clicking the panel's Copy button gives us coverage that
         // the wiring from roll → setLastRoll → renderResult →
-        // copyResult → writeRichClipboard all stays connected.
-        const clip = stubGlobalClipboard({ supportRichWrite: true });
+        // copyResult → htmlToMarkdown all stays connected.
+        const clip = stubGlobalClipboard();
         try {
             // Make a real BrowserView with a fake plugin.
             const fakePluginFor = (files: Record<string, string>) => {
@@ -606,38 +482,28 @@ describe("writeRichClipboard", () => {
             resultCopyBtn.click();
             await new Promise((r) => setTimeout(r, 30));
 
-            expect(clip.writtenItems.length).toBe(1);
-            const parts = (clip.writtenItems[0] as {
-                parts: Record<string, Blob>;
-            }).parts;
-            const readBlob = (b: Blob) =>
-                new Promise<string>((resolve, reject) => {
-                    const r = new FileReader();
-                    r.onload = () => resolve(r.result as string);
-                    r.onerror = () => reject(r.error);
-                    r.readAsText(b);
-                });
-            const html = await readBlob(parts["text/html"]);
-            const plain = await readBlob(parts["text/plain"]);
-            // The bold filter wrapped the name in <b>.
-            expect(html).toContain("<b>");
-            expect(html).toContain("Bramath Guk");
-            // Plain text version has the tags stripped but content kept.
-            expect(plain).not.toContain("<b>");
-            expect(plain).toContain("Bramath Guk");
+            // Exactly one plain-text write, and no ClipboardItem.
+            // The absent HTML flavour is the point: that flavour is
+            // what Android turned into a tempNNNN.html attachment.
+            expect(clip.writtenItems).toEqual([]);
+            expect(clip.writtenText.length).toBe(1);
+            const copied = clip.writtenText[0];
+            // The bold filter wrapped the name in <b>, which reaches
+            // the clipboard as markdown emphasis rather than a tag.
+            expect(copied).toContain("**Bramath Guk**");
+            expect(copied).not.toContain("<b>");
         } finally {
             clip.restore();
         }
     });
 
-    test("end-to-end: multi-line roll output keeps line breaks in copied HTML", async () => {
+    test("end-to-end: multi-line roll output keeps line breaks", async () => {
         // Regression test for the bug where a multi-rep table (or
         // any table with \n escapes) had its line breaks collapsed
-        // into spaces by Obsidian's HTML→markdown converter during
-        // paste. Fix: write the HTML to clipboard with \n → <br>
-        // translation, so newlines survive the HTML parse and
-        // convert to markdown line breaks.
-        const clip = stubGlobalClipboard({ supportRichWrite: true });
+        // into spaces during paste. On the markdown path the engine's
+        // real \n characters ARE line breaks, so they simply survive
+        // — no <br> round-trip to lose them in.
+        const clip = stubGlobalClipboard();
         try {
             const fakePluginFor = (files: Record<string, string>) => {
                 const map = new Map(Object.entries(files));
@@ -722,32 +588,11 @@ describe("writeRichClipboard", () => {
             resultCopyBtn.click();
             await new Promise((r) => setTimeout(r, 30));
 
-            const parts = (clip.writtenItems[0] as {
-                parts: Record<string, Blob>;
-            }).parts;
-            const readBlob = (b: Blob) =>
-                new Promise<string>((resolve, reject) => {
-                    const r = new FileReader();
-                    r.onload = () => resolve(r.result as string);
-                    r.onerror = () => reject(r.error);
-                    r.readAsText(b);
-                });
-            const html = await readBlob(parts["text/html"]);
-            const plain = await readBlob(parts["text/plain"]);
-            // HTML form: line breaks survive as <br>, so Obsidian's
-            // paste converter sees real breaks and emits markdown
-            // line breaks.
-            expect(html).toContain("<br>");
-            // Plain form: keeps real \n characters for plain-text
-            // paste targets that don't speak HTML.
-            expect(plain).toContain("\n");
+            expect(clip.writtenItems).toEqual([]);
+            const copied = clip.writtenText[0];
             // The bug was characterised by the three lines collapsing
-            // into one. We verify the opposite: each line's content
-            // is separated by either a <br> or a \n.
-            expect(html).toMatch(
-                /An altar stands<br>It has properties<br>Done/
-            );
-            expect(plain).toMatch(
+            // into one. Verify the opposite.
+            expect(copied).toMatch(
                 /An altar stands\nIt has properties\nDone/
             );
         } finally {
