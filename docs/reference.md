@@ -633,8 +633,15 @@ block ids at all:
 `rdm:#rumour`              a random block from a random note tagged
                            #rumour (frontmatter or inline; nested
                            tags match their parent)
-`rdm:#rumour|link`         a link to a random #rumour note
+`rdm:#rumour|link`         a link to a random #rumour note, shown
+                           as the note's name
+`rdm:#rumour|linkpath`     the same, but shown as the full vault path
 ```
+
+`|link` displays the note's name (e.g. `Burning Hands`); the link
+still points at the right note wherever it lives in the vault. Use
+`|linkpath` if you want the full path (`Spells/Level 1/Burning
+Hands`) visible instead.
 
 Tag rolls can be narrowed with extra pipe segments — additional tags
 and/or frontmatter properties:

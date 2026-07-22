@@ -688,8 +688,13 @@ export interface TagRollFilter {
 export interface DirectTagCall {
     /** Canonical human-readable form of the filter, for messages. */
     label: string;
-    /** What to produce: a random block from a matching note, or a link. */
-    mode: "block" | "link";
+    /**
+     * What to produce: a random block from a matching note (`block`),
+     * a wikilink shown as the note's name (`link`, the default for
+     * `|link`), or a wikilink shown as the note's full vault path
+     * (`linkpath`, opt-in via `|linkpath`).
+     */
+    mode: "block" | "link" | "linkpath";
     filter: TagRollFilter;
 }
 
@@ -700,7 +705,8 @@ const TAG_NAME_RE = /^#([A-Za-z0-9_/-]+)$/;
  * segments):
  *
  *   `#tag`                          random block from a random tagged note
- *   `#tag|link`                     wikilink to a random tagged note
+ *   `#tag|link`                     wikilink (shown as the note name)
+ *   `#tag|linkpath`                 wikilink shown as the full vault path
  *   `#npc|#merchant`                both tags required (AND)
  *   `#npc,#monster`                 either tag (OR within a segment)
  *   `#npc|universe=Eldara`          frontmatter property filter
@@ -746,12 +752,16 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
         filter.tagGroups.push(g);
     }
 
-    let mode: "block" | "link" = "block";
+    let mode: "block" | "link" | "linkpath" = "block";
     for (const seg of segments) {
         if (seg === "") continue;
         const low = seg.toLowerCase();
         if (low === "link") {
             mode = "link";
+            continue;
+        }
+        if (low === "linkpath") {
+            mode = "linkpath";
             continue;
         }
         if (low === "block" || low === "-") {

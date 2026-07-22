@@ -198,7 +198,8 @@ function withReps(repsRaw: string, target: string): string {
 /**
  * Tag rolls: `#tag` → random block from a random tagged note (Dice
  * Roller's `|-` single-note mode, our only mode); `#tag|link` → link
- * to a random tagged note. `|+` (a result from EVERY tagged file) has
+ * to a random tagged note (shown as its name), `#tag|linkpath` → the
+ * same shown as the full path. `|+` (a result from EVERY tagged file) has
  * no equivalent yet. Block-type filters approximate to the block roll.
  * Randomness filter segments (`|#tag`, `|prop=value`) pass through
  * unchanged so they work under the dice: prefix too.
@@ -213,7 +214,7 @@ function translateTagRoller(s: string): string {
         .split("|")
         .map((x) => x.trim())
         .filter((x) => x !== "");
-    let link = false;
+    let linkMode: "" | "link" | "linkpath" = "";
     const filters: string[] = [];
     for (const suf of suffixes) {
         const low = suf.toLowerCase();
@@ -223,8 +224,8 @@ function translateTagRoller(s: string): string {
                     "#tag rolls one result from one random tagged note."
             );
         }
-        if (low === "link") {
-            link = true;
+        if (low === "link" || low === "linkpath") {
+            linkMode = low;
             continue;
         }
         if (suf.startsWith("#") || suf.includes("=")) {
@@ -236,7 +237,7 @@ function translateTagRoller(s: string): string {
     }
     let out = `#${tagName}`;
     for (const f of filters) out += `|${f}`;
-    if (link) out += "|link";
+    if (linkMode) out += `|${linkMode}`;
     return out;
 }
 

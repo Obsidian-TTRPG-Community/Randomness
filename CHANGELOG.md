@@ -2,6 +2,21 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.8.0
+
+### Changed
+- **Tag and property `|link` rolls now show the note's name, not its
+  full path.** `` `rdm:#tag|link` `` and property/folder variants like
+  `` `rdm:*|spelllevel=1st|link` `` render the wikilink as the note's
+  name — `Burning Hands` rather than `Spells/Level 1/Burning Hands` —
+  while still linking to the correct note wherever it lives in the
+  vault. This is the new default for every `|link` roll.
+
+### Added
+- **`|linkpath` flag** for link rolls that keeps the full vault path
+  visible, for anyone who preferred the previous display. Works under
+  the `dice:` compatibility prefix too (`` `dice:#tag|linkpath` ``).
+
 ## 1.7.0
 
 ### Fixed

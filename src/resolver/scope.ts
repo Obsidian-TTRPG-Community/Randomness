@@ -111,9 +111,16 @@ export function buildInlineBundle(
         if (files.length === 0) {
             throw new Error(`No notes found matching ${tag.label}.`);
         }
-        if (tag.mode === "link") {
+        if (tag.mode === "link" || tag.mode === "linkpath") {
+            // `link` (default) shows the note's name; `linkpath` keeps
+            // the full vault path visible. Both point at the same note.
             tagTable = makeTagTable(
-                files.map((p) => `[[${p.replace(/\.md$/i, "")}]]`)
+                files.map((p) => {
+                    const path = p.replace(/\.md$/i, "");
+                    return tag.mode === "linkpath"
+                        ? `[[${path}]]`
+                        : `[[${path}|${noteBaseName(p)}]]`;
+                })
             );
         } else {
             tagTable = makeTagTable(

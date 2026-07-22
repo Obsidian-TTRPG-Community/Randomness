@@ -110,6 +110,10 @@ describe("parseDirectTagCall", () => {
             mode: "link",
             filter: { tagGroups: [["town/north"]], props: [] },
         });
+        expect(parseDirectTagCall("#town/north|linkpath")).toMatchObject({
+            mode: "linkpath",
+            filter: { tagGroups: [["town/north"]], props: [] },
+        });
     });
 
     test("tag AND / OR groups", () => {
@@ -342,9 +346,19 @@ describe("line/block/tag rolls end-to-end", () => {
         expect(seen.size).toBeGreaterThan(1); // actually varies
     });
 
-    test("#tag|link inserts a wikilink to a tagged note", () => {
+    test("#tag|link inserts a wikilink shown as the note name", () => {
         for (let seed = 1; seed <= 10; seed++) {
             const out = roll("#rumour|link", seed);
+            expect([
+                "[[Camp/Rumours|Rumours]]",
+                "[[Camp/Sightings|Sightings]]",
+            ]).toContain(out);
+        }
+    });
+
+    test("#tag|linkpath shows the full vault path instead", () => {
+        for (let seed = 1; seed <= 10; seed++) {
+            const out = roll("#rumour|linkpath", seed);
             expect(["[[Camp/Rumours]]", "[[Camp/Sightings]]"]).toContain(out);
         }
     });
@@ -356,10 +370,10 @@ describe("line/block/tag rolls end-to-end", () => {
     test("property filter narrows the candidates", () => {
         for (let seed = 1; seed <= 10; seed++) {
             expect(roll("#rumour|universe=Eldara|link", seed)).toBe(
-                "[[Camp/Sightings]]"
+                "[[Camp/Sightings|Sightings]]"
             );
             expect(roll("*|universe=Eldara|link", seed)).toBe(
-                "[[Camp/Sightings]]"
+                "[[Camp/Sightings|Sightings]]"
             );
             expect(["A dragon overhead.", "Strange lights."]).toContain(
                 roll("#rumour|universe=Eldara", seed)
@@ -372,11 +386,12 @@ describe("line/block/tag rolls end-to-end", () => {
 
     test("folder filter narrows to notes under that folder", () => {
         for (let seed = 1; seed <= 6; seed++) {
-            expect(["[[Camp/Rumours]]", "[[Camp/Sightings]]"]).toContain(
-                roll("*|folder=Camp|link", seed)
-            );
+            expect([
+                "[[Camp/Rumours|Rumours]]",
+                "[[Camp/Sightings|Sightings]]",
+            ]).toContain(roll("*|folder=Camp|link", seed));
             expect(roll("*|folder=Camp|universe=Eldara|link", seed)).toBe(
-                "[[Camp/Sightings]]"
+                "[[Camp/Sightings|Sightings]]"
             );
         }
         expect(() => roll("*|folder=Elsewhere|link")).toThrow(
@@ -412,6 +427,7 @@ describe("dice: compat for sections, lines, and tags", () => {
         expect(t("#rumour")).toBe("#rumour");
         expect(t("#rumour|-")).toBe("#rumour");
         expect(t("#rumour|link")).toBe("#rumour|link");
+        expect(t("#rumour|linkpath")).toBe("#rumour|linkpath");
         expect(t("#rumour|paragraph")).toBe("#rumour");
         expect(() => t("#rumour|+")).toThrow(/every-file/i);
     });
