@@ -155,6 +155,44 @@
     font-size: inherit;
 }
 
+/* Reroll control (codeblock rollers) */
+
+.randomness-codeblock-controls {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 0.75em;
+}
+
+.randomness-reroll-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.25em 0.7em;
+    background: var(--interactive-normal);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.2;
+    box-shadow: var(--input-shadow, none);
+}
+
+.randomness-reroll-btn:hover {
+    background: var(--interactive-hover);
+}
+
+.randomness-reroll-btn:active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.randomness-reroll-btn:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 1px;
+}
+
 /* ── Generator browser (right-sidebar pane) ── */
 
 .randomness-browser {

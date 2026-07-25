@@ -458,4 +458,72 @@ describe("codeblockProcessor: rendering", () => {
         // .randomness-prompts only appears when there are prompts.
         expect(el.querySelector(".randomness-prompts")).toBeNull();
     });
+
+    test("renders a Reroll button, even for a roller with no prompts", async () => {
+        const p = fakePlugin();
+        const proc = buildCodeblockProcessor(p as never);
+        const el = document.createElement("div");
+        await proc("Table: T\nhello", el, fakeCtx("note.md"));
+        const btn = el.querySelector(".randomness-reroll-btn");
+        expect(btn).not.toBeNull();
+        expect((btn as HTMLButtonElement).textContent).toContain("Reroll");
+    });
+
+    test("clicking Reroll preserves the current prompt selection", async () => {
+        const p = fakePlugin();
+        const proc = buildCodeblockProcessor(p as never);
+        const el = document.createElement("div");
+        const src = [
+            "Prompt: Tier {Easy|Hard}Easy",
+            "Table: T",
+            "Tier is {$prompt1}",
+        ].join("\n");
+        await proc(src, el, fakeCtx("note.md"));
+
+        // Switch the dropdown to Hard and let the re-render settle.
+        const select = el.querySelector("select") as HTMLSelectElement;
+        select.value = "Hard";
+        select.dispatchEvent(new Event("change"));
+        await new Promise((r) => setTimeout(r, 50));
+        expect(el.textContent).toContain("Tier is Hard");
+
+        // Reroll — the chosen prompt value must survive the re-roll.
+        const btn = el.querySelector(
+            ".randomness-reroll-btn"
+        ) as HTMLButtonElement;
+        btn.click();
+        await new Promise((r) => setTimeout(r, 50));
+        const selectAfter = el.querySelector("select") as HTMLSelectElement;
+        expect(selectAfter.value).toBe("Hard");
+        expect(el.textContent).toContain("Tier is Hard");
+    });
+
+    test("Reroll advances the result even when stable seeds are on", async () => {
+        // With stable seeds, passive re-renders repeat the same roll.
+        // A manual reroll folds a counter into the seed so the result
+        // advances. Wide table + several rerolls: the chance every roll
+        // lands on the same item is (1/26)^n — vanishingly small, so
+        // this is effectively deterministic, not a variance gamble.
+        const p = fakePlugin({ settings: { stableCodeblockSeeds: true } });
+        const proc = buildCodeblockProcessor(p as never);
+        const el = document.createElement("div");
+        const items = Array.from({ length: 26 }, (_, i) =>
+            String.fromCharCode(65 + i)
+        );
+        await proc("Table: T\n" + items.join("\n"), el, fakeCtx("note.md"));
+
+        const outputText = () =>
+            el.querySelector(".randomness-output")!.textContent!;
+        const seen = new Set<string>([outputText()]);
+        const btn = el.querySelector(
+            ".randomness-reroll-btn"
+        ) as HTMLButtonElement;
+        for (let i = 0; i < 8; i++) {
+            btn.click();
+            await new Promise((r) => setTimeout(r, 20));
+            seen.add(outputText());
+        }
+        // At least one reroll produced a different item.
+        expect(seen.size).toBeGreaterThan(1);
+    });
 });

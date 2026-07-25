@@ -2,6 +2,18 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.9.0
+
+### Added
+- **Reroll button on `randomness` codeblocks.** Fenced ```` ```randomness ````
+  rollers now render a Reroll button beside their prompt controls, so
+  an NPC or table roller embedded in a note can be re-rolled in place —
+  the same affordance the `.rdm` file view and inline calls already
+  had. Prompt selections are preserved across rerolls, and the button
+  forces a fresh roll even when **Stable codeblock seeds** is on (the
+  new result then persists across passive re-renders until the next
+  reroll).
+
 ## 1.8.0
 
 ### Changed

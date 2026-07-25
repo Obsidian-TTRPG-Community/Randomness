@@ -84,6 +84,16 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
      * inside runRender — so we track this rather than seed up-front.
      */
     private promptsSeeded = false;
+    /**
+     * Bumped each time the user clicks Reroll. Folded into the stable
+     * seed so a manual reroll produces a fresh result even when
+     * `stableCodeblockSeeds` is on — and that new result then persists
+     * across passive re-renders (scroll, note reload) rather than
+     * snapping back to the seed-0 roll. When stable seeds are off the
+     * seed is unused (every render is fresh anyway), so the button
+     * still rerolls — the counter just goes along for the ride.
+     */
+    private rerollCounter = 0;
 
     constructor(
         containerEl: HTMLElement,
@@ -135,6 +145,16 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
                     },
                 });
             }
+            // Reroll button. Rendered for every roller (with or without
+            // prompts) so a codeblock has the same "give me another"
+            // affordance the .rdm file view and inline calls already
+            // have. Clicking bumps rerollCounter and re-renders, which
+            // rerolls while keeping the current prompt values (they
+            // live on this instance and promptsSeeded stays true).
+            renderRerollButton(this.containerEl, () => {
+                this.rerollCounter++;
+                void this.render();
+            });
             renderOutput(
                 this.containerEl,
                 renderState.output,
@@ -219,8 +239,16 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         // setting is on, otherwise unseeded (which the RNG class
         // interprets as "use Math.random()").
         const sectionInfo = this.ctx.getSectionInfo(this.containerEl);
+        // Fold rerollCounter into the hashed source so each Reroll click
+        // advances the stable seed. At counter 0 this is equivalent to
+        // the old behaviour, so two fresh renders of the same block
+        // still match (passive re-renders stay stable); only an explicit
+        // reroll changes the seed.
         const seed = settings.stableCodeblockSeeds
-            ? stableSeedFor(this.source, sectionInfo?.lineStart ?? 0)
+            ? stableSeedFor(
+                  this.source + " reroll:" + this.rerollCounter,
+                  sectionInfo?.lineStart ?? 0
+              )
             : undefined;
         // Deck hosts, NON-committing: codeblocks re-render passively
         // (note opened, scrolled into view), and a passive render must
@@ -284,6 +312,29 @@ export function renderError(container: HTMLElement, err: unknown): void {
     const messageDiv = makeChildDiv(wrap, "randomness-error-message");
     messageDiv.textContent =
         err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Render a Reroll button into the container. Clicking it invokes
+ * `onReroll`, which the codeblock child wires to bump its reroll
+ * counter and re-render — a fresh roll that keeps the current prompt
+ * values. Kept here (rather than in promptUI) because it's tied to the
+ * codeblock's reroll lifecycle, not to prompt controls; a roller with
+ * no prompts still gets the button.
+ */
+export function renderRerollButton(
+    container: HTMLElement,
+    onReroll: () => void
+): HTMLButtonElement {
+    const bar = makeChildDiv(container, "randomness-codeblock-controls");
+    const button = activeDocument.createElement("button");
+    button.className = "randomness-reroll-btn";
+    button.type = "button";
+    button.textContent = "🎲 Reroll";
+    button.setAttribute("aria-label", "Reroll");
+    button.addEventListener("click", () => onReroll());
+    bar.appendChild(button);
+    return button;
 }
 
 // ────────────────────────────────────────────────────────────────────
