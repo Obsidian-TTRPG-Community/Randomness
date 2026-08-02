@@ -2,6 +2,32 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.9.1
+
+### Added
+- **`names.rdm` in the Fantasy Hub bundle — a much larger NPC name
+  pool.** Dictionary tables keyed by `race_gender`
+  (`[#elf_female TF-PersonName]`, or `rollUnscoped("TF-PersonName",
+  { dictKey: "elf_female" })`), plus `TF-FirstName` and `TF-Surname`
+  for the halves. Surnames blend a curated list with a
+  prefix + suffix compound table, giving roughly 16,000–47,000 full
+  names per race/gender bucket instead of a few hundred. Covers human,
+  elf, half-elf, half-orc, gnome and goblin; half-elves draw from both
+  parent cultures. Town Forge's place templates use it to keep every
+  NPC in a settlement distinct.
+
+### Changed
+- **Bigger built-in portrait name tables.** The names behind
+  `api.portraits.roll()` came from lists of 9–15 entries per race, so
+  a town full of NPCs would occasionally hand out the same name twice
+  (human males had only 210 possible full names). Each list is now
+  32–48 entries — human is 48 × 48 — cutting the chance of a repeat
+  across a 40-NPC town from roughly 36% to 4%. This is the fallback
+  path now that the Fantasy Hub ships `names.rdm`.
+- **Fantasy Hub `Personality` grown from 21 to 61 beats**, so
+  characters stop sharing a personality line two or three times per
+  generated town.
+
 ## 1.9.0
 
 ### Added

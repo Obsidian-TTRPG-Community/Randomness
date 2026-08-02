@@ -12,6 +12,7 @@
     "generators/items-weapons-simple.rdm",
     "generators/items-weapons.rdm",
     "generators/location.rdm",
+    "generators/names.rdm",
     "generators/people.rdm",
     "generators/place-barracks.rdm",
     "generators/place-castle.rdm",
