@@ -182,8 +182,19 @@ export function showDiceOverlay(
             // The total is known up front (the engine already rolled),
             // so reserve its space immediately — invisible until the
             // dice settle — and the card never resizes mid-animation.
+            //
+            // Show it whenever it says something the dice faces don't:
+            // more than one die to add up, or a flat modifier / dropped
+            // die that makes the total differ from the faces on screen.
+            // (`1d20 + 5` is a single die whose total is NOT its face —
+            // hiding the total there reads as "the modifier was
+            // ignored".)
+            const keptSum = dice.reduce(
+                (n, d) => (d.kept ? n + d.value : n),
+                0
+            );
             let totalEl: HTMLElement | null = null;
-            if (total !== null && dice.length > 1) {
+            if (total !== null && (dice.length > 1 || total !== keptSum)) {
                 totalEl = doc.createElement("div");
                 totalEl.className = "randomness-dice3d-total is-pending";
                 totalEl.textContent = `= ${total}`;

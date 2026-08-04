@@ -2,6 +2,21 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.9.2
+
+### Fixed
+- **The dice animation now shows the total when a roll has a
+  modifier.** The graphical dice overlay only drew its `= total` line
+  when a roll had more than one die, so a single die plus a modifier —
+  `1d20 + 5`, `1d6 - 3` — animated the die and showed nothing else.
+  The die face was the only number on screen, which read as "the
+  modifier was ignored"; the roll itself was always correct, and the
+  dice tray's result panel had the right number the whole time. The
+  total is now shown whenever it says something the faces don't: more
+  than one die, or a flat modifier or dropped die that makes the total
+  differ from the dice on screen. A plain `1d20` still animates
+  without a redundant total. Thanks to Anna_B_Meyer for the report.
+
 ## 1.9.1
 
 ### Added

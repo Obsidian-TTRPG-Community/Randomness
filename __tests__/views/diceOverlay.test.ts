@@ -118,6 +118,23 @@ describe("showDiceOverlay", () => {
         expect(document.querySelector(".randomness-dice3d-layer")).toBeNull();
     });
 
+    // Regression: a single die plus a flat modifier used to hide the
+    // total, so `1d20 + 5` showed only the d20's face and read as
+    // "the modifier was ignored".
+    test("a single die with a modifier still shows the total", () => {
+        void showDiceOverlay([{ sides: 20, value: 11, kept: true }], 16);
+        expect(
+            document.querySelector(".randomness-dice3d-total")?.textContent
+        ).toBe("= 16");
+    });
+
+    test("a single die with no modifier stays clean (no total badge)", () => {
+        void showDiceOverlay([{ sides: 20, value: 11, kept: true }], 11);
+        expect(
+            document.querySelector(".randomness-dice3d-total")
+        ).toBeNull();
+    });
+
     test("a new roll replaces any overlay still on screen", () => {
         void showDiceOverlay([{ sides: 6, value: 2, kept: true }]);
         void showDiceOverlay([{ sides: 20, value: 19, kept: true }]);
