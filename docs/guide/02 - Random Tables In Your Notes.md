@@ -44,6 +44,23 @@ On the way: `rdm:[@events]`
 - Just a name: `rdm:[@npcs.Name]`
 - Any random cell: `rdm:[@npcs.xy]`
 
+### Keeping a row together
+
+Each column is its own table, so three calls give you three
+different people — a baker with somebody else's secret:
+
+`rdm:The [@npcs.Job] was [@npcs.Secret], which put [@npcs.Name] at a disadvantage.`
+
+Roll the row *number* once instead, then pick that row from each
+column with `[#N table]`:
+
+`rdm:The [#{row=1d{count(npcs)}} npcs.Job] was [#{$row} npcs.Secret], which put [#{$row} npcs.Name] at a disadvantage.`
+
+`count(npcs)` is how many rows the table has, so the roll keeps
+working when you add more. Note that both calls above are a single
+`rdm:` span — variables don't carry from one span to the next, so
+the whole sentence has to go inside one.
+
 ## Lookup tables (roll dice, read the row)
 
 Make the first column a dice formula and give rows number ranges:

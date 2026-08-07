@@ -134,6 +134,7 @@ tables, which can call others, and so on.
 | `[@N table]` | Roll the table `N` times, results joined with blank lines. |
 | `[@{1d4} table]` | Roll `N` from dice, then roll the table that many times. |
 | `[#N table]` | Pick item number `N` (no roll — deterministic). |
+| `[#table]` | Pick the item at the *current* item's position — for cross-indexing parallel tables. Only meaningful inside a table item. |
 | `[#<key> table]` | Pick the entry whose key matches `<key>` (dictionary tables). |
 | `[#"key with spaces" table]` | Same, when the key contains whitespace or punctuation. |
 | `[!table]` | Deck pick — don't repeat items until the table's exhausted. |
@@ -283,6 +284,29 @@ Total = {{$str} + {$dex}}
 Variables that look numeric (like `15`) are treated as numbers
 when added; explicit string literals (`'15'`) stay strings and
 concatenate.
+
+### Functions
+
+A few functions are available inside `{...}`:
+
+| Function | What it does |
+| --- | --- |
+| `if(cond, a, b)` | `a` when `cond` is non-zero, else `b`. |
+| `max(…)` / `min(…)` | Largest / smallest of the arguments. |
+| `abs(n)`, `sign(n)`, `sqrt(n)` | The usual arithmetic. |
+| `round(n)`, `floor(n)`, `ceil(n)` | Rounding. |
+| `length(s)`, `trim(s)`, `substr(s, start, len)` | String helpers (`substr` is 1-indexed). |
+| `count(Table)` | How many items a table has. |
+
+`count()` is the odd one out: its argument is a table **name**, not
+a value, so it isn't evaluated as arithmetic. `count(npcs.Job)`,
+`count("a name with spaces")` and `count({$whichTable})` all work.
+It counts items, so a lookup table with two range rows counts 2 —
+not the size of its dice formula. Counting a table that doesn't
+exist is an error, just like rolling one.
+
+Its main use is rolling an index that stays valid as a table grows:
+`{1d{count(npcs)}}`.
 
 ## Filters
 
@@ -583,6 +607,50 @@ A table with several columns produces several rollable names:
 
 Inline, the column pick is `` `rdm:[[Note^npcs|Trait]]` `` and the
 random cell is `` `rdm:[[Note^npcs|xy]]` ``.
+
+### One row, several columns
+
+Each column is a *separate* table, so several calls roll several
+unrelated rows:
+
+```text
+The [@npcs.Trait] one was [@npcs.Name].
+```
+
+That happily pairs Borin's trait with Alia's name. To keep a row
+together, roll the row **number** once and then pick by index with
+`[#N table]`:
+
+```text
+The [#{row=1d{count(npcs)}} npcs.Trait] one was [#{$row} npcs.Name].
+```
+
+The first call rolls the index and stores it in `row`; every later
+call reuses it, so all the cells come from the same row.
+`count(npcs)` keeps the roll honest when you add rows later.
+
+To set the index up front instead, `>> left 0` swallows the number
+it would otherwise print:
+
+```text
+[{row=1d{count(npcs)}} >> left 0]The [#{$row} npcs.Trait] one was [#{$row} npcs.Name].
+```
+
+In a `randomness` codeblock, a `Set:` line is tidier:
+
+```text
+Set: row={1d{count(npcs)}}
+
+Table: Scene
+The [#{$row} npcs.Trait] one was [#{$row} npcs.Name].
+```
+
+> [!warning] Inline calls do not share variables
+> Every `` `rdm:` `` span is evaluated on its own, so a variable set
+> in one span is gone by the next. A sentence that needs a shared
+> row has to live inside a **single** span:
+>
+> `` `rdm:The [#{row=1d{count(npcs)}} npcs.Trait] one was [#{$row} npcs.Name].` ``
 
 ### Lookup tables in markdown
 

@@ -713,3 +713,85 @@ describe("mdContent: lookup header normalisation (no dice: syntax needed)", () =
         expect(t.items[0].rawContent).toBe("1, No");
     });
 });
+
+// ─── One row, several columns ───
+
+/**
+ * The documented fix for "each column re-rolls its own row": roll the
+ * row index once with `{count(table)}`, then pick every column with
+ * `[#N table]`. Regression guard for the whole idiom, since it spans
+ * the extractor (one table per column), the expression evaluator
+ * (count + assignment) and the index pick.
+ */
+const NPC_NOTE = [
+    "| Name  | Job       | Secret               |",
+    "| ----- | --------- | -------------------- |",
+    "| Alia  | baker     | afraid of yeast      |",
+    "| Borin | guard     | writes poetry        |",
+    "| Cass  | herbalist | cannot smell anything |",
+    "",
+    "^npcs",
+].join("\n");
+
+const NPC_ROWS = [
+    "Alia/baker/afraid of yeast",
+    "Borin/guard/writes poetry",
+    "Cass/herbalist/cannot smell anything",
+];
+
+function rollInline(expr: string, seed?: number): string {
+    // The table lives in the same note as the call, so the plain
+    // `[@npcs…]` form resolves without a Use: or a wikilink.
+    const source = inMemorySource({ "Vault/People.md": NPC_NOTE });
+    const bundle = buildInlineBundle(expr, {
+        notePath: "Vault/People.md",
+        noteSource: NPC_NOTE,
+        source,
+    });
+    return new Evaluator(bundle.main, bundle.extras, { seed }).run();
+}
+
+describe("correlated column picks", () => {
+    test("count() reports the number of rows, per column and whole-row", () => {
+        expect(rollInline("{count(npcs)}", 1)).toBe("3");
+        expect(rollInline("{count(npcs.Name)}", 1)).toBe("3");
+        // .xy is every cell — 3 rows x 3 columns.
+        expect(rollInline("{count(npcs.xy)}", 1)).toBe("9");
+    });
+
+    test("index assigned in the first pick keeps every column on one row", () => {
+        const expr =
+            "[#{row=1d{count(npcs)}} npcs.Name]/[#{$row} npcs.Job]/[#{$row} npcs.Secret]";
+        const seen = new Set<string>();
+        for (let seed = 1; seed <= 60; seed++) {
+            const out = rollInline(expr, seed);
+            expect(NPC_ROWS).toContain(out);
+            seen.add(out);
+        }
+        // Sanity: it's still random, not pinned to row 1.
+        expect(seen.size).toBeGreaterThan(1);
+    });
+
+    test("`>> left 0` hides the index when it is assigned up front", () => {
+        const expr =
+            "[{row=1d{count(npcs)}} >> left 0][#{$row} npcs.Name]/[#{$row} npcs.Job]/[#{$row} npcs.Secret]";
+        for (let seed = 1; seed <= 20; seed++) {
+            expect(NPC_ROWS).toContain(rollInline(expr, seed));
+        }
+    });
+
+    test("separate calls without a shared index do drift apart", () => {
+        // Documents the behaviour the idiom exists to fix — if this
+        // ever stops drifting, the docs need revisiting too.
+        const expr = "[@npcs.Name]/[@npcs.Job]/[@npcs.Secret]";
+        let mismatches = 0;
+        for (let seed = 1; seed <= 60; seed++) {
+            if (!NPC_ROWS.includes(rollInline(expr, seed))) mismatches++;
+        }
+        expect(mismatches).toBeGreaterThan(0);
+    });
+
+    test("counting a table that does not exist is an error", () => {
+        expect(() => rollInline("{count(nope)}", 1)).toThrow(/Unknown table/);
+    });
+});

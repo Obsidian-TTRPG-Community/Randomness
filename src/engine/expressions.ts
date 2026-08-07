@@ -49,6 +49,22 @@ export interface ExprContext {
      * show a breakdown instead of only the summed result.
      */
     onDice?(entry: DiceTraceEntry): void;
+    /**
+     * Number of items in a table — backs the `count()` function.
+     *
+     * The argument arrives as RAW source (whatever the author typed
+     * between the parentheses, un-evaluated) rather than as a
+     * `Value`, because table names are not expressions: `npcs.Job`
+     * would parse as `npcs` minus `Job`, and the identifier scanner
+     * stops at the dot. Raw source also lets the implementer reuse
+     * the engine's normal table-name resolution, so `{count({$t})}`
+     * interpolates like every other table reference.
+     *
+     * Optional: contexts built outside the Evaluator (tests, partial
+     * embedders) may not have a table registry, and `count()` throws
+     * a normal ExpressionError there rather than crashing.
+     */
+    countTable?(rawNameSource: string): number;
 }
 
 export class ExpressionError extends Error {
@@ -479,6 +495,33 @@ class ExprParser {
         return total;
     }
 
+    /**
+     * Consume `( ... )` starting at the current `(` and return the raw
+     * text inside it, un-evaluated. Nesting of (), [] and {} is
+     * tracked so a table name containing brackets — or an
+     * interpolation like `{$name}` — doesn't end the argument early.
+     */
+    private consumeRawCallArgs(): string {
+        // Caller has already checked that peek() === "(".
+        this.pos++;
+        const start = this.pos;
+        let depth = 1;
+        while (this.pos < this.source.length) {
+            const c = this.source[this.pos];
+            if (c === "(" || c === "[" || c === "{") depth++;
+            else if (c === ")" || c === "]" || c === "}") {
+                depth--;
+                if (depth === 0) {
+                    const raw = this.source.slice(start, this.pos);
+                    this.pos++;
+                    return raw;
+                }
+            }
+            this.pos++;
+        }
+        throw new ExpressionError("missing ')' in function call");
+    }
+
     private parseIdentifierOrCall(): Value {
         let id = "";
         // Consume optional $ prefix (legacy variable reference)
@@ -508,6 +551,20 @@ class ExprParser {
         this.skipWs();
         // Function call?
         if (this.peek() === "(") {
+            // `count()` is the one function whose argument is a table
+            // NAME, not a value. Grab the raw source between the
+            // parentheses before the expression grammar gets to it —
+            // otherwise `count(npcs.Job)` parses as a subtraction and
+            // `count(3 Wounds)` as a syntax error.
+            if (id.toLowerCase() === "count") {
+                const raw = this.consumeRawCallArgs();
+                if (!this.ctx.countTable) {
+                    throw new ExpressionError(
+                        "count() is not available in this context"
+                    );
+                }
+                return this.ctx.countTable(raw);
+            }
             this.pos++;
             const args: Value[] = [];
             this.skipWs();

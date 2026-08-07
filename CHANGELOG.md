@@ -2,6 +2,37 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.10.0
+
+### Added
+- **`count(Table)` inside `{...}` — how many items a table has.**
+  Mostly useful for rolling an index that stays valid as a table
+  grows: `{1d{count(npcs)}}` instead of hard-coding `1d3` and
+  forgetting to update it when you add a row. The argument is a table
+  *name* rather than a value, so dotted column names
+  (`count(npcs.Job)`), quoted names with spaces, and interpolated
+  names (`count({$whichTable})`) all work. It counts items, so a
+  lookup table with two range rows counts 2, not the span of its dice
+  formula; counting a table that doesn't exist is an error, the same
+  as rolling one.
+
+### Documentation
+- **How to pull several columns from the *same* rolled row.** Each
+  column of a markdown table is its own rollable table, so
+  `[@npcs.Job]` and `[@npcs.Name]` land on different people — which
+  looks like a bug the first time you write a sentence with two of
+  them in it. The fix is to roll the row number once and pick by
+  index: `The [#{row=1d{count(npcs)}} npcs.Job] was [#{$row}
+  npcs.Secret]`. Written up in the reference (*Rolling on note
+  content → One row, several columns*) and in guide note 02, along
+  with the reason it can't be split across two `` `rdm:` `` spans:
+  every inline span is evaluated on its own, so variables don't carry
+  from one to the next.
+- The `[#table]` current-index form — pick the item at the position
+  of the item currently being rendered, for cross-indexing parallel
+  tables — is now in the call-variations table, and the function list
+  (`if`, `max`, `min`, `round`, `substr`, …) is documented at all.
+
 ## 1.9.2
 
 ### Fixed

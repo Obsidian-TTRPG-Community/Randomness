@@ -549,3 +549,62 @@ describe("expressions: errors", () => {
         expect(() => evalE("* 5")).toThrow(ExpressionError);
     });
 });
+
+// ─── count() ───
+
+/**
+ * count() takes a table NAME, not a value, so it bypasses the normal
+ * argument grammar and hands the raw source to ctx.countTable. These
+ * tests pin that contract at the expression layer; the evaluator's
+ * end of it (name resolution, unknown-table errors) is covered in
+ * __tests__/engine/evaluator.test.ts.
+ */
+function makeCountCtx(sizes: Record<string, number>): ExprContext {
+    return {
+        ...makeCtx({ vars: { which: "npcs.Job" } }),
+        countTable: (raw: string) => {
+            const key = raw.trim().replace(/^\{\$(\w+)\}$/, (_m, v) =>
+                v === "which" ? "npcs.Job" : _m
+            );
+            if (!(key in sizes)) throw new Error(`Unknown table: ${key}`);
+            return sizes[key];
+        },
+    };
+}
+
+describe("expressions: count()", () => {
+    const ctx = () => makeCountCtx({ npcs: 3, "npcs.Job": 3, "a name": 7 });
+
+    test("counts a plain table name", () => {
+        expect(evalE("count(npcs)", ctx())).toBe(3);
+    });
+
+    test("dotted column names survive the argument grammar", () => {
+        // Without raw capture this parses as `npcs` minus `Job`.
+        expect(evalE("count(npcs.Job)", ctx())).toBe(3);
+    });
+
+    test("interpolated table name is passed through raw", () => {
+        expect(evalE("count({$which})", ctx())).toBe(3);
+    });
+
+    test("result is a number usable in arithmetic", () => {
+        expect(evalE("count(npcs) * 2 + 1", ctx())).toBe(7);
+    });
+
+    test("feeds dice sides", () => {
+        const v = Number(evalE("1d{count(npcs)}", ctx()));
+        expect(v).toBeGreaterThanOrEqual(1);
+        expect(v).toBeLessThanOrEqual(3);
+    });
+
+    test("unterminated argument list throws", () => {
+        expect(() => evalE("count(npcs", ctx())).toThrow(ExpressionError);
+    });
+
+    test("throws a clear error when the context has no table registry", () => {
+        expect(() => evalE("count(npcs)", makeCtx())).toThrow(
+            /count\(\) is not available/
+        );
+    });
+});

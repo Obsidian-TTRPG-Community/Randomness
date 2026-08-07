@@ -1062,8 +1062,35 @@ export class Evaluator {
                 return this.renderNodes(nodes);
             },
             rng: this.rng,
-            onDice: this.opts.onDice
+            onDice: this.opts.onDice,
+            countTable: (raw) => this.countTableItems(raw)
         };
+    }
+
+    /**
+     * Item count for `{count(Table)}`. The name arrives as raw source
+     * so `{count({$which})}` interpolates like any other table
+     * reference; quotes are optional and stripped, matching the
+     * `[#"key" Table]` convention.
+     *
+     * Counts ITEMS, not the roll range: a `Type: Lookup` table with
+     * `1-50` / `51-100` rows counts 2. For the common case this backs
+     * — one item per row, `{1d{count(T)}}` — that's exactly right.
+     */
+    private countTableItems(rawNameSource: string): number {
+        let name = this.evalRawText(rawNameSource).trim();
+        if (
+            name.length >= 2 &&
+            ((name.startsWith('"') && name.endsWith('"')) ||
+                (name.startsWith("'") && name.endsWith("'")))
+        ) {
+            name = name.slice(1, -1).trim();
+        }
+        const table = this.tables.get(name.toLowerCase());
+        // Same posture as [@Table] / [#Table]: an unknown table is an
+        // authoring mistake and should surface, not silently roll 1d0.
+        if (!table) throw new Error(`Unknown table: ${name}`);
+        return table.items.length;
     }
 
     private filterContext(): FilterContext {
