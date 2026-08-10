@@ -2,6 +2,25 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Added
+- **`api.rollFormula()` and `api.formulas()` — saved dice formulas are
+  now reachable from scripts.** Formula aliases (Settings → Randomness
+  → Dice formula aliases, and the dice tray's ★ button) resolved only
+  for inline `dice:` spans and the tray, so a Templater / Meta Bind /
+  QuickAdd script had no way to invoke one — the reported case was an
+  initiative button that rolls exploding step dice and writes the
+  result to a monster note's frontmatter. `api.rollFormula("sneak")`
+  now rolls the saved alias (matched trimmed and case-insensitively,
+  exactly as inline), and any unmatched string is rolled as a raw
+  formula in the full Dice Roller grammar — modifiers, special dice,
+  `[[Note^id]]` table rolls, `#tag` rolls. `api.formulas()` lists the
+  saved aliases. `roll()`, `rollUnscoped()` and `rollExpression()` are
+  unchanged: they still do not resolve aliases, so an expression
+  sharing a name with one keeps its existing meaning. API version
+  1.2.0 → 1.3.0 (additive).
+
 ## 1.10.0
 
 ### Added

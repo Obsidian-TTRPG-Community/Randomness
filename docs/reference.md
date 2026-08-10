@@ -1124,6 +1124,15 @@ generator anywhere in your vault without needing a `Use:` line.
   name.
 - `rollExpression(expr, opts?)` — roll an arbitrary expression
   like `"[@Names] of [@Origin]"`.
+- `rollFormula(nameOrFormula, opts?)` — roll a dice formula in
+  Dice Roller syntax, resolving **saved formula aliases** by name
+  first (Settings → Randomness → Dice formula aliases, and the
+  tray's ★ button). `api.rollFormula("sneak")` rolls whatever
+  `sneak` is defined as; `api.rollFormula("2d6!+3")` rolls a raw
+  formula; `[[Note^id]]` and `#tag` rolls work too. The other roll
+  methods deliberately don't resolve aliases, so an expression that
+  happens to share a name with one keeps its meaning.
+- `formulas()` — the saved aliases as `{ alias: formula }` (a copy).
 - `tables(callerNotePath?)` — list table names visible from a
   note, deduped and sorted.
 - `tablesWithSources(callerNotePath?)` — list tables with their

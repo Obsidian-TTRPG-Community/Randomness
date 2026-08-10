@@ -11,7 +11,7 @@ const result = await api.roll("VillainName");
 console.log(result.result); // -> "Mordred the Pale"
 ```
 
-- **API version:** `1.2.0` (read `api.version`)
+- **API version:** `1.3.0` (read `api.version`)
 - The API is stable within a major version. New methods may be added
   in minor versions; breaking changes bump the major.
 
@@ -24,6 +24,8 @@ console.log(result.result); // -> "Mordred the Pale"
 | `roll(tableName, opts?)` | Roll a named table **in note scope**. |
 | `rollUnscoped(tableName, opts?)` | Roll a named table found **anywhere in the vault**, ignoring scope. |
 | `rollExpression(rawExpr, opts?)` | Roll an arbitrary expression, e.g. `"[@A] of [@B]"`. |
+| `rollFormula(nameOrFormula, opts?)` | Roll a **dice formula** or a saved **alias**, in Dice Roller syntax. |
+| `formulas()` | The saved dice formula aliases, `{ alias: formula }`. |
 | `tables(callerNotePath?)` | List table names visible from a note's scope. |
 | `tablesWithSources(callerNotePath?)` | List tables with their source files and scope flag. |
 | `onRoll(callback)` | Subscribe to every roll attempt. Returns an unsubscribe fn. |
@@ -126,6 +128,85 @@ the same `RollOptions` as `roll()`.
 ```js
 const r = await api.rollExpression("[@FirstName] [@Surname] of [@City]");
 ```
+
+---
+
+### `rollFormula(nameOrFormula, opts?) → Promise<RollResult>`
+
+(Added in API 1.3.0.) Roll a **dice formula** the way the dice tray and
+inline `dice:` spans do — including the formulas you have saved as
+**aliases**.
+
+`nameOrFormula` is first matched against **Settings → Randomness → Dice
+formula aliases** (the same list the tray's ★ button writes to). The
+match is whole-string, trimmed and case-insensitive, exactly as for an
+inline span. On a hit, the alias's formula is rolled; on a miss, the
+string itself is rolled as a formula.
+
+```js
+await api.rollFormula("sneak");         // saved alias → e.g. 4d6dl1
+await api.rollFormula("2d6! + 3");      // raw formula, exploding
+await api.rollFormula("[[Loot^gems]]"); // a table in a note
+await api.rollFormula("#rumour|link");  // a tag roll
+```
+
+The whole Dice Roller compat grammar is accepted: modifiers
+(`kh`/`kl`/`dl`/`dh`, `!`, `!!`, `r`, `s`, `u`, `cs`), special dice
+(`d%`, `d66%`, `dF`, `d[3,5]`), `[[Note^id]]` table rolls with
+repetitions and `|Column` picks, and `#tag` rolls.
+
+Accepts the same `opts` as `roll()` (`callerNotePath`, `seed`,
+`promptValues`). In the returned `RollResult`, `table` is the alias name
+(or the raw input when no alias matched) and `expression` is the
+translated native expression — handy when you want to show the user
+what actually ran:
+
+```js
+const r = await api.rollFormula("sneak");
+r.table;      // "sneak"
+r.expression; // "{4d6dl1}"
+r.result;     // "14"
+```
+
+> `roll()`, `rollUnscoped()` and `rollExpression()` deliberately do
+> **not** resolve aliases — an expression that happens to share a name
+> with an alias keeps its existing meaning. `rollFormula` is the
+> alias-aware entry point.
+
+**Initiative-tracker recipe.** Roll a saved formula and write the number
+into a monster note's frontmatter, from a button:
+
+```js
+const api = app.plugins.plugins["randomness"].api;
+const file = app.vault.getAbstractFileByPath("Bestiary/Ogre.md");
+const r = await api.rollFormula("init-step-8");
+await app.fileManager.processFrontMatter(file, (fm) => {
+  fm.initiative = Number(r.result);   // Number() so tables sort numerically
+});
+```
+
+Fire that on a click (Meta Bind button, Templater command, QuickAdd
+macro) — not from a render-time block. See **Storing results in a
+note's frontmatter** below for why.
+
+---
+
+### `formulas() → Record<string, string>`
+
+(Added in API 1.3.0.) The saved dice formula aliases, as
+`{ alias: formula }`. Synchronous. Returns a copy, so mutating it does
+not touch settings.
+
+```js
+const saved = api.formulas();
+// { sneak: "4d6dl1", "init-step-8": "2d6!" }
+for (const [name, formula] of Object.entries(saved)) {
+  console.log(name, "=", formula);
+}
+```
+
+Use it to populate a dropdown, or to check an alias exists before
+rolling it.
 
 ---
 

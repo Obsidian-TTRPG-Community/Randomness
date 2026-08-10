@@ -511,3 +511,99 @@ describe("API: onRoll", () => {
         errSpy.mockRestore();
     });
 });
+
+describe("API: rollFormula / formulas", () => {
+    /** Plugin with a couple of saved dice formula aliases. */
+    function makeAliasPlugin(aliases: Record<string, string>) {
+        const p = makePlugin({
+            "names.ipt": NAMES_IPT,
+            "note.md": NOTE_WITH_NAMES,
+        });
+        (p.settings as Record<string, unknown>).diceFormulas = aliases;
+        return p;
+    }
+
+    test("rolls a saved alias by name", async () => {
+        const api = createApi(
+            makeAliasPlugin({ sneak: "4d6dl1" }) as any
+        );
+        const r = await api.rollFormula("sneak");
+        const n = Number(r.result);
+        // 4d6 drop lowest → 3..18.
+        expect(Number.isFinite(n)).toBe(true);
+        expect(n).toBeGreaterThanOrEqual(3);
+        expect(n).toBeLessThanOrEqual(18);
+        // table reports the alias, expression the translated formula.
+        expect(r.table).toBe("sneak");
+        expect(r.expression).toBe("{4d6dl1}");
+    });
+
+    test("alias match is case-insensitive and trims whitespace", async () => {
+        const api = createApi(
+            makeAliasPlugin({ "  Sneak  ": "1d1+41" }) as any
+        );
+        const r = await api.rollFormula("  sNeAk ");
+        expect(r.result).toBe("42");
+        expect(r.table).toBe("  Sneak  ");
+    });
+
+    test("rolls a raw formula when no alias matches", async () => {
+        const api = createApi(makeAliasPlugin({}) as any);
+        const r = await api.rollFormula("2d1+3");
+        expect(r.result).toBe("5");
+        expect(r.table).toBe("2d1+3");
+    });
+
+    test("supports the compat grammar (exploding, keep/drop, dF)", async () => {
+        const api = createApi(makeAliasPlugin({}) as any);
+        // 1d1! would explode forever without the chain cap; use a
+        // shape whose bounds are checkable instead.
+        const kept = Number((await api.rollFormula("2d20kh1")).result);
+        expect(kept).toBeGreaterThanOrEqual(1);
+        expect(kept).toBeLessThanOrEqual(20);
+        const fudge = Number((await api.rollFormula("4dF")).result);
+        expect(fudge).toBeGreaterThanOrEqual(-4);
+        expect(fudge).toBeLessThanOrEqual(4);
+    });
+
+    test("honours seed for reproducible rolls", async () => {
+        const api = createApi(
+            makeAliasPlugin({ init: "1d100" }) as any
+        );
+        const a = await api.rollFormula("init", { seed: 4242 });
+        const b = await api.rollFormula("init", { seed: 4242 });
+        expect(a.result).toBe(b.result);
+    });
+
+    test("fires onRoll on success and on a bad formula", async () => {
+        const api = createApi(makeAliasPlugin({}) as any);
+        const events: { error?: string }[] = [];
+        api.onRoll((r) => events.push(r));
+        await api.rollFormula("1d6");
+        // #tag|+ (every-file tag mode) is explicitly unsupported and
+        // throws during translation, before evaluation.
+        await expect(api.rollFormula("#tag|+")).rejects.toThrow();
+        expect(events).toHaveLength(2);
+        expect(events[0].error).toBeUndefined();
+        expect(events[1].error).toBeTruthy();
+    });
+
+    test("formulas() returns a copy of the saved aliases", async () => {
+        const p = makeAliasPlugin({ sneak: "4d6dl1", init: "1d20+2" });
+        const api = createApi(p as any);
+        expect(api.formulas()).toEqual({
+            sneak: "4d6dl1",
+            init: "1d20+2",
+        });
+        api.formulas().sneak = "tampered";
+        expect(
+            (p.settings as Record<string, unknown>).diceFormulas
+        ).toEqual({ sneak: "4d6dl1", init: "1d20+2" });
+    });
+
+    test("formulas() is empty when settings carry no aliases", () => {
+        const p = makePlugin({ "names.ipt": NAMES_IPT });
+        const api = createApi(p as any);
+        expect(api.formulas()).toEqual({});
+    });
+});

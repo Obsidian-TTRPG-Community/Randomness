@@ -25,6 +25,7 @@
  */
 
 import { evaluateInlineExpression } from "../views/inlineProcessor";
+import { translateDiceExpression } from "../compat/diceCompat";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
 import { buildInlineBundle } from "../resolver/scope";
 import { resolveBundle } from "../resolver/fileResolver";
@@ -41,7 +42,7 @@ import { createPortraitApi, PortraitAPI } from "../portrait/api";
  * Semantic version of the API surface, independent of the plugin
  * version. Bump on any change to the public contract below.
  */
-export const API_VERSION = "1.2.0" as const;
+export const API_VERSION = "1.3.0" as const;
 
 /** Options accepted by roll / rollExpression. */
 export interface RollOptions {
@@ -191,6 +192,42 @@ export interface RandomnessAPI {
      * Returns an unsubscribe function.
      */
     onRoll(callback: RollEventListener): () => void;
+
+    /**
+     * Roll a **dice formula**, in Dice Roller syntax, the way the
+     * dice tray and inline `dice:` spans do.
+     *
+     * `nameOrFormula` is first matched against the saved **dice
+     * formula aliases** (Settings → Randomness → Dice formula
+     * aliases, also written by the tray's ★ button) — the match is
+     * case-insensitive and whitespace-trimmed, exactly as for an
+     * inline span. On a hit the alias's formula is rolled; on a
+     * miss the string is rolled as a formula in its own right.
+     *
+     * The full compat grammar works: modifiers (`4d6dl1`, `2d6!`),
+     * special dice (`d%`, `4dF`), `[[Note^id]]` table rolls, and
+     * `#tag` rolls. Added in API 1.3.0.
+     *
+     *   await api.rollFormula("sneak");        // saved alias
+     *   await api.rollFormula("2d6!+3");       // raw formula
+     *   await api.rollFormula("[[Loot^gems]]");// vault table
+     *
+     * The returned `RollResult` reports the alias name (or the raw
+     * input) as `table`, and the translated native expression as
+     * `expression`.
+     */
+    rollFormula(
+        nameOrFormula: string,
+        opts?: RollOptions
+    ): Promise<RollResult>;
+
+    /**
+     * The saved dice formula aliases, as `{ alias: formula }`.
+     * Returns a copy — mutating it does not change settings.
+     * Useful for offering the user a list of their own formulas
+     * before calling `rollFormula`. Added in API 1.3.0.
+     */
+    formulas(): Record<string, string>;
 
     /**
      * Pick a random markdown note, optionally limited to a folder
@@ -601,6 +638,63 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         return names;
     };
 
+    /**
+     * Saved dice formula aliases, defensively defaulted: older
+     * settings blobs (and test harnesses) may not carry the key.
+     */
+    const aliasMap = (): Record<string, string> =>
+        plugin.settings.diceFormulas ?? {};
+
+    /**
+     * The alias key matching `raw`, or null. Same matching rule as
+     * translateDiceExpression uses internally (trimmed,
+     * case-insensitive, whole-string) — resolved separately here
+     * only so the RollResult can report the alias NAME as `table`
+     * while `expression` carries the translated formula.
+     */
+    const matchAlias = (raw: string): string | null => {
+        const needle = raw.trim().toLowerCase();
+        const key = Object.keys(aliasMap()).find(
+            (k) => k.trim().toLowerCase() === needle
+        );
+        return key ?? null;
+    };
+
+    const rollFormula = async (
+        nameOrFormula: string,
+        opts?: RollOptions
+    ): Promise<RollResult> => {
+        const raw = nameOrFormula.trim();
+        const alias = matchAlias(raw);
+        let expr: string;
+        try {
+            // One call does both jobs: substitutes the alias (when
+            // the whole string matches one) and translates Dice
+            // Roller syntax into a native expression. This is the
+            // same function the inline processor and the dice tray
+            // use, so a formula behaves identically in all three.
+            expr = translateDiceExpression(raw, aliasMap()).expr;
+        } catch (error: unknown) {
+            // Translation failures (unsupported constructs) must
+            // still reach onRoll subscribers — otherwise the event
+            // stream silently misses failed attempts.
+            const failure = buildFailureResult(
+                raw,
+                alias ?? raw,
+                error,
+                resolveCallerNotePath(plugin, opts)
+            );
+            emitRoll(failure);
+            throw error;
+        }
+        return rollExpression(expr, {
+            ...opts,
+            [REQUESTED_TABLE]: alias ?? raw,
+        });
+    };
+
+    const formulas = (): Record<string, string> => ({ ...aliasMap() });
+
     const onRoll = (callback: RollEventListener): (() => void) => {
         listeners.add(callback);
         return () => {
@@ -637,6 +731,8 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         roll,
         rollUnscoped,
         rollExpression,
+        rollFormula,
+        formulas,
         tables,
         tablesWithSources,
         onRoll,
