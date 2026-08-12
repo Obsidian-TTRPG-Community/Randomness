@@ -1054,6 +1054,109 @@ describe("decorateDiceResult: Dice Roller display flags", () => {
     });
 });
 
+describe("decorateDiceResult: the Show dice formula setting", () => {
+    const on = {
+        settings: { diceFormulas: {}, showDiceFormula: true },
+    } as any;
+    const off = {
+        settings: { diceFormulas: {}, showDiceFormula: false },
+    } as any;
+    const TRACE = [{ total: 11, dice: [{ value: 5, kept: true }] }] as any;
+
+    test("off by default: an rdm: dice roll shows the bare result", () => {
+        const r = decorateDiceResult(
+            { expr: "{2d6+3}" } as any,
+            "11",
+            off,
+            TRACE
+        );
+        expect(r.display).toBe("11");
+    });
+
+    test("on: rdm: dice rolls show the formula, braces stripped", () => {
+        const r = decorateDiceResult(
+            { expr: "{2d6+3}" } as any,
+            "11",
+            on,
+            TRACE
+        );
+        expect(r.display).toBe("2d6+3 → 11");
+    });
+
+    test("on: dice: spans get it too", () => {
+        const r = decorateDiceResult(
+            { expr: "2d6+3", prefix: "dice:" } as any,
+            "11",
+            on,
+            TRACE
+        );
+        expect(r.display).toBe("2d6+3 → 11");
+    });
+
+    test("on: a roll with no dice is left alone", () => {
+        // A table roll has an empty trace — `[@Weather] → Light rain`
+        // would be noise, so the setting must not reach it.
+        expect(
+            decorateDiceResult({ expr: "[@Weather]" } as any, "Rain", on, [])
+                .display
+        ).toBe("Rain");
+        expect(
+            decorateDiceResult({ expr: "[@Weather]" } as any, "Rain", on)
+                .display
+        ).toBe("Rain");
+    });
+
+    test("|noform overrides the setting for one call", () => {
+        const r = decorateDiceResult(
+            { expr: "2d6+3|noform", prefix: "dice:" } as any,
+            "11",
+            on,
+            TRACE
+        );
+        expect(r.display).toBe("11");
+    });
+
+    test("|form still works with the setting off, dice or not", () => {
+        expect(
+            decorateDiceResult(
+                { expr: "2d6+3|form", prefix: "dice:" } as any,
+                "11",
+                off,
+                TRACE
+            ).display
+        ).toBe("2d6+3 → 11");
+        expect(
+            decorateDiceResult(
+                { expr: "2d6+3|form", prefix: "dice:" } as any,
+                "11",
+                off
+            ).display
+        ).toBe("2d6+3 → 11");
+    });
+
+    test("|text still wins outright over the formula", () => {
+        const r = decorateDiceResult(
+            { expr: "1d20+2|text(Dexterity +2)", prefix: "dice:" } as any,
+            "17",
+            on,
+            TRACE
+        );
+        expect(r.display).toBe("Dexterity +2");
+        expect(r.tooltip).toBe("17");
+    });
+
+    test("only a whole-expression brace wrapper is stripped", () => {
+        // Mixed text plus an interpolation isn't a bare formula.
+        const r = decorateDiceResult(
+            { expr: "{1d6} gold" } as any,
+            "4 gold",
+            on,
+            TRACE
+        );
+        expect(r.display).toBe("{1d6} gold → 4 gold");
+    });
+});
+
 describe("Dice Roller display flags survive a re-roll (pipeline)", () => {
     test("|form keeps showing the formula after clicking re-roll", async () => {
         const src = "`dice:2d6+3|form`";

@@ -40,6 +40,14 @@ Add `|dice`: `dice: 2d10|dice` — or flip **Settings → Randomness
 Ironsworn-style challenge dice, where the individual faces are
 the whole point.
 
+## See the formula too
+
+Prefer `2d6+3 → 11` over a bare `11`? Turn on **Settings →
+Randomness → Show dice formula**. It applies to every inline dice
+roll, whichever prefix you use, and leaves table rolls alone. On a
+`dice:` span you can override it per roll with `|form` and
+`|noform`.
+
 ## Dice inside sentences and tables
 
 Inside generator text, dice go in curly braces:

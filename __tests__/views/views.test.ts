@@ -153,6 +153,7 @@ describe("settings: defaults", () => {
             diceFormulas: {},
             graphicalDice: true,
             showDiceBreakdown: false,
+            showDiceFormula: false,
             collapsedDecks: [],
         });
     });
@@ -182,6 +183,7 @@ describe("settings: load merge", () => {
             diceFormulas: {},
             graphicalDice: false,
             showDiceBreakdown: false,
+            showDiceFormula: false,
             collapsedDecks: [],
         };
         await p.saveSettings();
@@ -198,6 +200,7 @@ describe("settings: load merge", () => {
             diceFormulas: {},
             graphicalDice: false,
             showDiceBreakdown: false,
+            showDiceFormula: false,
             collapsedDecks: [],
         });
     });

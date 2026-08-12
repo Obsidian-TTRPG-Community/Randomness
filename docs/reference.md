@@ -250,6 +250,23 @@ result — `13 (7, 6)`, the Ironsworn challenge-dice case — turn on
 faces when they're visible, so the record survives in the note.
 The dice tray shows the same breakdown under each history row.
 
+### Seeing the formula next to the result
+
+Turn on **Settings → Randomness → Show dice formula** and every
+inline roll that rolled dice shows what it rolled: `2d6+3 → 11`
+instead of a bare `11`. It applies to both prefixes, so
+`` `rdm:{2d6+3}` `` and `` `dice:2d6+3` `` read the same (the `{…}`
+wrapper is dropped from the display). Rolls that don't touch dice —
+`` `rdm:[@Weather]` `` — are left alone.
+
+A `dice:` span overrides the setting either way: `|form` shows the
+formula with the setting off, `|noform` hides it with the setting on.
+`|text(label)` still wins over both.
+
+The formula is display only. Locking a roll commits the result (and
+the faces, if those are visible) — not the formula, since the point
+of a lock is the value you rolled.
+
 ## Variables
 
 The `Set:` directive assigns a value to a variable. Reference it
@@ -914,8 +931,9 @@ the formula with the result; `|dice` appends what each die rolled
 into the note on first render — the lock form of Dice Roller's
 note-modifying roll. **Formula aliases** from Settings → Randomness
 → Dice formula aliases work for every compat prefix: define
-`sneak = 4d6dl1` and `dice: sneak` rolls it. The remaining flags
-(`|nodice`, `|avg`, `|none`, `|noform`) are accepted and
+`sneak = 4d6dl1` and `dice: sneak` rolls it. `|noform`
+suppresses it when the **Show dice formula** setting is on. The
+remaining flags (`|nodice`, `|avg`, `|none`) are accepted and
 currently ignored. `|render` plays the graphical dice animation for
 plain dice formulas (see below). Whole-note
 rolls work: `dice: [[Note]]` picks a random block, `|line` a random

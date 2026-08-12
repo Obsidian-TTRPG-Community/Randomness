@@ -2,6 +2,22 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.13.0
+
+### Added
+- **A "Show dice formula" setting.** Inline rolls can now show what
+  was rolled next to the result — `2d6+3 → 11` instead of a bare `11`
+  — without adding a flag to every call. Settings → Randomness → Show
+  dice formula, off by default. It covers both prefixes, so
+  `` `rdm:{2d6+3}` `` and `` `dice:2d6+3` `` read the same (the `{…}`
+  wrapper is dropped from the display), and it only touches rolls that
+  actually rolled dice, so `` `rdm:[@Weather]` `` is unaffected. A
+  `dice:` span still overrides it per roll: `|form` shows the formula
+  with the setting off, `|noform` hides it with the setting on, and
+  `|text(label)` wins over both. The formula is display only — locking
+  a roll commits the result, as before. `|noform` had been accepted
+  and ignored until now. Thanks to Anna_B_Meyer for the request.
+
 ## 1.12.0
 
 ### Added

@@ -264,10 +264,21 @@ export function decorateDiceResult(
         trace !== undefined && trace.length > 0
             ? formatDiceBreakdown(trace)
             : undefined;
-    // Display flags only apply to the Dice Roller compat prefixes.
+    const withFormula = (text: string) =>
+        showFormula(call, plugin, trace)
+            ? `${displayFormulaOf(call)} → ${text}`
+            : text;
+
+    // The rest of the display flags only apply to the Dice Roller
+    // compat prefixes; a native rdm: span has none to read.
     if ((call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX) {
         return {
-            display: applyVisibleFaces(call, result, plugin, trace),
+            display: applyVisibleFaces(
+                call,
+                withFormula(result),
+                plugin,
+                trace
+            ),
             breakdown,
         };
     }
@@ -286,26 +297,62 @@ export function decorateDiceResult(
                 breakdown,
             };
         }
-        if (flags.some((f) => f.toLowerCase() === "form")) {
-            // Strip the trailing flags so the `|form` flag itself does
-            // not leak into the displayed formula.
-            return {
-                display: applyVisibleFaces(
-                    call,
-                    `${stripDisplayFlags(call.expr)} → ${result}`,
-                    plugin,
-                    trace
-                ),
-                breakdown,
-            };
-        }
     } catch {
         // Translation errors were already surfaced by the caller.
     }
     return {
-        display: applyVisibleFaces(call, result, plugin, trace),
+        display: applyVisibleFaces(call, withFormula(result), plugin, trace),
         breakdown,
     };
+}
+
+/**
+ * Should this roll show its formula? The "Show dice formula" setting
+ * is the default for every prefix; a compat span overrides it either
+ * way with `|form` / `|noform`.
+ *
+ * Gated on the call having actually rolled dice: without that, a
+ * table roll would render `[@Weather] → Light rain`, which is noise.
+ * Same rule `applyVisibleFaces` uses for the face list.
+ */
+function showFormula(
+    call: InlineCall,
+    plugin: RandomnessPlugin,
+    trace?: DiceTraceEntry[]
+): boolean {
+    // An explicit flag is an explicit request: honoured even for a
+    // roll with no dice in it, which is how `|form` behaved before
+    // the setting existed. The trace gate below guards only the new
+    // implicit path.
+    if ((call.prefix ?? INLINE_PREFIX) !== INLINE_PREFIX) {
+        try {
+            const { flags } = translateDiceExpression(
+                call.expr,
+                plugin.settings.diceFormulas
+            );
+            const low = flags.map((f) => f.toLowerCase());
+            if (low.includes("noform")) return false;
+            if (low.includes("form")) return true;
+        } catch {
+            // Fall through to the setting.
+        }
+    }
+    if (trace === undefined || trace.length === 0) return false;
+    return plugin.settings.showDiceFormula === true;
+}
+
+/**
+ * The formula as the reader wrote it, minus the syntax that only
+ * matters to the parser: trailing display flags, and the `{…}` an
+ * rdm: dice call is wrapped in (`{2d6+3}` reads better as `2d6+3`
+ * next to its result). Only the outer wrapper is stripped, and only
+ * when it encloses the whole expression.
+ */
+function displayFormulaOf(call: InlineCall): string {
+    const bare = stripDisplayFlags(call.expr).trim();
+    const m = bare.match(/^\{(.+)\}$/s);
+    if (m && !m[1].includes("{") && !m[1].includes("}")) return m[1].trim();
+    return bare;
 }
 
 /**

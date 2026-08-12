@@ -143,6 +143,14 @@ export interface RandomnessSettings {
      */
     showDiceBreakdown: boolean;
     /**
+     * Show the formula that produced an inline roll — `2d6+3 → 11`
+     * instead of just `11`. Only applies to calls that actually
+     * rolled dice, so table rolls are unaffected. Compat spans
+     * override per-roll with `|form` / `|noform`; the formula is
+     * display only and never committed by a lock.
+     */
+    showDiceFormula: boolean;
+    /**
      * Deck names collapsed to their title row in the Decks tab.
      * Toggled by clicking a deck's title; persists across reloads.
      */
@@ -160,6 +168,7 @@ export const DEFAULT_SETTINGS: RandomnessSettings = {
     diceFormulas: {},
     graphicalDice: true,
     showDiceBreakdown: false,
+    showDiceFormula: false,
     collapsedDecks: [],
 };
 
@@ -851,6 +860,26 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     .setValue(this.plugin.settings.showDiceBreakdown)
                     .onChange(async (value) => {
                         this.plugin.settings.showDiceBreakdown = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Show dice formula")
+            .setDesc(
+                "Show what was rolled next to the result — " +
+                    "'2d6+3 → 11' instead of just '11'. Applies to " +
+                    "inline rolls that actually rolled dice; table " +
+                    "rolls are unaffected. dice: spans override this " +
+                    "per-roll with the |form and |noform flags. " +
+                    "Display only — locking still commits just the " +
+                    "result."
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.showDiceFormula)
+                    .onChange(async (value) => {
+                        this.plugin.settings.showDiceFormula = value;
                         await this.plugin.saveSettings();
                     })
             );
