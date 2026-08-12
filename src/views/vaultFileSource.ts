@@ -166,3 +166,25 @@ export function makeTagFilesLookup(
         return out.sort();
     };
 }
+
+/**
+ * Frontmatter of one note by vault path, for `prop:` tag rolls.
+ * Reads the same metadata cache the filter lookup uses, so a note
+ * that matched a `cr=*` filter is guaranteed to have a `cr` here.
+ * Returns undefined for a path with no cache entry or no frontmatter.
+ */
+export function makeTagFrontmatterLookup(
+    plugin: RandomnessPlugin
+): (path: string) => Record<string, unknown> | undefined {
+    return (path) => {
+        try {
+            return plugin.app.metadataCache.getCache(path)?.frontmatter as
+                | Record<string, unknown>
+                | undefined;
+        } catch {
+            // Defensive, matching makeTagFilesLookup: cache API drift
+            // degrades to "no properties", not a crash.
+            return undefined;
+        }
+    };
+}

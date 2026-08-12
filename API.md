@@ -11,7 +11,7 @@ const result = await api.roll("VillainName");
 console.log(result.result); // -> "Mordred the Pale"
 ```
 
-- **API version:** `1.3.0` (read `api.version`)
+- **API version:** `1.4.0` (read `api.version`)
 - The API is stable within a major version. New methods may be added
   in minor versions; breaking changes bump the major.
 
@@ -29,7 +29,7 @@ console.log(result.result); // -> "Mordred the Pale"
 | `tables(callerNotePath?)` | List table names visible from a note's scope. |
 | `tablesWithSources(callerNotePath?)` | List tables with their source files and scope flag. |
 | `onRoll(callback)` | Subscribe to every roll attempt. Returns an unsubscribe fn. |
-| `randomNote(folder?, opts?)` | A random markdown note from a folder (recursive). |
+| `randomNote(folder?, opts?)` | A random markdown note from a folder (recursive), with its frontmatter. |
 | `portraits.*` | Portrait compositor: roll/render/savePng/snippets (see below). |
 | `version` | The API version string. |
 
@@ -487,7 +487,7 @@ console.table(
 
 ---
 
-## Random notes (`randomNote`, since 1.2.0)
+## Random notes (`randomNote`, since 1.2.0; `frontmatter` since 1.4.0)
 
 Pick a random markdown note, optionally limited to a folder
 (searched recursively). Great for "roll a random encounter/NPC/rumour
@@ -499,10 +499,31 @@ const enc = api.randomNote("Encounters/Forest");
 if (enc) tR += `Tonight: ${enc.link}`;   // -> Tonight: [[Encounters/Forest/Wolves]]
 ```
 
-Returns `{ path, basename, link }` (the link is path-qualified), or
-`null` when the folder contains no notes. `opts.seed` makes the pick
-deterministic. Prefer a hand-curated `.ipt` table of `[[links]]` when
-you want to control weighting.
+Returns `{ path, basename, link, frontmatter }` (the link is
+path-qualified), or `null` when the folder contains no notes.
+`opts.seed` makes the pick deterministic. Prefer a hand-curated `.ipt`
+table of `[[links]]` when you want to control weighting.
+
+### Reading the rolled note's properties (since 1.4.0)
+
+`frontmatter` is the note's properties straight from Obsidian's
+metadata cache — `{}` when it has none, so it's always safe to reach
+into. Keys keep their authored casing.
+
+```js
+const api = app.plugins.plugins["randomness"].api;
+const m = api.randomNote("Bestiary");
+if (m) {
+  const { cr = "?", hp = "?" } = m.frontmatter;
+  tR += `${m.link} — CR ${cr}, ${hp} HP`;
+}
+```
+
+Filtering on properties (rather than just reading them) is a job for
+the inline syntax: `` `rdm:*|folder=Bestiary|cr=3|link` ``. That syntax
+can print them too — `` `rdm:*|folder=Bestiary|prop:{{link}} — CR
+{{cr}}` `` — which is usually less code than a Templater block. See
+*Random lines, blocks, and tagged notes* in the reference.
 
 ---
 

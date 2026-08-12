@@ -32,6 +32,7 @@ import {
     noteBaseName,
     parseDirectTagCall,
     parseDirectWikilinkCall,
+    renderPropTemplate,
     TagRollFilter,
 } from "./mdContent";
 import {
@@ -70,6 +71,14 @@ export interface InlineScopeOptions {
      * a descriptive error.
      */
     tagFiles?: (filter: TagRollFilter) => string[];
+    /**
+     * Optional frontmatter lookup for one vault path. Required for
+     * `prop:` tag rolls, which interpolate a matched note's
+     * properties; the plugin backs it with the metadata cache. When
+     * absent, `prop:` rolls throw a descriptive error and the other
+     * tag-roll modes are unaffected.
+     */
+    tagFrontmatter?: (path: string) => Record<string, unknown> | undefined;
 }
 
 /**
@@ -111,7 +120,23 @@ export function buildInlineBundle(
         if (files.length === 0) {
             throw new Error(`No notes found matching ${tag.label}.`);
         }
-        if (tag.mode === "link" || tag.mode === "linkpath") {
+        if (tag.mode === "prop") {
+            // One item per candidate note, each already rendered — the
+            // engine picks a whole rendered note, so every `{{key}}`
+            // in the template describes the SAME note.
+            if (!opts.tagFrontmatter) {
+                throw new Error(
+                    `Property rolls (${tag.label}) need the vault's ` +
+                        `metadata cache, which isn't available in this ` +
+                        `context.`
+                );
+            }
+            const fmOf = opts.tagFrontmatter;
+            const tpl = tag.template as string;
+            tagTable = makeTagTable(
+                files.map((p) => renderPropTemplate(tpl, p, fmOf(p)))
+            );
+        } else if (tag.mode === "link" || tag.mode === "linkpath") {
             // `link` (default) shows the note's name; `linkpath` keeps
             // the full vault path visible. Both point at the same note.
             tagTable = makeTagTable(

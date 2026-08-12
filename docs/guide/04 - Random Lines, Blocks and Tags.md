@@ -45,6 +45,30 @@ Values match case-insensitively, lists in frontmatter match if any
 entry hits, and link-style values (`universe: "[[Eldara]]"`) match
 their note name. `prop=*` means "the property exists".
 
+## Printing the properties themselves
+
+Filtering on a property is one thing; printing it is another. End the
+call with `prop:` and the rest becomes a template:
+
+```text
+`rdm:*|folder=Bestiary|prop:cr`
+
+`rdm:*|folder=Bestiary|prop:{{link}} — CR {{cr}}, {{hp}} HP`
+```
+
+The second one renders as:
+
+> [[Bestiary/Bog Hag|Bog Hag]] — CR 3, 45 HP
+
+One note is rolled and the whole line is filled in from it, so the CR
+and the HP always belong to that monster. Writing two separate
+`` `rdm:` `` calls would give you two different monsters — each inline
+call is its own roll.
+
+`{{link}}`, `{{linkpath}}`, `{{path}}` and `{{name}}` describe the note
+itself; anything else is one of its properties. A note that's missing a
+property you asked for is simply never picked.
+
 ## Why this is handy
 
 - A `#quest-hook` tag across your campaign notes = instant

@@ -64,6 +64,36 @@ describe("api.randomNote", () => {
         expect(api.randomNote("Nowhere")).toBeNull();
     });
 
+    test("frontmatter is {} when the metadata cache is unavailable", () => {
+        // fakePlugin has no metadataCache at all — the property bag
+        // must still be present so callers can destructure it.
+        expect(api.randomNote("NPCs")!.frontmatter).toEqual({});
+    });
+
+    test("frontmatter comes from the metadata cache, keys as authored", () => {
+        const plugin = fakePlugin(["Bestiary/Bog Hag.md"]);
+        (plugin as unknown as { app: Record<string, unknown> }).app = {
+            ...(plugin.app as object),
+            metadataCache: {
+                getFileCache: (f: TFile) =>
+                    f.path === "Bestiary/Bog Hag.md"
+                        ? { frontmatter: { CR: 3, hp: 45 } }
+                        : null,
+            },
+        };
+        const n = createApi(plugin).randomNote("Bestiary")!;
+        expect(n.frontmatter).toEqual({ CR: 3, hp: 45 });
+    });
+
+    test("a note with no frontmatter yields {}, not undefined", () => {
+        const plugin = fakePlugin(["Inbox.md"]);
+        (plugin as unknown as { app: Record<string, unknown> }).app = {
+            ...(plugin.app as object),
+            metadataCache: { getFileCache: () => ({}) },
+        };
+        expect(createApi(plugin).randomNote()!.frontmatter).toEqual({});
+    });
+
     test("seed makes the pick deterministic; link is path-qualified", () => {
         const a = api.randomNote("Encounters", { seed: 7 })!;
         const b = api.randomNote("Encounters", { seed: 7 })!;

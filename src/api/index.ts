@@ -42,7 +42,7 @@ import { createPortraitApi, PortraitAPI } from "../portrait/api";
  * Semantic version of the API surface, independent of the plugin
  * version. Bump on any change to the public contract below.
  */
-export const API_VERSION = "1.3.0" as const;
+export const API_VERSION = "1.4.0" as const;
 
 /** Options accepted by roll / rollExpression. */
 export interface RollOptions {
@@ -119,6 +119,13 @@ export interface NoteRollResult {
     basename: string;
     /** Ready-to-paste wiki link, path-qualified: "[[NPCs/Goblins/Snagg]]". */
     link: string;
+    /**
+     * The note's frontmatter properties, straight from the metadata
+     * cache — `{}` when the note has no frontmatter (never
+     * undefined, so `result.frontmatter.cr` is always safe to reach
+     * for). Keys keep their authored casing. Added in API 1.4.0.
+     */
+    frontmatter: Record<string, unknown>;
 }
 
 /** Listener for the onRoll event stream. */
@@ -232,10 +239,11 @@ export interface RandomnessAPI {
     /**
      * Pick a random markdown note, optionally limited to a folder
      * (recursive). Returns null when the folder holds no notes.
-     * `seed` makes the pick deterministic. Added in API 1.2.0.
+     * `seed` makes the pick deterministic. Added in API 1.2.0;
+     * `frontmatter` on the result added in API 1.4.0.
      *
      *   const enc = api.randomNote("Encounters/Forest");
-     *   if (enc) tR += `Tonight: ${enc.link}`;
+     *   if (enc) tR += `Tonight: ${enc.link} (CR ${enc.frontmatter.cr})`;
      */
     randomNote(
         folder?: string,
@@ -719,10 +727,22 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
                 ? new RNG(opts.seed).nextU32() % files.length
                 : Math.floor(Math.random() * files.length);
         const f = files[idx];
+        let frontmatter: Record<string, unknown> = {};
+        try {
+            frontmatter =
+                (plugin.app.metadataCache.getFileCache(f)?.frontmatter as
+                    | Record<string, unknown>
+                    | undefined) ?? {};
+        } catch {
+            // Metadata cache unavailable (API drift, or a note the
+            // cache hasn't indexed yet): an empty property bag beats
+            // failing the whole pick.
+        }
         return {
             path: f.path,
             basename: f.basename,
             link: `[[${f.path.replace(/\.md$/i, "")}]]`,
+            frontmatter,
         };
     };
 

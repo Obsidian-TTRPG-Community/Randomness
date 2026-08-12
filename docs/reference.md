@@ -741,6 +741,51 @@ and cap at 50 matching notes per roll. The note pick happens inside
 the engine, so seeded rolls are reproducible and every re-roll may
 pick a different note.
 
+#### Printing the properties, not just the link
+
+A final `prop:` segment turns the roll's output into a template: one
+note is picked, and its frontmatter is interpolated into whatever text
+you wrote.
+
+```text
+`rdm:*|folder=Bestiary|prop:cr`   the rolled note's `cr` property
+
+`rdm:*|folder=Bestiary|prop:{{link}} — CR {{cr}}, {{hp}} HP`
+    → [[Bestiary/Bog Hag|Bog Hag]] — CR 3, 45 HP
+```
+
+`prop:` must come last: everything after it is the template, pipes
+included, so `{{...}}` placeholders can sit inside wikilinks
+(`prop:[[{{path}}|{{name}}]]`). The bare form `prop:cr` is shorthand
+for `prop:{{cr}}`.
+
+Because the whole template is filled from one note, values can't drift
+apart — the CR and the HP always belong to the monster in the link.
+Two separate `` `rdm:` `` spans *would* drift: every inline call is its
+own roll. That's the reason to reach for a template rather than
+several calls.
+
+Four placeholder names describe the note itself and are reserved (a
+frontmatter property of the same name is shadowed):
+
+| Placeholder | Renders |
+| --- | --- |
+| `{{link}}` | `[[Bestiary/Bog Hag\|Bog Hag]]` — link shown as the name |
+| `{{linkpath}}` | `[[Bestiary/Bog Hag]]` — link shown as the path |
+| `{{path}}` | `Bestiary/Bog Hag` — plain text, no link |
+| `{{name}}` | `Bog Hag` — the filename |
+
+Every other placeholder is a frontmatter key, matched
+case-insensitively. Naming a property in a template also *requires*
+it: `prop:{{cr}}` implicitly adds `cr=*`, so a note without a `cr` is
+never picked and the output can't come back half-blank. An explicit
+constraint stands on its own — `cr=3|prop:{{cr}}` still only rolls CR
+3 notes. List-valued properties render comma-joined (`types: [fey,
+humanoid]` → `fey, humanoid`), and property values are treated as
+plain text — a value containing `[` or `{` prints as itself rather
+than being read as a table call. (The template around it is yours, so
+`prop:{{name}} takes {1d4} damage` still rolls the d4.)
+
 ### How wikilinks resolve
 
 `[[Note]]` refs resolve the way Obsidian resolves links: relative

@@ -692,13 +692,113 @@ export interface DirectTagCall {
      * What to produce: a random block from a matching note (`block`),
      * a wikilink shown as the note's name (`link`, the default for
      * `|link`), or a wikilink shown as the note's full vault path
-     * (`linkpath`, opt-in via `|linkpath`).
+     * (`linkpath`, opt-in via `|linkpath`), or frontmatter properties
+     * interpolated into a template (`prop`, via `|prop:…`).
      */
-    mode: "block" | "link" | "linkpath";
+    mode: "block" | "link" | "linkpath" | "prop";
+    /**
+     * Only set when `mode === "prop"`: the output template, always
+     * normalised to contain at least one `{{key}}` placeholder (the
+     * `prop:cr` shorthand is expanded to `{{cr}}` at parse time).
+     */
+    template?: string;
     filter: TagRollFilter;
 }
 
 const TAG_NAME_RE = /^#([A-Za-z0-9_/-]+)$/;
+
+/**
+ * Placeholder names in a `prop:` template that describe the note
+ * itself rather than one of its frontmatter properties. These always
+ * win over a same-named frontmatter key — a note with a `name:`
+ * property still renders `{{name}}` as its filename.
+ */
+const RESERVED_PROP_KEYS = new Set(["link", "linkpath", "path", "name"]);
+
+/** `{{ key }}` placeholders inside a `prop:` template. */
+const PROP_PLACEHOLDER_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
+
+/** What a bare `prop:cr` shorthand is allowed to look like. */
+const BARE_PROP_KEY_RE = /^[A-Za-z0-9_][A-Za-z0-9_ .-]*$/;
+
+/** Every distinct placeholder name used by a template, in order. */
+export function propTemplateKeys(template: string): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const m of template.matchAll(PROP_PLACEHOLDER_RE)) {
+        const key = m[1].trim();
+        const low = key.toLowerCase();
+        if (key === "" || seen.has(low)) continue;
+        seen.add(low);
+        out.push(key);
+    }
+    return out;
+}
+
+/**
+ * Render one candidate note through a `prop:` template. Reserved
+ * placeholders describe the note; everything else is looked up in its
+ * frontmatter (case-insensitively). Unknown keys render empty —
+ * parseDirectTagCall adds an exists-filter for each referenced
+ * property, so in practice a note that reaches here has them all.
+ */
+export function renderPropTemplate(
+    template: string,
+    path: string,
+    fm: Record<string, unknown> | undefined
+): string {
+    const noExt = path.replace(/\.md$/i, "");
+    const base = noteBaseName(path);
+    const byKey = new Map<string, unknown>();
+    for (const k of Object.keys(fm ?? {})) {
+        byKey.set(k.toLowerCase(), (fm as Record<string, unknown>)[k]);
+    }
+    return template.replace(PROP_PLACEHOLDER_RE, (_all, rawKey: string) => {
+        const key = rawKey.trim().toLowerCase();
+        switch (key) {
+            case "link":
+                return `[[${noExt}|${base}]]`;
+            case "linkpath":
+                return `[[${noExt}]]`;
+            case "path":
+                return noExt;
+            case "name":
+                return base;
+            default:
+                return escapeForEngine(
+                    formatFrontmatterValue(byKey.get(key))
+                );
+        }
+    });
+}
+
+/**
+ * Frontmatter is user data, not generator syntax: a property whose
+ * value happens to contain `[` or `{` must render as itself rather
+ * than being read as a table call or an expression (which would fail
+ * the whole roll with "Unknown table"). Only interpolated values are
+ * escaped — the surrounding template is authored by the person
+ * writing the call, so `{1d6}` there still rolls.
+ */
+function escapeForEngine(s: string): string {
+    return s.replace(/[\\[{]/g, (c) => "\\" + c);
+}
+
+/**
+ * Frontmatter value → display string. Lists join with commas (a
+ * note's `types: [fey, humanoid]` reads as "fey, humanoid"); null and
+ * undefined render empty rather than the words "null"/"undefined".
+ */
+function formatFrontmatterValue(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    if (Array.isArray(v)) {
+        return v
+            .map((x) => formatFrontmatterValue(x))
+            .filter((x) => x !== "")
+            .join(", ");
+    }
+    return String(v);
+}
 
 /**
  * Detect a direct tag-roll expression. Grammar (pipe-separated
@@ -713,17 +813,28 @@ const TAG_NAME_RE = /^#([A-Za-z0-9_/-]+)$/;
  *   `#npc|universe=Eldara,Vex`      property is Eldara OR Vex
  *   `#npc|universe=*`               property exists (any value)
  *   `*|universe=Eldara`             all notes with the property, no tag
+ *   `*|folder=Bestiary|prop:cr`     that note's `cr` property
+ *   `#npc|prop:{{name}} ({{job}})`  several properties of ONE note
  *
  * Dice Roller's `|-` (single random note) matches our default
  * behaviour and is accepted as plain mode; unknown word suffixes
  * (block-type filters like `paragraph`) are approximated to the block
  * mode, as before. Returns null for anything that isn't a tag call.
+ *
+ * `prop:` consumes the rest of the expression — pipes after it belong
+ * to the template (so `{{link}}`-style wikilinks with aliases survive)
+ * — and so must come last.
  */
 export function parseDirectTagCall(expr: string): DirectTagCall | null {
     const s = expr.trim();
     if (!s.startsWith("#") && !s.startsWith("*")) return null;
-    const segments = s.split("|").map((x) => x.trim());
-    const first = segments.shift() ?? "";
+    // Raw (untrimmed) segments are kept alongside the trimmed ones so
+    // a `prop:` template can be rebuilt with its internal spacing and
+    // pipes intact.
+    const rawSegments = s.split("|");
+    const segments = rawSegments.map((x) => x.trim());
+    segments.shift();
+    const first = (rawSegments[0] ?? "").trim();
 
     const filter: TagRollFilter = { tagGroups: [], props: [] };
 
@@ -752,10 +863,30 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
         filter.tagGroups.push(g);
     }
 
-    let mode: "block" | "link" | "linkpath" = "block";
-    for (const seg of segments) {
+    let mode: "block" | "link" | "linkpath" | "prop" = "block";
+    let template: string | undefined;
+    for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
         if (seg === "") continue;
         const low = seg.toLowerCase();
+        if (low.startsWith("prop:")) {
+            // Everything from here to the end of the expression is
+            // the template, pipes included.
+            const raw = rawSegments[i + 1];
+            const body = raw.slice(raw.toLowerCase().indexOf("prop:") + 5);
+            const rest = [body, ...rawSegments.slice(i + 2)].join("|").trim();
+            if (rest === "") return null;
+            if (rest.includes("{{")) {
+                if (propTemplateKeys(rest).length === 0) return null;
+                template = rest;
+            } else {
+                // `prop:cr` shorthand — the whole segment is one key.
+                if (!BARE_PROP_KEY_RE.test(rest)) return null;
+                template = `{{${rest}}}`;
+            }
+            mode = "prop";
+            break;
+        }
         if (low === "link") {
             mode = "link";
             continue;
@@ -803,6 +934,23 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
         return null;
     }
 
+    if (template !== undefined) {
+        // Asking for a property implies requiring it: a note missing
+        // `cr` is never picked for a template that prints `{{cr}}`,
+        // so the output can't come back half-blank. An explicit
+        // constraint on the same key (`cr=3|prop:cr`) is narrower and
+        // stands on its own.
+        const constrained = new Set(
+            filter.props.map((p) => p.key.toLowerCase())
+        );
+        for (const key of propTemplateKeys(template)) {
+            const low = key.toLowerCase();
+            if (RESERVED_PROP_KEYS.has(low) || constrained.has(low)) continue;
+            filter.props.push({ key, values: ["*"] });
+            constrained.add(low);
+        }
+    }
+
     if (
         filter.tagGroups.length === 0 &&
         filter.props.length === 0 &&
@@ -810,7 +958,7 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
     ) {
         return null;
     }
-    return { label: describeTagFilter(filter), mode, filter };
+    return { label: describeTagFilter(filter), mode, filter, template };
 }
 
 /** Canonical `#tag|prop=value` rendering of a filter, for messages. */

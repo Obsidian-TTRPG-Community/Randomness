@@ -18,6 +18,7 @@ import {
     extractNoteBlocks,
     parseDirectWikilinkCall,
     parseDirectTagCall,
+    renderPropTemplate,
     matchesTagRollFilter,
     TagRollFilter,
     LINES_PREFIX,
@@ -440,5 +441,205 @@ describe("dice: compat for sections, lines, and tags", () => {
         expect(t("#npc|link|universe=Eldara")).toBe(
             "#npc|universe=Eldara|link"
         );
+    });
+});
+
+// ─── Property output (`prop:` templates) ───
+
+describe("parseDirectTagCall: prop: templates", () => {
+    test("bare key shorthand expands to a placeholder", () => {
+        const c = parseDirectTagCall("#npc|prop:cr");
+        expect(c?.mode).toBe("prop");
+        expect(c?.template).toBe("{{cr}}");
+    });
+
+    test("template keeps its literal text, spacing and pipes", () => {
+        const c = parseDirectTagCall(
+            "#npc|prop:{{link}} — CR {{cr}}, {{hp}} HP"
+        );
+        expect(c?.template).toBe("{{link}} — CR {{cr}}, {{hp}} HP");
+        const piped = parseDirectTagCall("#npc|prop:[[{{path}}|{{name}}]]");
+        expect(piped?.template).toBe("[[{{path}}|{{name}}]]");
+    });
+
+    test("each referenced property becomes an exists-filter", () => {
+        const c = parseDirectTagCall("*|folder=Bestiary|prop:{{cr}}/{{hp}}");
+        expect(c?.filter.props).toEqual([
+            { key: "cr", values: ["*"] },
+            { key: "hp", values: ["*"] },
+        ]);
+    });
+
+    test("an explicit constraint on the same key is not widened", () => {
+        const c = parseDirectTagCall("#npc|cr=3|prop:{{cr}} {{hp}}");
+        expect(c?.filter.props).toEqual([
+            { key: "cr", values: ["3"] },
+            { key: "hp", values: ["*"] },
+        ]);
+    });
+
+    test("reserved placeholders add no filter", () => {
+        const c = parseDirectTagCall("#npc|prop:{{link}} {{name}} {{path}}");
+        expect(c?.filter.props).toEqual([]);
+        expect(c?.filter.tagGroups).toEqual([["npc"]]);
+    });
+
+    test("prop: alone is a valid source — any note with the property", () => {
+        const c = parseDirectTagCall("*|prop:cr");
+        expect(c?.mode).toBe("prop");
+        expect(c?.filter.props).toEqual([{ key: "cr", values: ["*"] }]);
+    });
+
+    test("malformed templates are rejected", () => {
+        expect(parseDirectTagCall("#npc|prop:")).toBeNull();
+        expect(parseDirectTagCall("#npc|prop:{{}}")).toBeNull();
+        expect(parseDirectTagCall("#npc|prop:CR is {{}}")).toBeNull();
+    });
+
+    test("other modes are unaffected", () => {
+        expect(parseDirectTagCall("#npc|link")?.mode).toBe("link");
+        expect(parseDirectTagCall("#npc")?.template).toBeUndefined();
+    });
+});
+
+describe("renderPropTemplate", () => {
+    const FM = { cr: 3, hp: 45, types: ["fey", "humanoid"], name: "Ignored" };
+
+    test("reserved placeholders describe the note", () => {
+        expect(
+            renderPropTemplate(
+                "{{link}} {{linkpath}} {{path}} {{name}}",
+                "Bestiary/Bog Hag.md",
+                FM
+            )
+        ).toBe(
+            "[[Bestiary/Bog Hag|Bog Hag]] [[Bestiary/Bog Hag]] " +
+                "Bestiary/Bog Hag Bog Hag"
+        );
+    });
+
+    test("frontmatter lookup is case-insensitive; lists join", () => {
+        expect(
+            renderPropTemplate("{{CR}} / {{types}}", "B/Hag.md", FM)
+        ).toBe("3 / fey, humanoid");
+    });
+
+    test("property values are escaped, so `[` and `{` stay literal", () => {
+        const out = renderPropTemplate("{{note}}", "B/Hag.md", {
+            note: "hits [@twice] for {2d6}",
+        });
+        expect(out).toBe("hits \\[@twice] for \\{2d6}");
+    });
+
+    test("missing and empty values render empty, not 'undefined'", () => {
+        expect(renderPropTemplate("[{{nope}}]", "B/Hag.md", FM)).toBe("[]");
+        expect(
+            renderPropTemplate("[{{x}}]", "B/Hag.md", { x: null })
+        ).toBe("[]");
+        expect(renderPropTemplate("[{{x}}]", "B/Hag.md", undefined)).toBe(
+            "[]"
+        );
+    });
+});
+
+describe("prop: rolls end-to-end", () => {
+    const meta: Record<
+        string,
+        { tags: Set<string>; fm?: Record<string, unknown> }
+    > = {
+        "Bestiary/Bog Hag.md": {
+            tags: new Set(["monster"]),
+            fm: { cr: 3, hp: 45 },
+        },
+        "Bestiary/Dust Mephit.md": {
+            tags: new Set(["monster"]),
+            fm: { cr: 1, hp: 17 },
+        },
+        // No cr/hp: must never be picked by a template using them.
+        "Bestiary/Notes.md": { tags: new Set(["monster"]) },
+        // Right properties, wrong folder.
+        "NPCs/Guard.md": { tags: new Set(["npc"]), fm: { cr: 1, hp: 11 } },
+    };
+    const tagFiles = (filter: TagRollFilter) =>
+        Object.keys(meta)
+            .filter((p) =>
+                matchesTagRollFilter(meta[p].tags, meta[p].fm, filter, p)
+            )
+            .sort();
+    const tagFrontmatter = (p: string) => meta[p]?.fm;
+
+    function roll(expr: string, seed: number): string {
+        const bundle = buildInlineBundle(expr, {
+            notePath: "Session/log.md",
+            noteSource: "",
+            source: inMemorySource({}),
+            tagFiles,
+            tagFrontmatter,
+        });
+        return new Evaluator(bundle.main, bundle.extras, { seed }).run();
+    }
+
+    test("every property in one template comes from the same note", () => {
+        const valid = new Set([
+            "[[Bestiary/Bog Hag|Bog Hag]] — CR 3, 45 HP",
+            "[[Bestiary/Dust Mephit|Dust Mephit]] — CR 1, 17 HP",
+        ]);
+        const seen = new Set<string>();
+        for (let seed = 1; seed <= 40; seed++) {
+            const out = roll(
+                "*|folder=Bestiary|prop:{{link}} — CR {{cr}}, {{hp}} HP",
+                seed
+            );
+            expect(valid).toContain(out);
+            seen.add(out);
+        }
+        // Both candidates reachable — the pick is a real roll.
+        expect(seen.size).toBe(2);
+    });
+
+    test("notes missing a referenced property are never picked", () => {
+        for (let seed = 1; seed <= 40; seed++) {
+            expect(["3", "1"]).toContain(roll("#monster|prop:cr", seed));
+        }
+    });
+
+    test("folder= narrows the candidates", () => {
+        for (let seed = 1; seed <= 20; seed++) {
+            expect(roll("*|folder=NPCs|prop:{{name}} CR {{cr}}", seed)).toBe(
+                "Guard CR 1"
+            );
+        }
+    });
+
+    test("seeded rolls are deterministic", () => {
+        const a = roll("*|folder=Bestiary|prop:{{name}} {{cr}}", 7);
+        const b = roll("*|folder=Bestiary|prop:{{name}} {{cr}}", 7);
+        expect(a).toBe(b);
+    });
+
+    test("no matching note is a clear error", () => {
+        expect(() => roll("*|folder=Nowhere|prop:cr", 1)).toThrow(
+            /No notes found/i
+        );
+    });
+
+    test("without a frontmatter lookup, prop: rolls explain themselves", () => {
+        expect(() =>
+            buildInlineBundle("#monster|prop:cr", {
+                notePath: "Session/log.md",
+                noteSource: "",
+                source: inMemorySource({}),
+                tagFiles,
+            })
+        ).toThrow(/metadata cache/i);
+    });
+
+    test("dice: compat passes a prop template through intact", () => {
+        expect(
+            translateDiceExpression("#monster|prop:{{link}} — CR {{cr}}").expr
+        ).toBe("#monster|prop:{{link}} — CR {{cr}}");
+        expect(
+            translateDiceExpression("#npc|link|cr=3|prop:{{cr}}").expr
+        ).toBe("#npc|cr=3|prop:{{cr}}");
     });
 });

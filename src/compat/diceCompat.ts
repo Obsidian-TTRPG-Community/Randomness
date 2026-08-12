@@ -205,6 +205,20 @@ function withReps(repsRaw: string, target: string): string {
  * unchanged so they work under the dice: prefix too.
  */
 function translateTagRoller(s: string): string {
+    // A `prop:` template owns the rest of the expression (pipes and
+    // all), so translate only what precedes it and re-attach it
+    // verbatim. Without this the template's segments would be read as
+    // Dice Roller block-type filters and silently dropped.
+    const propAt = s.toLowerCase().indexOf("|prop:");
+    if (propAt >= 0) {
+        // A template supersedes any link mode in the head (`{{link}}`
+        // is how a template asks for one), so don't re-emit it.
+        const head = translateTagRoller(s.slice(0, propAt)).replace(
+            /\|link(path)?$/i,
+            ""
+        );
+        return head + s.slice(propAt);
+    }
     const m = s.match(/^#([^|\s]+)((?:\|[^|]*)*)$/);
     if (!m) {
         throw new DiceCompatError(`Unrecognised tag roll: '${s}'`);

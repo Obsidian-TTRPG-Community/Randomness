@@ -2,7 +2,7 @@
 
 All notable changes to the Randomness plugin.
 
-## Unreleased
+## 1.11.0
 
 ### Added
 - **`api.rollFormula()` and `api.formulas()` — saved dice formulas are
@@ -20,6 +20,22 @@ All notable changes to the Randomness plugin.
   unchanged: they still do not resolve aliases, so an expression
   sharing a name with one keeps its existing meaning. API version
   1.2.0 → 1.3.0 (additive).
+- **Print a rolled note's properties, not just a link to it.** Tag and
+  folder rolls could always *filter* on frontmatter
+  (`rdm:*|folder=Bestiary|cr=3|link`); now they can output it. End the
+  call with `prop:` and the rest is a template:
+  `` `rdm:*|folder=Bestiary|prop:{{link}} — CR {{cr}}, {{hp}} HP` `` →
+  *[[Bestiary/Bog Hag|Bog Hag]] — CR 3, 45 HP*. One note is rolled and
+  the whole template is filled from it, so the values can never belong
+  to different monsters the way two separate `` `rdm:` `` spans would.
+  `prop:cr` is shorthand for `prop:{{cr}}`. `{{link}}`, `{{linkpath}}`,
+  `{{path}}` and `{{name}}` describe the note itself; every other
+  placeholder is a frontmatter key, and naming one also requires it, so
+  a note missing that property is never picked. Works under the `dice:`
+  prefix too.
+- **`api.randomNote()` now returns the note's `frontmatter`**, so
+  Templater and dataviewjs callers don't need a second `metadataCache`
+  lookup. API version 1.3.0 → 1.4.0 (additive).
 
 ## 1.10.0
 

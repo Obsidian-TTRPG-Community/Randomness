@@ -34,6 +34,7 @@ import { discoverReferencedTables } from "../resolver/autoDiscover";
 import {
     makeLinkAwareBasenameResolver,
     makeTagFilesLookup,
+    makeTagFrontmatterLookup,
     vaultFileSource,
 } from "./vaultFileSource";
 import {
@@ -530,7 +531,10 @@ export async function evaluateInlineExpression(
     const tagLookup = makeTagFilesLookup(plugin);
     let syncSource: FileSource = prefetch.source;
     const tagCall = parseDirectTagCall(expr);
-    if (tagCall !== null) {
+    // Only block rolls need the candidates' text — link and prop rolls
+    // are built entirely from paths and the metadata cache, so reading
+    // up to TAG_FILE_CAP notes off disk would be pure waste.
+    if (tagCall !== null && tagCall.mode === "block") {
         const tagged: Map<string, string> = new Map();
         for (const p of tagLookup(tagCall.filter).slice(0, TAG_FILE_CAP)) {
             try {
@@ -554,6 +558,7 @@ export async function evaluateInlineExpression(
         generatorRoot: settings.generatorRoot || undefined,
         basenameResolver,
         tagFiles: tagLookup,
+        tagFrontmatter: makeTagFrontmatterLookup(plugin),
     });
 
     // Auto-discover tables referenced by name but not defined in the
