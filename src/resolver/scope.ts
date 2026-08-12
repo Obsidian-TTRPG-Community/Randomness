@@ -155,7 +155,20 @@ export function buildInlineBundle(
             );
             tagUses = files;
         }
-        expr = "[@__tagroll]";
+        // Repetitions, mirroring the wikilink rolls: `[@N …]` may pick
+        // the same note twice, `[!N …]` draws the candidates as a deck
+        // so it can't. A deck asked for more than it holds just yields
+        // everything it has — with `unique`, the note cap is the real
+        // ceiling, not an error. Reps of "" or 1 stay a plain single
+        // pick either way, so `|unique` alone is a harmless no-op.
+        const single = tag.reps === "" || tag.reps === "1";
+        if (single) {
+            expr = "[@__tagroll]";
+        } else if (tag.unique) {
+            expr = `[!${tag.reps} __tagroll >> implode]`;
+        } else {
+            expr = `[@${tag.reps} __tagroll >> implode]`;
+        }
     }
 
     // Step 1: synthetic main file holding just the expression.

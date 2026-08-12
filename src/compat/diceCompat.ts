@@ -115,7 +115,9 @@ export function translateDiceExpression(
         }
     }
 
-    if (s.startsWith("#")) {
+    // Tag rolls, with the same optional repetition prefix the table
+    // roller below accepts (`3#rumour`, `{1d4}#rumour|link`).
+    if (/^(?:\d+|\{[^{}]+\})?\s*#/.test(s)) {
         return { expr: translateTagRoller(s), flags };
     }
 
@@ -205,6 +207,10 @@ function withReps(repsRaw: string, target: string): string {
  * unchanged so they work under the dice: prefix too.
  */
 function translateTagRoller(s: string): string {
+    // Repetition prefix rides along untouched — `rdm:` parses it with
+    // the same grammar, so there's nothing to translate.
+    const rep = s.match(/^(\d+|\{[^{}]+\})\s*(?=#)/);
+    if (rep) return rep[1] + translateTagRoller(s.slice(rep[0].length));
     // A `prop:` template owns the rest of the expression (pipes and
     // all), so translate only what precedes it and re-attach it
     // verbatim. Without this the template's segments would be read as
@@ -229,6 +235,7 @@ function translateTagRoller(s: string): string {
         .map((x) => x.trim())
         .filter((x) => x !== "");
     let linkMode: "" | "link" | "linkpath" = "";
+    let unique = false;
     const filters: string[] = [];
     for (const suf of suffixes) {
         const low = suf.toLowerCase();
@@ -242,6 +249,12 @@ function translateTagRoller(s: string): string {
             linkMode = low;
             continue;
         }
+        if (low === "unique") {
+            // Randomness-native, not Dice Roller: pass it through so
+            // the no-repeat draw survives the dice: prefix.
+            unique = true;
+            continue;
+        }
         if (suf.startsWith("#") || suf.includes("=")) {
             filters.push(suf);
             continue;
@@ -251,6 +264,7 @@ function translateTagRoller(s: string): string {
     }
     let out = `#${tagName}`;
     for (const f of filters) out += `|${f}`;
+    if (unique) out += "|unique";
     if (linkMode) out += `|${linkMode}`;
     return out;
 }

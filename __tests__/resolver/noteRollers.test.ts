@@ -643,3 +643,138 @@ describe("prop: rolls end-to-end", () => {
         ).toBe("#npc|cr=3|prop:{{cr}}");
     });
 });
+
+// ─── Repetitions and |unique ───
+
+describe("parseDirectTagCall: repetitions and |unique", () => {
+    test("a count or a dice prefix is captured, not rejected", () => {
+        expect(parseDirectTagCall("3#monster")?.reps).toBe("3");
+        expect(parseDirectTagCall("{1d4}#monster|link")?.reps).toBe("{1d4}");
+        expect(parseDirectTagCall("3*|folder=B|prop:cr")?.reps).toBe("3");
+    });
+
+    test("no prefix means one pick", () => {
+        const c = parseDirectTagCall("#monster");
+        expect(c?.reps).toBe("");
+        expect(c?.unique).toBe(false);
+    });
+
+    test("|unique is a draw style, not a mode", () => {
+        const c = parseDirectTagCall("3#monster|unique|link");
+        expect(c?.unique).toBe(true);
+        expect(c?.mode).toBe("link");
+        expect(c?.reps).toBe("3");
+    });
+
+    test("|unique composes with prop: when it comes first", () => {
+        const c = parseDirectTagCall("3*|folder=B|unique|prop:{{name}}");
+        expect(c?.unique).toBe(true);
+        expect(c?.mode).toBe("prop");
+        expect(c?.template).toBe("{{name}}");
+    });
+
+    test("the filter still parses after a prefix", () => {
+        const c = parseDirectTagCall("{1d3}#npc|universe=Eldara|link");
+        expect(c?.filter.tagGroups).toEqual([["npc"]]);
+        expect(c?.filter.props).toEqual([
+            { key: "universe", values: ["Eldara"] },
+        ]);
+    });
+
+    test("a prefix without a tag source is still not a tag call", () => {
+        expect(parseDirectTagCall("3[[Note|line]]")).toBeNull();
+        expect(parseDirectTagCall("3")).toBeNull();
+    });
+});
+
+describe("repeated tag rolls end-to-end", () => {
+    const meta: Record<
+        string,
+        { tags: Set<string>; fm?: Record<string, unknown> }
+    > = {
+        "Bestiary/Hag.md": { tags: new Set(["monster"]), fm: { cr: 3 } },
+        "Bestiary/Mephit.md": { tags: new Set(["monster"]), fm: { cr: 1 } },
+        "Bestiary/Wolf.md": { tags: new Set(["monster"]), fm: { cr: 2 } },
+    };
+    const tagFiles = (filter: TagRollFilter) =>
+        Object.keys(meta)
+            .filter((p) =>
+                matchesTagRollFilter(meta[p].tags, meta[p].fm, filter, p)
+            )
+            .sort();
+    const tagFrontmatter = (p: string) => meta[p]?.fm;
+
+    function roll(expr: string, seed: number): string {
+        const bundle = buildInlineBundle(expr, {
+            notePath: "Session/log.md",
+            noteSource: "",
+            source: inMemorySource({}),
+            tagFiles,
+            tagFrontmatter,
+        });
+        return new Evaluator(bundle.main, bundle.extras, { seed }).run();
+    }
+
+    test("N picks are comma-joined", () => {
+        const out = roll("3#monster|link", 1);
+        expect(out.split(", ")).toHaveLength(3);
+        for (const part of out.split(", ")) {
+            expect(part).toMatch(/^\[\[Bestiary\/\w+\|\w+\]\]$/);
+        }
+    });
+
+    test("plain repeats may repeat a note; unique never does", () => {
+        let sawRepeat = false;
+        for (let seed = 1; seed <= 40; seed++) {
+            const parts = roll("3#monster|link", seed).split(", ");
+            if (new Set(parts).size < 3) sawRepeat = true;
+        }
+        expect(sawRepeat).toBe(true);
+
+        for (let seed = 1; seed <= 40; seed++) {
+            const parts = roll("3#monster|unique|link", seed).split(", ");
+            expect(new Set(parts).size).toBe(3);
+        }
+    });
+
+    test("unique asked for more notes than exist yields all of them", () => {
+        for (let seed = 1; seed <= 10; seed++) {
+            const parts = roll("9#monster|unique|link", seed).split(", ");
+            expect(parts).toHaveLength(3);
+            expect(new Set(parts).size).toBe(3);
+        }
+    });
+
+    test("repetitions work with prop: templates", () => {
+        const out = roll("3*|folder=Bestiary|unique|prop:{{name}} CR {{cr}}", 4);
+        const parts = out.split(", ");
+        expect(parts).toHaveLength(3);
+        expect(new Set(parts).size).toBe(3);
+        for (const p of parts) expect(p).toMatch(/^\w+ CR \d$/);
+    });
+
+    test("a dice prefix rolls the count", () => {
+        const seen = new Set<number>();
+        for (let seed = 1; seed <= 40; seed++) {
+            seen.add(roll("{1d3}#monster|link", seed).split(", ").length);
+        }
+        expect(seen.size).toBeGreaterThan(1);
+        for (const n of seen) expect(n).toBeGreaterThanOrEqual(1);
+    });
+
+    test("reps of 1 stays a single pick, not a one-item join", () => {
+        expect(roll("1#monster|link", 5)).toBe(roll("#monster|link", 5));
+    });
+
+    test("dice: compat carries the prefix and |unique through", () => {
+        expect(translateDiceExpression("3#monster|link").expr).toBe(
+            "3#monster|link"
+        );
+        expect(translateDiceExpression("{1d4}#monster|unique").expr).toBe(
+            "{1d4}#monster|unique"
+        );
+        expect(
+            translateDiceExpression("3#monster|unique|prop:{{cr}}").expr
+        ).toBe("3#monster|unique|prop:{{cr}}");
+    });
+});

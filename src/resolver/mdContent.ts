@@ -702,10 +702,24 @@ export interface DirectTagCall {
      * `prop:cr` shorthand is expanded to `{{cr}}` at parse time).
      */
     template?: string;
+    /**
+     * Repetition prefix as written — a count (`3#npc`) or a braced
+     * dice expression (`{1d4}#npc`). Empty string for a single pick.
+     * Same shape as DirectWikilinkCall.reps.
+     */
+    reps: string;
+    /**
+     * `|unique`: draw the repetitions as a deck, so one note can't be
+     * picked twice. Meaningless without a repetition prefix.
+     */
+    unique: boolean;
     filter: TagRollFilter;
 }
 
 const TAG_NAME_RE = /^#([A-Za-z0-9_/-]+)$/;
+
+/** Leading `3` or `{1d4}` on a tag roll, as on wikilink rolls. */
+const TAG_REPS_RE = /^(\d+|\{[^{}]+\})\s*(?=[#*])/;
 
 /**
  * Placeholder names in a `prop:` template that describe the note
@@ -815,6 +829,9 @@ function formatFrontmatterValue(v: unknown): string {
  *   `*|universe=Eldara`             all notes with the property, no tag
  *   `*|folder=Bestiary|prop:cr`     that note's `cr` property
  *   `#npc|prop:{{name}} ({{job}})`  several properties of ONE note
+ *   `3#npc|link`                    three picks (may repeat)
+ *   `3#npc|unique|link`             three DIFFERENT notes
+ *   `{1d4}#npc|link`                a dice-rolled number of picks
  *
  * Dice Roller's `|-` (single random note) matches our default
  * behaviour and is accepted as plain mode; unknown word suffixes
@@ -826,7 +843,12 @@ function formatFrontmatterValue(v: unknown): string {
  * — and so must come last.
  */
 export function parseDirectTagCall(expr: string): DirectTagCall | null {
-    const s = expr.trim();
+    let s = expr.trim();
+    // Optional repetition prefix, stripped before anything else so the
+    // rest of the grammar is unchanged: `3#npc`, `{1d4}*|folder=X`.
+    const repsMatch = s.match(TAG_REPS_RE);
+    const reps = repsMatch ? repsMatch[1] : "";
+    if (repsMatch) s = s.slice(repsMatch[0].length).trim();
     if (!s.startsWith("#") && !s.startsWith("*")) return null;
     // Raw (untrimmed) segments are kept alongside the trimmed ones so
     // a `prop:` template can be rebuilt with its internal spacing and
@@ -865,6 +887,7 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
 
     let mode: "block" | "link" | "linkpath" | "prop" = "block";
     let template: string | undefined;
+    let unique = false;
     for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         if (seg === "") continue;
@@ -897,6 +920,12 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
         }
         if (low === "block" || low === "-") {
             mode = "block";
+            continue;
+        }
+        if (low === "unique") {
+            // Not a mode: it changes how the repetitions are drawn,
+            // and composes with every mode including prop:.
+            unique = true;
             continue;
         }
         if (seg.startsWith("#")) {
@@ -958,7 +987,14 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
     ) {
         return null;
     }
-    return { label: describeTagFilter(filter), mode, filter, template };
+    return {
+        label: describeTagFilter(filter),
+        mode,
+        filter,
+        template,
+        reps,
+        unique,
+    };
 }
 
 /** Canonical `#tag|prop=value` rendering of a filter, for messages. */

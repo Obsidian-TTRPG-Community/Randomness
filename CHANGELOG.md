@@ -2,6 +2,21 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.12.0
+
+### Added
+- **Roll more than one note at a time.** Tag and folder rolls take the
+  same repetition prefix the `[[Note|line]]` rolls have always had —
+  `` `rdm:3#monster|link` `` or `` `rdm:{1d4}#rumour` `` — and the new
+  `|unique` segment draws them as a deck so no note comes up twice:
+  `` `rdm:3#monster|unique|link` `` is three *different* monsters.
+  Comma-joined, works with `prop:` templates
+  (`` `rdm:3*|folder=Bestiary|unique|prop:{{name}} (CR {{cr}})` ``), and
+  passes through the `dice:` prefix. `|unique` has to come before
+  `prop:`, which swallows the rest of the line. Asking a unique roll for
+  more notes than match gives you all of them rather than an error.
+  Thanks to Gizmo734 for the suggestion.
+
 ## 1.11.0
 
 ### Added

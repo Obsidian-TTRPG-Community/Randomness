@@ -45,6 +45,20 @@ Values match case-insensitively, lists in frontmatter match if any
 entry hits, and link-style values (`universe: "[[Eldara]]"`) match
 their note name. `prop=*` means "the property exists".
 
+## More than one at a time
+
+Put a number in front, exactly as you would for a line roll:
+
+```text
+`rdm:3#monster|link`          three picks
+`rdm:3#monster|unique|link`   three DIFFERENT monsters
+`rdm:{1d4}#rumour`            roll d4, get that many rumours
+```
+
+Without `|unique` the same note can show up twice — fine for rumours,
+less so for "the five monsters in this dungeon". Ask for more unique
+notes than you have and you just get all of them.
+
 ## Printing the properties themselves
 
 Filtering on a property is one thing; printing it is another. End the

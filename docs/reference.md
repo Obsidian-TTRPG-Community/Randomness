@@ -741,6 +741,25 @@ and cap at 50 matching notes per roll. The note pick happens inside
 the engine, so seeded rolls are reproducible and every re-roll may
 pick a different note.
 
+#### More than one note per call
+
+A repetition prefix works the same way it does on wikilink rolls — a
+count, or a braced dice expression — and `|unique` draws the notes as a
+deck so none repeats:
+
+```text
+`rdm:3#monster|link`            three picks; the same note can come up twice
+`rdm:3#monster|unique|link`     three DIFFERENT notes
+`rdm:{1d4}#rumour`              a dice-rolled number of blocks
+`rdm:3*|folder=Bestiary|unique|prop:{{name}} (CR {{cr}})`
+```
+
+Results are comma-joined. `|unique` must come before `prop:` (which
+swallows the rest of the line), and asking a `unique` roll for more
+notes than match simply gives you all of them — the 50-note cap is the
+real ceiling, not an error. A prefix of `1`, or none at all, is a plain
+single pick.
+
 #### Printing the properties, not just the link
 
 A final `prop:` segment turns the roll's output into a template: one
