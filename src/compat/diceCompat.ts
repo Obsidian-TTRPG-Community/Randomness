@@ -79,6 +79,61 @@ export function stripDisplayFlags(expr: string): string {
 }
 
 /**
+ * Characters a bare dice formula may contain: digits, the dice
+ * letters (`d`, `F`, `%`), modifier letters (`kh`/`kl`/`dl`/`dh`,
+ * `r`, `s`, `u`, `i`, `cs`), arithmetic, comparisons, face-range
+ * brackets, and spaces. Deliberately a whitelist — every character
+ * of generator syntax (`{}`, `@`, `#`, `|`) is absent, so an
+ * expression that is really a table call can never match.
+ */
+const BARE_FORMULA_CHARS = /^[0-9dDfFkKhHlLrRsSuUiIcC%!<>=+\-*/(),.[\] ]+$/;
+
+/** At least one real die: `2d6`, `d20`, `1d%`, `4dF`, `1d[3,5]`. */
+const HAS_DIE = /\d*[dD](\d+|%|[fF](?![a-zA-Z])|\[)/;
+
+/**
+ * Is this whole `rdm:` expression nothing but a dice formula?
+ *
+ * `rdm:` expressions mix literal text with calls, so dice normally
+ * live in `{…}` — which means `` `rdm:2d10` `` used to render the
+ * literal text "2d10", silently. Anyone writing that means the roll
+ * (it's the `dice:` grammar, where the formula IS the expression),
+ * so we treat it as `{2d10}`.
+ *
+ * Returns the braced expression, or null to leave the text alone.
+ * The test is deliberately narrow: the whole expression must be a
+ * formula. Mixed text like `you take 2d6` keeps its old meaning,
+ * because there the literal reading is a real possibility.
+ */
+export function braceBareFormula(expr: string): string | null {
+    const s = expr.trim();
+    if (s === "") return null;
+    // Face ranges are the one construct with brackets; drop them
+    // before the charset test so a stray `[` elsewhere still fails.
+    const withoutRanges = s.replace(/\[\s*-?\d+\s*,\s*-?\d+\s*\]/g, "");
+    if (withoutRanges.includes("[") || withoutRanges.includes("]")) {
+        return null;
+    }
+    if (!BARE_FORMULA_CHARS.test(s)) return null;
+    if (!HAS_DIE.test(s)) return null;
+    // Brace it for the NATIVE grammar rather than routing through
+    // translateDiceExpression: this is an `rdm:` span, and the two
+    // grammars disagree about a bare comparison. `{3d6>=10}` is 1
+    // when the total reaches 10 here, where Dice Roller reads it as
+    // success counting. Going native keeps `rdm:3d6>=10` and
+    // `rdm:{3d6>=10}` the same roll, which is the whole point.
+    //
+    // The one thing worth normalising is Dice Roller's omitted count,
+    // since someone arriving from that syntax will type `d20`:
+    // the native parser wants `1d20`.
+    const withCount = s.replace(
+        /(^|[^0-9A-Za-z_)\]])([dD])(?=[0-9%fF[])/g,
+        (_m, before: string, d: string) => `${before}1${d}`
+    );
+    return `{${withCount}}`;
+}
+
+/**
  * Translate a Dice Roller expression (the text after the `dice:`
  * prefix) into an rdm expression. Throws DiceCompatError with a
  * user-facing message for unsupported constructs.

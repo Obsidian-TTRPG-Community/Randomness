@@ -2,6 +2,25 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.14.0
+
+### Changed
+- **A bare dice formula in an `rdm:` span now rolls.** `` `rdm:2d10` ``
+  used to render the literal text "2d10" — no roll, no error, nothing
+  to suggest anything was wrong. It was the trap waiting for anyone
+  converting `dice:` spans, where the formula *is* the whole
+  expression. An inline call that is nothing but a dice formula is now
+  treated as `` `rdm:{2d10}` ``, and an omitted die count is filled in
+  (`` `rdm:d20` ``) for the same reason.
+
+  The test is deliberately narrow: the whole expression must be a
+  formula, so `` `rdm:you take 2d6` `` is still literal text, and no
+  expression containing generator syntax (`[@table]`, `{…}`, `#tag`,
+  `|`) can match. Bracing is native, so `` `rdm:3d6>=10` `` means what
+  `` `rdm:{3d6>=10}` `` means — 1 when the total reaches 10 — rather
+  than the success-counting a `dice:` span would read it as. Thanks to
+  Anna_B_Meyer for walking into it.
+
 ## 1.13.0
 
 ### Added

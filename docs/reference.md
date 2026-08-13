@@ -166,6 +166,14 @@ formatting use a sub-table plus filters (see Repetitions).
 `{NdN}` rolls dice. `{2d6}` rolls two six-siders and sums them.
 Modifiers and arithmetic work as you'd expect.
 
+> **Inline shortcut.** Inside generator text the braces are what
+> tell dice from prose, but an inline call that is *nothing but* a
+> formula doesn't need them: `` `rdm:2d10` `` rolls, exactly like
+> `` `rdm:{2d10}` ``. Anything else — `` `rdm:you take 2d6` `` —
+> is still literal text, because there the words could be the
+> point. An omitted die count is filled in, so `` `rdm:d20` ``
+> works for anyone used to that from `dice:` spans.
+
 ```text
 Table: damage
 The sword deals {1d8+2} damage.

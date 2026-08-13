@@ -24,7 +24,10 @@
  * the processor to write back via `Vault.process`.
  */
 
-import { translateDiceExpression } from "../compat/diceCompat";
+import {
+    braceBareFormula,
+    translateDiceExpression,
+} from "../compat/diceCompat";
 import { DiceTraceEntry } from "../engine/dice";
 
 // ────────────────────────────────────────────────────────────────────
@@ -84,8 +87,8 @@ export function matchInlinePrefix(text: string): string | null {
 /**
  * Registry-key / identity string for a call: prefix + expression.
  * Two spans with the same expression under different prefixes are
- * different calls (e.g. `rdm:1d20` is literal text, `dice:1d20`
- * rolls), so previews and lock targeting must not collide.
+ * different calls (a `dice:` expression is translated before it is
+ * evaluated), so previews and lock targeting must not collide.
  */
 export function callKey(call: InlineCall): string {
     const prefix = call.prefix ?? INLINE_PREFIX;
@@ -97,7 +100,8 @@ export function callKey(call: InlineCall): string {
 
 /**
  * The expression to actually EVALUATE for a call. `rdm:` calls
- * evaluate their expression as-is; Dice Roller prefixes are
+ * evaluate their expression as-is, bar a whole-expression dice
+ * formula, which is braced first; Dice Roller prefixes are
  * translated first. Throws DiceCompatError (user-facing message)
  * for unsupported Dice Roller constructs.
  */
@@ -106,7 +110,12 @@ export function evalSourceOf(
     aliases?: Record<string, string>
 ): string {
     const prefix = call.prefix ?? INLINE_PREFIX;
-    if (prefix === INLINE_PREFIX) return call.expr;
+    if (prefix === INLINE_PREFIX) {
+        // A bare formula (`rdm:2d10`) is the one rdm: expression that
+        // isn't literal text: it rolls, as if it had been written
+        // `{2d10}`. See braceBareFormula for how narrow that is.
+        return braceBareFormula(call.expr) ?? call.expr;
+    }
     return translateDiceExpression(call.expr, aliases).expr;
 }
 

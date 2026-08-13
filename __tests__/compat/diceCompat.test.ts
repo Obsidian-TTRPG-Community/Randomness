@@ -14,6 +14,7 @@
 import {
     translateDiceExpression,
     stripDisplayFlags,
+    braceBareFormula,
     DiceCompatError,
 } from "../../src/compat/diceCompat";
 import {
@@ -179,10 +180,17 @@ describe("multi-prefix inline calls", () => {
 
     test("evalSourceOf translates only compat prefixes", () => {
         expect(evalSourceOf({ expr: "{1d20}", prefix: "rdm:" })).toBe("{1d20}");
-        expect(evalSourceOf({ expr: "1d20" })).toBe("1d20"); // absent = rdm:
+        expect(evalSourceOf({ expr: "[@Names]" })).toBe("[@Names]"); // absent = rdm:
         expect(evalSourceOf({ expr: "3d6>=5", prefix: "dice:" })).toBe(
             "{3d6cs>=5}"
         );
+        // A BARE formula is the exception: `rdm:1d20` used to render
+        // the literal text "1d20", which only ever meant the author
+        // forgot the braces. It is braced for the native grammar —
+        // note the difference from the `dice:` line above, which
+        // rewrites a bare comparison to success counting.
+        expect(evalSourceOf({ expr: "1d20" })).toBe("{1d20}");
+        expect(evalSourceOf({ expr: "3d6>=5" })).toBe("{3d6>=5}");
     });
 
     test("callKey separates same expression under different prefixes", () => {
@@ -279,5 +287,99 @@ describe("stripDisplayFlags", () => {
     });
     test("leaves a flag-free expression unchanged", () => {
         expect(stripDisplayFlags("2d6+3")).toBe("2d6+3");
+    });
+});
+
+
+// ─── Bare formulas in rdm: spans ───
+
+describe("braceBareFormula", () => {
+    test("a whole-expression formula is braced", () => {
+        expect(braceBareFormula("2d10")).toBe("{2d10}");
+        expect(braceBareFormula("1d20+5")).toBe("{1d20+5}");
+        expect(braceBareFormula("2d6 + 3")).toBe("{2d6 + 3}");
+        expect(braceBareFormula("2d6*10")).toBe("{2d6*10}");
+        expect(braceBareFormula("1d4-1")).toBe("{1d4-1}");
+    });
+
+    test("modifiers and special dice survive", () => {
+        expect(braceBareFormula("4d6dl1")).toBe("{4d6dl1}");
+        expect(braceBareFormula("2d20kh")).toBe("{2d20kh}");
+        expect(braceBareFormula("1d6!")).toBe("{1d6!}");
+        expect(braceBareFormula("6d6cs>=5")).toBe("{6d6cs>=5}");
+        expect(braceBareFormula("4dF")).toBe("{4dF}");
+        expect(braceBareFormula("1d66%")).toBe("{1d66%}");
+        expect(braceBareFormula("1d[3,5]")).toBe("{1d[3,5]}");
+    });
+
+    test("an omitted die count is filled in, Dice Roller style", () => {
+        expect(braceBareFormula("d20")).toBe("{1d20}");
+        expect(braceBareFormula("d%")).toBe("{1d%}");
+        expect(braceBareFormula("2d6+d4")).toBe("{2d6+1d4}");
+    });
+
+    test("a bare comparison keeps NATIVE meaning, not success counting", () => {
+        // translateDiceExpression would rewrite this to `3d6cs>=10`
+        // (Dice Roller semantics). An rdm: span must mean what
+        // `rdm:{3d6>=10}` means, so the text is braced as written.
+        expect(braceBareFormula("3d6>=10")).toBe("{3d6>=10}");
+    });
+
+    test("generator syntax is never swallowed", () => {
+        for (const expr of [
+            "[@Names]",
+            "[@npcs.Job]",
+            "[[Note^loot]]",
+            "[!deck]",
+            "#rumour|link",
+            "3#monster|unique",
+            "*|folder=B|prop:cr",
+            "{2d6}",
+        ]) {
+            expect(braceBareFormula(expr)).toBeNull();
+        }
+    });
+
+    test("text is still text", () => {
+        for (const expr of [
+            "hello",
+            "you take 2d6 damage",
+            "the 2d6 hit",
+            "1d4 sacks",
+            "husk",
+            "",
+            "   ",
+        ]) {
+            expect(braceBareFormula(expr)).toBeNull();
+        }
+    });
+
+    test("something without a real die is left alone", () => {
+        // No roll to make — bracing these would change nothing but
+        // could surprise someone who wanted the literal characters.
+        expect(braceBareFormula("5")).toBeNull();
+        expect(braceBareFormula("3+4")).toBeNull();
+        expect(braceBareFormula("10d")).toBeNull();
+        expect(braceBareFormula("2dX")).toBeNull();
+    });
+});
+
+describe("evalSourceOf: bare formulas roll under rdm:", () => {
+    test("a bare formula evaluates as if braced", () => {
+        expect(evalSourceOf({ expr: "2d10" })).toBe("{2d10}");
+        expect(evalSourceOf({ expr: "2d10", prefix: "rdm:" })).toBe("{2d10}");
+    });
+
+    test("everything else is passed through untouched", () => {
+        expect(evalSourceOf({ expr: "[@Names]" })).toBe("[@Names]");
+        expect(evalSourceOf({ expr: "{2d6} gold" })).toBe("{2d6} gold");
+        expect(evalSourceOf({ expr: "hello" })).toBe("hello");
+    });
+
+    test("compat prefixes still go through the translator", () => {
+        expect(evalSourceOf({ expr: "2d10", prefix: "dice:" })).toBe("{2d10}");
+        expect(evalSourceOf({ expr: "3d6>=10", prefix: "dice:" })).toBe(
+            "{3d6cs>=10}"
+        );
     });
 });

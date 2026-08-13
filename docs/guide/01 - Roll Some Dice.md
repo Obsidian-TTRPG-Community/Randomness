@@ -50,6 +50,17 @@ roll, whichever prefix you use, and leaves table rolls alone. On a
 
 ## Dice inside sentences and tables
 
+Both of these roll the same d10:
+
+```text
+`rdm:2d10`
+`rdm:{2d10}`
+```
+
+An inline call that's *only* a formula doesn't need the braces. You
+need them as soon as there's text around the dice, which is what the
+next bit is about — `` `rdm:you take 2d6` `` is just words.
+
 Inside generator text, dice go in curly braces:
 
 ```randomness
