@@ -232,6 +232,49 @@ describe("evaluator: smoke tests for common patterns", () => {
         expect(e.run()).toBe("xxx");
     });
 
+    // Reported as a bug ("[@N table] isn't inserting linebreaks"),
+    // and it isn't meant to: a repeated sub-table call is usually
+    // embedded in a sentence, so it joins with NOTHING and the author
+    // asks for a separator with `implode`. The one automatic separator
+    // is a whole-file MaxReps roll, which blank-lines its reps because
+    // that output is standalone. docs/reference.md promised the
+    // MaxReps behaviour for `[@N table]`; these pin the real contract
+    // so the docs can't drift back.
+    describe("how repeated results are joined", () => {
+        const sub = "\nTable: Sub\nx";
+        const rolled = (main: string, src = "") =>
+            new Evaluator(
+                parseGeneratorFile(`${src}Table: Main\n${main}${sub}`),
+                [],
+                { seed: 1 }
+            ).run();
+
+        test("a bare [@N table] inserts no separator at all", () => {
+            expect(rolled("[@3 Sub]")).toBe("xxx");
+        });
+
+        test("implode with no glue joins with a comma and a space", () => {
+            expect(rolled("[@3 Sub >> implode]")).toBe("x, x, x");
+        });
+
+        test("implode \\n and \\n\\n give lines and blank lines", () => {
+            expect(rolled("[@3 Sub >> implode \\n]")).toBe("x\nx\nx");
+            expect(rolled("[@3 Sub >> implode \\n\\n]")).toBe("x\n\nx\n\nx");
+        });
+
+        test("a glue is trimmed, so a trailing space needs \\_", () => {
+            expect(rolled("[@3 Sub >> implode ;\\_]")).toBe("x; x; x");
+            // Documented counter-example: the space is eaten, and
+            // quoting the glue puts the quotes in the output.
+            expect(rolled("[@3 Sub >> implode ; ]")).toBe("x;x;x");
+            expect(rolled('[@3 Sub >> implode ", "]')).toBe('x", "x", "x');
+        });
+
+        test("MaxReps repeats the main table with a blank line between", () => {
+            expect(rolled("x", "MaxReps: 3\n\n")).toBe("x\n\nx\n\nx");
+        });
+    });
+
     test("inline pick gives one of the options", () => {
         const file = parseGeneratorFile("Table: T\n[|red|blue|green]");
         for (let seed = 1; seed <= 20; seed++) {

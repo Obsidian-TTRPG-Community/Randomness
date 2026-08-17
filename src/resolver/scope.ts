@@ -31,6 +31,7 @@ import {
     extractMarkdownContentTables,
     noteBaseName,
     parseDirectTagCall,
+    implodeSuffix,
     parseDirectWikilinkCall,
     renderPropTemplate,
     TagRollFilter,
@@ -162,12 +163,13 @@ export function buildInlineBundle(
         // ceiling, not an error. Reps of "" or 1 stay a plain single
         // pick either way, so `|unique` alone is a harmless no-op.
         const single = tag.reps === "" || tag.reps === "1";
+        const joiner = implodeSuffix(tag.sep);
         if (single) {
             expr = "[@__tagroll]";
         } else if (tag.unique) {
-            expr = `[!${tag.reps} __tagroll >> implode]`;
+            expr = `[!${tag.reps} __tagroll${joiner}]`;
         } else {
-            expr = `[@${tag.reps} __tagroll >> implode]`;
+            expr = `[@${tag.reps} __tagroll${joiner}]`;
         }
     }
 

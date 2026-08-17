@@ -59,6 +59,38 @@ Without `|unique` the same note can show up twice — fine for rumours,
 less so for "the five monsters in this dungeon". Ask for more unique
 notes than you have and you just get all of them.
 
+### Putting them on separate lines
+
+Several results come back as a comma list. `|sep:` changes the glue to
+whatever you like — and it works on line, block and table rolls too:
+
+```text
+`rdm:3#monster|sep:<br>|link`      one per line
+`rdm:3#monster|sep:<br>• |link`    one per line, bulleted
+`rdm:3[[Rumour Mill|line]]|sep:\n` same thing, written as a newline
+`rdm:3[[Loot^loot]]|sep: /\_`      a slash-separated list
+```
+
+Everything after `sep:` is the separator, spaces included, so
+`sep: —\_` really does put spaces around the dash. Two shorthands help
+where a space is hard to type: `\n` is a line break and `\_` is a
+space.
+
+**Write `\_` whenever the separator ends in a space.** A space right
+before the closing backtick is trimmed away before Randomness sees it,
+so `sep: / ` quietly joins with `" /"` and you get
+`sword /ring /sword`. `sep: /\_` gives you the `sword / ring / sword`
+you meant. (It only matters at the very end — in `sep: —\_|link` the
+space would survive anyway — but always writing `\_` is the habit that
+never bites.)
+
+On a tag roll `sep:` goes before `prop:`, which swallows the rest of
+the line:
+
+```text
+`rdm:3*|folder=Bestiary|unique|sep:<br>|prop:{{link}} — CR {{cr}}`
+```
+
 ## Printing the properties themselves
 
 Filtering on a property is one thing; printing it is another. End the

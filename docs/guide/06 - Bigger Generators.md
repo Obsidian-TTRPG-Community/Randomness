@@ -80,7 +80,12 @@ capybara
 ```
 
 Other useful filters: `proper` (Title Case), `a` (adds "a"/"an"),
-`implode ", "` (joins multiple rolls with commas), `bold`.
+`implode` (joins multiple rolls with commas), `bold`.
+
+That last one matters more than it looks: a repeated call like
+`[@3 Animal]` runs its results straight together with nothing in
+between. `[@3 Animal >> implode]` gives `weasel, heron, capybara`,
+and `[@3 Animal >> implode \n]` puts each on its own line.
 
 There's more — lookup tables, dictionaries, deck picks that never
 repeat — all in the full reference (Settings → Randomness → Open

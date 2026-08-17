@@ -2,6 +2,61 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.15.0
+
+### Added
+- **`|sep:` — choose what goes between multiple results.** A roll that
+  returns several things has always joined them with `, `, which is
+  right inside a sentence and wrong everywhere else. `|sep:` sets the
+  glue: `` `rdm:3#monster|sep:<br>|link` `` puts one monster per line,
+  `` `rdm:3#monster|sep:<br>• |link` `` bullets them, and
+  `` `rdm:3[[Rumours|line]]|sep: /\_` `` runs them together with
+  slashes. It works on every multi-result inline roll — tag rolls,
+  table rolls, line and block rolls — and under the `dice:` prefix.
+
+  Everything after `sep:` is the separator, spaces and HTML included.
+  Escapes cover what the surrounding syntax would eat: `\n` newline,
+  `\t` tab, `\_` space (needed at the end of a glue, since an inline
+  span reaches the parser trimmed — `sep: / ` joins with `" /"`, and
+  `sep: /\_` is the one that gives ` / `), `\\` backslash. On a wikilink roll
+  `sep:` goes outside the brackets — inside them a pipe already means
+  "column pick" — and on a tag roll it is a segment like `unique`, so
+  it comes before `prop:`, which still swallows the rest of the line.
+  Separator text is never evaluated, so a glue containing `[@table]`
+  prints as itself. Thanks to Gizmo734 for the request.
+
+### Fixed
+- **`dice:*|folder=…` rolls instead of silently doing nothing useful.**
+  The tagless `*` source — "any note matching these properties", with
+  no tag constraint — never reached the tag-roll branch under the
+  `dice:` prefix. It fell through to the formula translator and came
+  out as the nonsense expression `{*|folder=Bestiary|link}`: no error,
+  no roll, nothing to indicate the syntax was fine and the plumbing
+  wasn't. The reference has claimed since these filters landed that
+  they work under the compatibility prefix, so this was a documented
+  feature that had never run. `*` now dispatches exactly like `#tag`,
+  including the repetition prefix, `|unique`, and `prop:` templates,
+  and a test pins the two prefixes to the same note on the same seed.
+
+- **Documentation: `[@N table]` was described as joining results with
+  blank lines.** It doesn't, and shouldn't — a repeated sub-table call
+  runs its results straight together, because it is nearly always
+  embedded in a sentence (`The party of [@4 hero] sets out.`) where an
+  injected blank line would be wrong. The separator is the author's
+  call, via `>> implode`: bare for `, `, or `\n` / `\n\n` / `<br>` /
+  `;\_` for anything else. The reference's "Call variations",
+  "Filters" and "Repetitions" sections now say so, with a new note on
+  the one place separation *is* automatic — a whole-file `MaxReps:`
+  roll, whose reps are standalone blocks and so are blank-line
+  separated. Behaviour is unchanged; the corpus tests now pin every
+  one of these joins so the docs can't drift again.
+
+  Two smaller errors went with it: a filter's glue is **trimmed** and
+  never quoted, so the documented `implode ", "` would have put the
+  quote marks in the result and `implode , ` loses its trailing space.
+  Both examples are corrected, and `\_` is documented as the way to
+  end a glue with a space. Thanks to claudermilk for the report.
+
 ## 1.14.0
 
 ### Changed

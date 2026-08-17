@@ -73,9 +73,89 @@ export interface DirectWikilinkCall {
     tableName: string;
     /** Repetition prefix: `"3"` or `"{1d4+1}"`; `""` for one roll. */
     reps: string;
+    /**
+     * `|sep:…` glue for a multi-result roll, already decoded (so a
+     * written `\n` is a real newline here). `undefined` when the call
+     * didn't ask for one — that's the default ", ", not an empty glue,
+     * which `sep:` with nothing after it legitimately means.
+     */
+    sep?: string;
     /** The complete engine call, e.g. `[@3 loot]` or `[@npcs.xy]`. */
     tableCall: string;
 }
+
+/**
+ * A `|sep:` glue as the person wrote it → the string it stands for.
+ * Backslash escapes are honoured so a separator can be something the
+ * pipe-segment grammar (or a trimmed markdown span) would otherwise
+ * eat: `\n` newline, `\t` tab, `\_` space, `\\` backslash. Everything
+ * else is literal, including HTML — `<br>` is a `<br>`.
+ *
+ * A backslash before anything else yields that character, but don't
+ * document `\|` as an escape: on a WIKILINK roll the glue is taken as
+ * `[\s\S]*$`, so a bare `|` already works and needs no escape, while
+ * on a TAG roll the segments are split on the raw `|` before we're
+ * called, so neither `|` nor `\|` can reach us intact. A pipe glue is
+ * a wikilink-roll-only trick either way.
+ */
+export function decodeSepGlue(raw: string): string {
+    let out = "";
+    for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i];
+        if (ch !== "\\" || i + 1 >= raw.length) {
+            out += ch;
+            continue;
+        }
+        const next = raw[++i];
+        if (next === "n") out += "\n";
+        else if (next === "t") out += "\t";
+        else if (next === "_") out += " ";
+        else out += next;
+    }
+    return out;
+}
+
+/**
+ * The reverse trip: a decoded glue → source text safe to sit in an
+ * `>> implode <args>` filter argument. The engine parses that argument
+ * as content and trims it, so anything structural (brackets, braces,
+ * the `>>` that starts the next filter) and every space has to be
+ * escaped — `\_` survives the trim, a bare trailing space does not.
+ */
+function encodeGlueForImplode(glue: string): string {
+    let out = "";
+    for (let i = 0; i < glue.length; i++) {
+        const ch = glue[i];
+        if (ch === "\\") out += "\\\\";
+        else if (ch === " ") out += "\\_";
+        else if (ch === "\n") out += "\\n";
+        else if (ch === "\t") out += "\\t";
+        else if ("[]{}".includes(ch)) out += "\\" + ch;
+        // Only a doubled `>` is structural (it opens the next filter);
+        // escaping every one of them would turn the common `<br>` glue
+        // into an unreadable `<br\>` in the generated call.
+        else if (ch === ">" && glue[i + 1] === ">") out += "\\>";
+        else out += ch;
+    }
+    return out;
+}
+
+/**
+ * The filter suffix for a multi-result inline roll. Inline rolls join
+ * with ", " by default — the engine's own multi-rep join is bare
+ * concatenation (IPP3 behaviour, pinned by the corpus), which is
+ * unreadable inside prose. `|sep:` overrides the glue; `sep:` with an
+ * empty body means "join with nothing", which is why the parameter is
+ * optional rather than falsy-checked.
+ */
+export function implodeSuffix(sep: string | undefined): string {
+    if (sep === undefined) return " >> implode";
+    if (sep === "") return " >> implode \\z";
+    return " >> implode " + encodeGlueForImplode(sep);
+}
+
+/** Trailing `|sep:…` on a wikilink roll, outside the `]]`. */
+const WIKILINK_SEP_RE = /\|sep:([\s\S]*)$/i;
 
 /**
  * Detect a "direct call" expression: an inline `rdm:` whose entire
@@ -88,14 +168,25 @@ export interface DirectWikilinkCall {
 export function parseDirectWikilinkCall(
     expr: string
 ): DirectWikilinkCall | null {
+    // A trailing `|sep:…` sits OUTSIDE the brackets — inside them the
+    // pipe already means "column pick" (`[[Note^npcs|Trait]]`). It
+    // owns the rest of the expression, spaces included, so the glue
+    // survives verbatim.
+    let body = expr.trim();
+    let sep: string | undefined;
+    const sepMatch = body.match(WIKILINK_SEP_RE);
+    if (sepMatch) {
+        sep = decodeSepGlue(sepMatch[1]);
+        body = body.slice(0, sepMatch.index).trim();
+    }
     // `[[Note|line]]` / `[[Note|block]]` (no block-id): roll a random
     // line / block from the whole note (merge Phase 4). Same optional
     // repetition prefix as the block-id form. These target the hidden
     // per-note tables parseFileSource builds (see LINES_PREFIX /
     // BLOCKS_PREFIX below).
-    const whole = expr
-        .trim()
-        .match(/^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\|(line|block)\]\]$/i);
+    const whole = body.match(
+        /^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\|(line|block)\]\]$/i
+    );
     if (whole) {
         const reps = whole[1] ?? "";
         const file = whole[2].trim();
@@ -104,11 +195,12 @@ export function parseDirectWikilinkCall(
             (kind === "line" ? LINES_PREFIX : BLOCKS_PREFIX) +
             noteBaseName(file).toLowerCase();
         const repsPart = reps === "" || reps === "1" ? "" : `${reps} `;
-        const joiner = repsPart === "" ? "" : " >> implode";
+        const joiner = repsPart === "" ? "" : implodeSuffix(sep);
         return {
             fileRef: `[[${file}]]`,
             tableName,
             reps,
+            sep,
             tableCall: `[@${repsPart}${tableName}${joiner}]`,
         };
     }
@@ -116,9 +208,9 @@ export function parseDirectWikilinkCall(
     // before the wikilink: `3[[Note^id]]`, `{1d4+1}[[Note^id]]`. Added
     // for Dice Roller compat (`dice: 3[[Note^id]]`), and available to
     // `rdm:` for free.
-    const m = expr
-        .trim()
-        .match(/^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\^([A-Za-z0-9-]+)(?:\|([^[\]]+))?\]\]$/);
+    const m = body.match(
+        /^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\^([A-Za-z0-9-]+)(?:\|([^[\]]+))?\]\]$/
+    );
     if (!m) return null;
     const reps = m[1] ?? "";
     const file = m[2].trim();
@@ -126,16 +218,15 @@ export function parseDirectWikilinkCall(
     const column = m[4]?.trim();
     const tableName = column ? `${blockId}.${column}` : blockId;
     const repsPart = reps === "" || reps === "1" ? "" : `${reps} `;
-    // Multi-rep inline rolls join with ", " — the engine's default
-    // multi-rep join is bare concatenation (IPP3 behaviour, pinned by
-    // the corpus), which is unreadable inside prose. A comma list is
-    // what an inline span wants; authors composing display themselves
-    // can always write the [@N table >> …] form directly.
-    const joiner = repsPart === "" ? "" : " >> implode";
+    // Multi-rep inline rolls join with ", " unless `|sep:` says
+    // otherwise — see implodeSuffix. Authors composing display
+    // themselves can always write the [@N table >> …] form directly.
+    const joiner = repsPart === "" ? "" : implodeSuffix(sep);
     return {
         fileRef: `[[${file}]]`,
         tableName,
         reps,
+        sep,
         tableCall: `[@${repsPart}${tableName}${joiner}]`,
     };
 }
@@ -713,6 +804,11 @@ export interface DirectTagCall {
      * picked twice. Meaningless without a repetition prefix.
      */
     unique: boolean;
+    /**
+     * `|sep:…` glue joining the repetitions, already decoded.
+     * `undefined` means the default ", ".
+     */
+    sep?: string;
     filter: TagRollFilter;
 }
 
@@ -888,6 +984,7 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
     let mode: "block" | "link" | "linkpath" | "prop" = "block";
     let template: string | undefined;
     let unique = false;
+    let sep: string | undefined;
     for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         if (seg === "") continue;
@@ -926,6 +1023,15 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
             // Not a mode: it changes how the repetitions are drawn,
             // and composes with every mode including prop:.
             unique = true;
+            continue;
+        }
+        if (low.startsWith("sep:")) {
+            // Not a mode either: it's the glue between repetitions.
+            // Read from the RAW segment so spacing survives — a
+            // separator is usually mostly spacing. Must precede
+            // `prop:`, which swallows everything after it.
+            const raw = rawSegments[i + 1];
+            sep = decodeSepGlue(raw.slice(raw.toLowerCase().indexOf("sep:") + 4));
             continue;
         }
         if (seg.startsWith("#")) {
@@ -994,6 +1100,7 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
         template,
         reps,
         unique,
+        sep,
     };
 }
 

@@ -442,6 +442,58 @@ describe("dice: compat for sections, lines, and tags", () => {
             "#npc|universe=Eldara|link"
         );
     });
+
+    // The tagless `*` source is the same roll with no tag constraint.
+    // It used to miss the tag-roll dispatch entirely and fall through
+    // to the formula branch, coming out as `{*|folder=Bestiary|link}`
+    // — no error, just a nonsense formula — while the reference said
+    // these filters work under the dice: prefix.
+    test("the tagless * source translates like any other tag roll", () => {
+        expect(t("*|folder=Bestiary|link")).toBe("*|folder=Bestiary|link");
+        expect(t("*|universe=Eldara")).toBe("*|universe=Eldara");
+        expect(t("*|folder=Bestiary|cr=3|linkpath")).toBe(
+            "*|folder=Bestiary|cr=3|linkpath"
+        );
+        expect(t("3*|folder=Bestiary|unique|link")).toBe(
+            "3*|folder=Bestiary|unique|link"
+        );
+        expect(t("{1d4}*|folder=Bestiary|link")).toBe(
+            "{1d4}*|folder=Bestiary|link"
+        );
+        // `prop:` still owns the rest of the line, link mode and all.
+        expect(t("*|folder=Bestiary|prop:{{name}} CR {{cr}}")).toBe(
+            "*|folder=Bestiary|prop:{{name}} CR {{cr}}"
+        );
+        // A `#tag` roll is untouched by the widened dispatch.
+        expect(t("#npc|folder=Bestiary|link")).toBe("#npc|folder=Bestiary|link");
+    });
+
+    test("a * roll rolls end-to-end under both prefixes", () => {
+        const meta: Record<string, { tags: Set<string>; fm?: Record<string, unknown> }> = {
+            "Bestiary/Hag.md": { tags: new Set(), fm: { cr: 3 } },
+            "Bestiary/Wolf.md": { tags: new Set(), fm: { cr: 2 } },
+        };
+        const opts = {
+            notePath: "Session/log.md",
+            noteSource: "",
+            source: inMemorySource({}),
+            tagFiles: (f: TagRollFilter) =>
+                Object.keys(meta)
+                    .filter((p) => matchesTagRollFilter(meta[p].tags, meta[p].fm, f, p))
+                    .sort(),
+            tagFrontmatter: (p: string) => meta[p]?.fm,
+        };
+        const render = (expr: string) => {
+            const b = buildInlineBundle(expr, opts);
+            return new Evaluator(b.main, b.extras, { seed: 5 }).run();
+        };
+        const native = render("*|folder=Bestiary|prop:{{name}} CR {{cr}}");
+        const compat = render(t("*|folder=Bestiary|prop:{{name}} CR {{cr}}"));
+        expect(native).toMatch(/^(Hag CR 3|Wolf CR 2)$/);
+        // Same seed, same translated expression — the two prefixes
+        // must land on the same note, not merely both "work".
+        expect(compat).toBe(native);
+    });
 });
 
 // ─── Property output (`prop:` templates) ───
@@ -776,5 +828,257 @@ describe("repeated tag rolls end-to-end", () => {
         expect(
             translateDiceExpression("3#monster|unique|prop:{{cr}}").expr
         ).toBe("3#monster|unique|prop:{{cr}}");
+    });
+});
+
+// ─── |sep: custom separators ───
+
+describe("parseDirectTagCall / parseDirectWikilinkCall: |sep:", () => {
+    test("no sep: means the default join, not an empty glue", () => {
+        expect(parseDirectTagCall("3#monster|link")?.sep).toBeUndefined();
+        expect(parseDirectWikilinkCall("3[[Note^loot]]")?.sep).toBeUndefined();
+        expect(parseDirectWikilinkCall("3[[Note^loot]]")?.tableCall).toBe(
+            "[@3 loot >> implode]"
+        );
+    });
+
+    test("a tag roll takes sep: as a draw option, keeping its mode", () => {
+        const c = parseDirectTagCall("3#monster|sep:<br>|link");
+        expect(c?.sep).toBe("<br>");
+        expect(c?.mode).toBe("link");
+        expect(c?.reps).toBe("3");
+    });
+
+    test("sep: composes with unique and prop:", () => {
+        const c = parseDirectTagCall("3#npc|unique|sep:<br>|prop:{{name}}");
+        expect(c?.sep).toBe("<br>");
+        expect(c?.unique).toBe(true);
+        expect(c?.mode).toBe("prop");
+        expect(c?.template).toBe("{{name}}");
+    });
+
+    test("spacing inside the glue survives — it IS the separator", () => {
+        expect(parseDirectTagCall("3#monster|sep: — |link")?.sep).toBe(" — ");
+        expect(parseDirectTagCall("3#monster|sep:<br>• |link")?.sep).toBe(
+            "<br>• "
+        );
+    });
+
+    test("escapes decode: \\n newline, \\t tab, \\_ space, \\\\ backslash", () => {
+        expect(parseDirectTagCall("3#monster|sep:\\n|link")?.sep).toBe("\n");
+        expect(parseDirectTagCall("3#monster|sep:\\t|link")?.sep).toBe("\t");
+        expect(parseDirectTagCall("3#monster|sep:,\\_|link")?.sep).toBe(", ");
+        expect(parseDirectTagCall("3#monster|sep:\\\\|link")?.sep).toBe("\\");
+    });
+
+    test("a wikilink roll takes sep: outside the brackets", () => {
+        const c = parseDirectWikilinkCall("3[[Note^loot]]|sep:<br>");
+        expect(c?.sep).toBe("<br>");
+        expect(c?.tableName).toBe("loot");
+        expect(c?.tableCall).toBe("[@3 loot >> implode <br>]");
+    });
+
+    test("sep: does not eat a column pick", () => {
+        const c = parseDirectWikilinkCall("3[[Note^npcs|Trait]]|sep:;\\_");
+        expect(c?.tableName).toBe("npcs.Trait");
+        // `\_` is how a trailing space is written: markdown code spans
+        // strip one, and the expression reaches us trimmed.
+        expect(c?.sep).toBe("; ");
+        expect(c?.tableCall).toBe("[@3 npcs.Trait >> implode ;\\_]");
+    });
+
+    test("sep: works on whole-note line/block rolls", () => {
+        const c = parseDirectWikilinkCall("3[[Rumours|line]]|sep:\\n");
+        expect(c?.tableName).toBe(LINES_PREFIX + "rumours");
+        expect(c?.tableCall).toBe(`[@3 ${LINES_PREFIX}rumours >> implode \\n]`);
+    });
+
+    test("a glue full of engine syntax is escaped, not executed", () => {
+        const c = parseDirectWikilinkCall("3[[Note^loot]]|sep: [@x] {1d6} >>");
+        expect(c?.sep).toBe(" [@x] {1d6} >>");
+        expect(c?.tableCall).toBe(
+            "[@3 loot >> implode \\_\\[@x\\]\\_\\{1d6\\}\\_\\>>]"
+        );
+    });
+
+    test("an empty glue joins with nothing", () => {
+        expect(parseDirectWikilinkCall("3[[Note^loot]]|sep:")?.sep).toBe("");
+        expect(parseDirectWikilinkCall("3[[Note^loot]]|sep:")?.tableCall).toBe(
+            "[@3 loot >> implode \\z]"
+        );
+    });
+
+    test("sep: without repetitions is harmless", () => {
+        const c = parseDirectWikilinkCall("[[Note^loot]]|sep:<br>");
+        expect(c?.tableCall).toBe("[@loot]");
+    });
+});
+
+describe("|sep: end-to-end", () => {
+    const meta: Record<
+        string,
+        { tags: Set<string>; fm?: Record<string, unknown> }
+    > = {
+        "Bestiary/Hag.md": { tags: new Set(["monster"]), fm: { cr: 3 } },
+        "Bestiary/Mephit.md": { tags: new Set(["monster"]), fm: { cr: 1 } },
+        "Bestiary/Wolf.md": { tags: new Set(["monster"]), fm: { cr: 2 } },
+    };
+    const tagFiles = (filter: TagRollFilter) =>
+        Object.keys(meta)
+            .filter((p) =>
+                matchesTagRollFilter(meta[p].tags, meta[p].fm, filter, p)
+            )
+            .sort();
+    const tagFrontmatter = (p: string) => meta[p]?.fm;
+
+    function roll(expr: string, seed: number, files: Record<string, string> = {}): string {
+        const bundle = buildInlineBundle(expr, {
+            notePath: "Session/log.md",
+            noteSource: "",
+            source: inMemorySource(files),
+            tagFiles,
+            tagFrontmatter,
+        });
+        return new Evaluator(bundle.main, bundle.extras, { seed }).run();
+    }
+
+    test("tag roll: <br> separates instead of a comma", () => {
+        const out = roll("3#monster|sep:<br>|link", 1);
+        expect(out).not.toContain(", ");
+        expect(out.split("<br>")).toHaveLength(3);
+    });
+
+    test("tag roll: \\n renders as a real newline", () => {
+        const out = roll("3#monster|sep:\\n|link", 2);
+        expect(out.split("\n")).toHaveLength(3);
+    });
+
+    test("tag roll: a bullet glue keeps its trailing space", () => {
+        const out = roll("3#monster|unique|sep:<br>• |link", 3);
+        expect(out.split("<br>• ")).toHaveLength(3);
+        expect(out).not.toContain("•[[");
+    });
+
+    test("tag roll: sep: composes with a prop: template", () => {
+        const out = roll("3*|folder=Bestiary|unique|sep:<br>|prop:{{name}} CR {{cr}}", 4);
+        const parts = out.split("<br>");
+        expect(parts).toHaveLength(3);
+        for (const p of parts) expect(p).toMatch(/^\w+ CR \d$/);
+    });
+
+    test("wikilink roll: sep: joins the repetitions", () => {
+        const files = {
+            "Session/Loot.md": ["| Loot |", "| --- |", "| a ring |", "| a sword |", "", "^loot", ""].join("\n"),
+        };
+        const out = roll("3[[Loot^loot]]|sep:<br>", 7, files);
+        expect(out.split("<br>")).toHaveLength(3);
+        expect(out).not.toContain(", ");
+    });
+
+    test("the default is still a comma list", () => {
+        expect(roll("3#monster|link", 1).split(", ")).toHaveLength(3);
+    });
+
+    test("dice: compat carries sep: through, spacing intact", () => {
+        expect(translateDiceExpression("3#monster|sep:<br>|link").expr).toBe(
+            "3#monster|sep:<br>|link"
+        );
+        expect(translateDiceExpression("3#monster|sep:<br>• |link").expr).toBe(
+            "3#monster|sep:<br>• |link"
+        );
+        expect(translateDiceExpression("3[[Note^loot]]|sep:<br>").expr).toBe(
+            "3[[Note^loot]]|sep:<br>"
+        );
+        expect(
+            translateDiceExpression("3[[Note^npcs]]|Trait|sep:;\\_").expr
+        ).toBe("3[[Note^npcs|Trait]]|sep:;\\_");
+    });
+
+    // translateTableRoller has THREE returns that re-attach the glue —
+    // whole-note block, whole-note line, and block-id — and only the
+    // last was covered. A missing `+ sepTail` on either of the others
+    // would drop the separator under the dice: prefix only, which is
+    // exactly the prefix-specific difference the compat layer exists
+    // to prevent.
+    test("dice: whole-note line and block rolls carry sep: too", () => {
+        expect(translateDiceExpression("3[[Rumours]]|sep:<br>").expr).toBe(
+            "3[[Rumours|block]]|sep:<br>"
+        );
+        expect(translateDiceExpression("3[[Rumours]]|line|sep:<br>").expr).toBe(
+            "3[[Rumours|line]]|sep:<br>"
+        );
+        // A block-type filter still approximates to the block roll,
+        // and must not swallow the glue on the way.
+        expect(
+            translateDiceExpression("3[[Rumours]]|paragraph|sep:\\n").expr
+        ).toBe("3[[Rumours|block]]|sep:\\n");
+    });
+
+    test("dice: sep: survives unique, prop: and an empty glue", () => {
+        expect(
+            translateDiceExpression("3#npc|unique|sep:<br>|link").expr
+        ).toBe("3#npc|unique|sep:<br>|link");
+        expect(
+            translateDiceExpression(
+                "3*|folder=Bestiary|sep:<br>|prop:{{name}} CR {{cr}}"
+            ).expr
+        ).toBe("3*|folder=Bestiary|sep:<br>|prop:{{name}} CR {{cr}}");
+        // `sep:` with nothing after it is a real glue (join with
+        // nothing), not an absent one — it must not be dropped as an
+        // unknown word segment.
+        expect(translateDiceExpression("3#monster|sep:|link").expr).toBe(
+            "3#monster|sep:|link"
+        );
+    });
+
+    // The glue may contain brackets, which the table-roller pattern
+    // forbids in a suffix. Before the peel moved up into
+    // translateDiceExpression this fell through to the formula
+    // branch and produced `{3[[Note^loot]]|sep:] [}` — no error, just
+    // a nonsense formula downstream.
+    test("dice: a glue containing brackets still parses as a roller", () => {
+        expect(translateDiceExpression("3[[Note^loot]]|sep:] [").expr).toBe(
+            "3[[Note^loot]]|sep:] ["
+        );
+        expect(translateDiceExpression("3[[Note^loot]]|sep:[x]").expr).toBe(
+            "3[[Note^loot]]|sep:[x]"
+        );
+    });
+
+    // Claimed in the CHANGELOG ("line and block rolls") but only
+    // asserted at the parse layer before — this runs it.
+    test("wikilink roll: sep: joins a whole-note block roll", () => {
+        const files = {
+            "Session/Rumours.md": "first rumour\n\nsecond rumour\n\nthird rumour\n",
+        };
+        const out = roll("3[[Rumours|block]]|sep:<br>", 11, files);
+        expect(out.split("<br>")).toHaveLength(3);
+        expect(out).not.toContain(", ");
+    });
+
+    // "Separator text is never evaluated" was only checked against the
+    // generated call string. This is the claim itself: the glue comes
+    // out of the engine as literal text.
+    test("a glue full of engine syntax renders as itself", () => {
+        const files = {
+            "Session/Loot.md": ["| Loot |", "| --- |", "| a ring |", "", "^loot", ""].join("\n"),
+        };
+        const out = roll("3[[Loot^loot]]|sep: [@x] {1d6} ", 12, files);
+        expect(out).toBe("a ring [@x] {1d6}a ring [@x] {1d6}a ring");
+    });
+
+    // The trap the docs now call out explicitly: a trailing space is
+    // trimmed off the whole expression before sep: ever sees it, so a
+    // glue that should end in a space needs `\_`.
+    test("a trailing space in the glue needs \\_ to survive", () => {
+        const files = {
+            "Session/Loot.md": ["| Loot |", "| --- |", "| a ring |", "", "^loot", ""].join("\n"),
+        };
+        expect(roll("3[[Loot^loot]]|sep: /", 13, files)).toBe(
+            "a ring /a ring /a ring"
+        );
+        expect(roll("3[[Loot^loot]]|sep: /\\_", 13, files)).toBe(
+            "a ring / a ring / a ring"
+        );
     });
 });

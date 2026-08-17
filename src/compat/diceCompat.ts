@@ -171,21 +171,40 @@ export function translateDiceExpression(
     }
 
     // Tag rolls, with the same optional repetition prefix the table
-    // roller below accepts (`3#rumour`, `{1d4}#rumour|link`).
-    if (/^(?:\d+|\{[^{}]+\})?\s*#/.test(s)) {
+    // roller below accepts (`3#rumour`, `{1d4}#rumour|link`). `*` is
+    // the same roll with no tag constraint (`*|folder=Bestiary|link`)
+    // — it must dispatch here too, or it falls through to the formula
+    // branch and silently becomes `{*|folder=Bestiary|link}`.
+    if (/^(?:\d+|\{[^{}]+\})?\s*[#*]/.test(s)) {
         return { expr: translateTagRoller(s), flags };
+    }
+
+    // `|sep:…` owns the rest of the expression and its glue may hold
+    // anything — including the brackets the table-roller pattern below
+    // forbids in a suffix. Peel it off before matching: otherwise a
+    // glue like `sep:] [` pushes a perfectly good roller into the
+    // formula branch, where it translates to garbage instead of
+    // rolling or erroring. Re-attached verbatim — the rdm: parser
+    // reads the glue, we only carry it.
+    let sepTail = "";
+    let rollerSrc = s;
+    const sepAt = s.toLowerCase().indexOf("|sep:");
+    if (sepAt >= 0) {
+        sepTail = s.slice(sepAt);
+        rollerSrc = s.slice(0, sepAt);
     }
 
     // Table roller: optional repetitions, then a wikilink, then an
     // optional |column pick.
-    const table = s.match(/^(.*?)\[\[([^[\]]+)\]\]([^[\]]*)$/);
+    const table = rollerSrc.match(/^(.*?)\[\[([^[\]]+)\]\]([^[\]]*)$/);
     if (table) {
         return {
-            expr: translateTableRoller(
-                table[1].trim(),
-                table[2].trim(),
-                table[3].trim()
-            ),
+            expr:
+                translateTableRoller(
+                    table[1].trim(),
+                    table[2].trim(),
+                    table[3].trim()
+                ) + sepTail,
             flags,
         };
     }
@@ -212,11 +231,16 @@ function translateTableRoller(
     }
 
     let column = "";
-    if (suffix !== "") {
-        const sm = suffix.match(/^\|(.+)$/);
+    // `|sep:…` is peeled off by translateDiceExpression before the
+    // wikilink is matched (the glue may contain brackets, which the
+    // roller pattern forbids here), so `suffix` is the column pick
+    // alone by the time it reaches us.
+    const rest = suffix;
+    if (rest !== "") {
+        const sm = rest.match(/^\|(.+)$/);
         if (!sm) {
             throw new DiceCompatError(
-                `Unrecognised text after the wikilink: '${suffix}'`
+                `Unrecognised text after the wikilink: '${rest}'`
             );
         }
         column = sm[1].trim();
@@ -264,7 +288,7 @@ function withReps(repsRaw: string, target: string): string {
 function translateTagRoller(s: string): string {
     // Repetition prefix rides along untouched — `rdm:` parses it with
     // the same grammar, so there's nothing to translate.
-    const rep = s.match(/^(\d+|\{[^{}]+\})\s*(?=#)/);
+    const rep = s.match(/^(\d+|\{[^{}]+\})\s*(?=[#*])/);
     if (rep) return rep[1] + translateTagRoller(s.slice(rep[0].length));
     // A `prop:` template owns the rest of the expression (pipes and
     // all), so translate only what precedes it and re-attach it
@@ -280,13 +304,28 @@ function translateTagRoller(s: string): string {
         );
         return head + s.slice(propAt);
     }
-    const m = s.match(/^#([^|\s]+)((?:\|[^|]*)*)$/);
+    // `#tag` or the tagless `*`, then the pipe segments. `*` carries no
+    // name of its own — the filter segments are the whole constraint,
+    // which is why the rdm: parser rejects a bare `*`; we pass it
+    // through and let that check speak.
+    const m = s.match(/^(?:#([^|\s]+)|(\*))((?:\|[^|]*)*)$/);
     if (!m) {
         throw new DiceCompatError(`Unrecognised tag roll: '${s}'`);
     }
-    const tagName = m[1];
-    const suffixes = (m[2] ?? "")
-        .split("|")
+    const source = m[2] ? "*" : `#${m[1]}`;
+    // A `sep:` glue is mostly whitespace by nature, so it is carried
+    // untrimmed and re-emitted verbatim — trimming it here would turn
+    // `|sep:,\_` into `|sep:,` under the dice: prefix only.
+    let sepSegment = "";
+    const rawSuffixes = (m[3] ?? "").split("|").slice(1);
+    const suffixes = rawSuffixes
+        .filter((x) => {
+            if (/^\s*sep:/i.test(x)) {
+                sepSegment = "|" + x.replace(/^\s+/, "");
+                return false;
+            }
+            return true;
+        })
         .map((x) => x.trim())
         .filter((x) => x !== "");
     let linkMode: "" | "link" | "linkpath" = "";
@@ -317,9 +356,10 @@ function translateTagRoller(s: string): string {
         // Block-type filters (`paragraph`, `-`, …) approximate to the
         // default block roll: drop them.
     }
-    let out = `#${tagName}`;
+    let out = source;
     for (const f of filters) out += `|${f}`;
     if (unique) out += "|unique";
+    out += sepSegment;
     if (linkMode) out += `|${linkMode}`;
     return out;
 }

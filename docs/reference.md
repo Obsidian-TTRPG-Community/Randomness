@@ -131,7 +131,7 @@ tables, which can call others, and so on.
 | Syntax | What it does |
 | --- | --- |
 | `[@table]` | Roll the table once, insert the result. |
-| `[@N table]` | Roll the table `N` times, results joined with blank lines. |
+| `[@N table]` | Roll the table `N` times and run the results together. Add `>> implode` for a separator. |
 | `[@{1d4} table]` | Roll `N` from dice, then roll the table that many times. |
 | `[#N table]` | Pick item number `N` (no roll — deterministic). |
 | `[#table]` | Pick the item at the *current* item's position — for cross-indexing parallel tables. Only meaningful inside a table item. |
@@ -145,7 +145,7 @@ Examples:
 
 ```text
 Table: party
-The party of [@4 hero] sets out.
+The party of [@4 hero >> implode] sets out.
 
 Table: hero
 a dwarven cleric
@@ -157,9 +157,32 @@ Table: order
 First in line: [@1 hero]. Second: [@1 hero]. Third: [@1 hero].
 ```
 
-Note the difference: `[@4 hero]` returns four results joined with
-blank lines; `[@1 hero]` returns one result inline. For complex
-formatting use a sub-table plus filters (see Repetitions).
+> [!warning] Repeated rolls are **not** separated for you
+> `[@4 hero]` on its own returns the four results butted straight
+> together — `a dwarven clerica halfling rogue…` — because a
+> repeated call is usually sitting inside a sentence, where any
+> inserted separator would be wrong. Whenever you want something
+> between the results, say so with `implode`:
+>
+> ```text
+> [@4 hero >> implode]           a, b, c, d   (the default glue is ", ")
+> [@4 hero >> implode \n]        one per line
+> [@4 hero >> implode \n\n]      one per paragraph (a blank line between)
+> [@4 hero >> implode <br>]      one per line, in html formatting
+> [@4 hero >> implode ;\_]       a; b; c; d
+> ```
+>
+> A filter's argument is **trimmed**, and it is never quoted — the
+> quotes in `implode ", "` would come out in the result. Write the
+> whitespace you want as an escape instead: `\n`, `\t`, and `\_` for
+> a space (see **Escaping** below). That's why the last example is
+> `;\_` and not `; `.
+>
+> The one place separation *is* automatic is a whole-file roll with
+> `MaxReps:` — see **Repetitions**.
+
+`[@1 hero]`, or a plain `[@hero]`, returns one result inline and is
+never joined at all.
 
 ## Dice
 
@@ -341,7 +364,7 @@ left-to-right.
 ```text
 [@creature >> upper]            // SHOUTS THE CREATURE NAME
 [@name >> proper]               // Title-cases the name
-[@5 items >> sort >> implode , ]// sort, then join with ", "
+[@5 items >> sort >> implode]   // sort, then join with ", "
 [@village >> a]                 // "a village" or "an oasis"
 ```
 
@@ -351,7 +374,10 @@ Common filters:
 - **proper** — Title Case
 - **bold / italic / underline** — wrap in `<b>`/`<i>`/`<u>`
 - **sort** — sort alphabetically (multi-rep results)
-- **implode \<glue\>** — join multi-rep results with the glue string
+- **implode \<glue\>** — join multi-rep results with the glue string.
+  With no glue the join is `, `. The glue is trimmed and taken
+  literally, so use `\n` / `\t` / `\_` for whitespace and don't
+  quote it
 - **replace \<from\>/\<to\>** — substring replace
 - **trim** — strip leading and trailing whitespace
 - **left N / right N / mid N M** — substring extraction
@@ -364,14 +390,44 @@ To roll a table multiple times, put the count before the table
 name inside the brackets:
 
 ```text
-[@3 treasure]                       // three treasures, blank-separated
-[@5 spell >> implode ", "]          // five spells, comma-separated
+[@3 treasure]                       // three treasures, run together
+[@3 treasure >> implode \n\n]       // three treasures, one per paragraph
+[@5 spell >> implode]               // five spells, comma-separated
 [@{1d4} goblin]                     // 1-4 goblins
 ```
+
+A repeated call inserts **nothing** between the results on its own —
+see the warning under "Call variations". Reach for `implode` (or
+`sort >> implode`) whenever the results should be visually separate.
 
 The file's `MaxReps:` directive caps the repetition count,
 useful when authors want to allow variable reps but prevent a
 runaway `[@100 expensive_table]`.
+
+### `MaxReps:` is the one automatic separator
+
+`MaxReps: N` (or an API/browser roll that asks for `N`) repeats the
+file's **main table** rather than a sub-table call, and those reps
+*are* separated by a blank line, so each one reads as its own block:
+
+```text
+MaxReps: 3
+
+Table: Altar
+A [|cracked|mossy|gilded] altar to [@Deity].
+
+Table: Deity
+the Drowned Mother
+a nameless star
+the Keeper of Roads
+```
+
+Rolling that file gives three descriptions with a blank line between
+them. The two behaviours are different on purpose: a whole-file roll
+is standalone output, while `[@3 Altar]` is almost always embedded in
+a sentence, where an injected blank line would be wrong. If you want
+a different separator on a whole-file roll, wrap the body in a
+sub-table and call it with `implode`.
 
 ## Conditionals
 
@@ -779,11 +835,61 @@ deck so none repeats:
 `rdm:3*|folder=Bestiary|unique|prop:{{name}} (CR {{cr}})`
 ```
 
-Results are comma-joined. `|unique` must come before `prop:` (which
-swallows the rest of the line), and asking a `unique` roll for more
-notes than match simply gives you all of them — the 50-note cap is the
-real ceiling, not an error. A prefix of `1`, or none at all, is a plain
-single pick.
+Results are comma-joined by default. `|unique` must come before `prop:`
+(which swallows the rest of the line), and asking a `unique` roll for
+more notes than match simply gives you all of them — the 50-note cap is
+the real ceiling, not an error. A prefix of `1`, or none at all, is a
+plain single pick.
+
+#### Choosing the separator
+
+`|sep:` sets what goes between the results. It works on every
+multi-result inline roll — tag rolls, table rolls, line and block
+rolls:
+
+```text
+`rdm:3#monster|sep:<br>|link`        one per line
+`rdm:3#monster|sep:<br>• |link`      one per line, bulleted
+`rdm:3[[Rumours|line]]|sep:\n`       a newline between lines
+`rdm:3[[Note^loot]]|sep: /\_`        a slash-separated list
+`rdm:3[[Note^npcs|Trait]]|sep:;\_`   a column pick, semicolon-joined
+```
+
+Everything after `sep:` is the separator, spaces and HTML included —
+so `sep: —\_` puts the spaces around the dash, and `<br>` is a line
+break. Backslash escapes cover what the surrounding syntax would
+otherwise eat:
+
+| Escape | Means |
+| --- | --- |
+| `\n` | newline (rendered as a line break) |
+| `\t` | tab |
+| `\_` | space — needed at the end of a glue, since an inline span reaches the parser trimmed |
+| `\\` | a literal backslash |
+
+That `\_` rule catches people out, so it's worth being blunt about:
+**a glue that ends in a space must end in `\_`.** The span is trimmed
+before anything else looks at it, so a trailing space is gone before
+`sep:` ever sees it:
+
+```text
+`rdm:3[[Note^loot]]|sep: / `     → sword /ring /sword    ✗
+`rdm:3[[Note^loot]]|sep: /\_`    → sword / ring / sword   ✓
+```
+
+A glue that is followed by another segment (`|sep: —\_|link`) keeps
+its trailing space either way, since the trim only reaches the end of
+the whole expression — but writing `\_` always is the habit that
+doesn't bite.
+
+On a wikilink roll `sep:` goes *outside* the brackets, because inside
+them a pipe already means "column pick". On a tag roll it is a segment
+like `unique`, so it must come before `prop:`. Separator text is never
+evaluated: a glue containing `[@table]` or `{1d6}` prints as itself.
+
+`sep:` with nothing after it joins with nothing at all. Without
+`sep:`, the join stays `, ` — and a single result is never joined, so
+`sep:` on a one-pick call does nothing.
 
 #### Printing the properties, not just the link
 
@@ -951,7 +1057,9 @@ unsupported (clear errors): the every-file tag mode (`#tag|+`),
 stunt dice (`dS`), and Genesys narrative dice.
 
 `rdm:` also gains the repetition prefix on wikilink rolls:
-`` `rdm:3[[Note^loot]]` `` rolls three, joined with ", ".
+`` `rdm:3[[Note^loot]]` `` rolls three, joined with ", " — or with
+whatever `|sep:` says (see "Choosing the separator"). Both work under
+the `dice:` prefix too.
 
 ## Escaping
 
