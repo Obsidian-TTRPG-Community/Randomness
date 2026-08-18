@@ -817,10 +817,15 @@ case-insensitive; comma for OR) rather than filtering a frontmatter
 property. These filters also work under the `dice:` compatibility
 prefix.
 
-Tag rolls use Obsidian's own metadata cache — no Dataview required —
-and cap at 50 matching notes per roll. The note pick happens inside
-the engine, so seeded rolls are reproducible and every re-roll may
-pick a different note.
+Tag rolls use Obsidian's own metadata cache — no Dataview required.
+The note pick happens inside the engine, so seeded rolls are
+reproducible and every re-roll may pick a different note.
+
+`link`, `linkpath` and `prop:` rolls consider **every** matching note,
+however many there are — they only need the note's path and its
+properties. A block roll (`rdm:#tag` with no mode) has to read each
+candidate note's text, so it draws from a random sample of 50 of the
+matching notes rather than all of them.
 
 #### More than one note per call
 
@@ -837,9 +842,9 @@ deck so none repeats:
 
 Results are comma-joined by default. `|unique` must come before `prop:`
 (which swallows the rest of the line), and asking a `unique` roll for
-more notes than match simply gives you all of them — the 50-note cap is
-the real ceiling, not an error. A prefix of `1`, or none at all, is a
-plain single pick.
+more notes than match simply gives you all of them rather than raising
+an error — for a block roll, the 50-note sample is that ceiling. A
+prefix of `1`, or none at all, is a plain single pick.
 
 #### Choosing the separator
 

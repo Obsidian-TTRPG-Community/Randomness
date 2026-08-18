@@ -666,8 +666,47 @@ function tableToDecls(id: string, rowLines: string[]): TableDecl[] {
 export const LINES_PREFIX = "__lines:";
 export const BLOCKS_PREFIX = "__blocks:";
 
-/** Cap on how many tagged notes a single #tag roll imports. */
+/**
+ * Cap on how many tagged notes a single #tag roll imports.
+ *
+ * This applies to BLOCK rolls only (`rdm:#tag`), which pull every
+ * candidate note's text off disk — reading a four-figure tag's worth
+ * of notes on every render is not something a note render can afford.
+ * `link`, `linkpath` and `prop` rolls build their candidates from the
+ * path plus the metadata cache, so they cost no I/O and are not
+ * capped.
+ *
+ * The cap must never be applied to an ordered list: the note pick
+ * happens inside the engine, so slicing a sorted match set would pin
+ * every roll to the alphabetically-first notes. Use `sampleTagFiles`.
+ */
 export const TAG_FILE_CAP = 50;
+
+/**
+ * A uniform random sample of `cap` paths, or all of them when there
+ * are no more than `cap`.
+ *
+ * Partial Fisher-Yates: only `cap` swaps, so a 1500-note tag costs 50
+ * steps rather than a full shuffle. `rng` is structural so callers can
+ * pass the engine's seedable RNG (deterministic sample under a seed)
+ * or any `{ next(): number }`.
+ */
+export function sampleTagFiles(
+    paths: string[],
+    cap: number,
+    rng: { next(): number }
+): string[] {
+    if (cap <= 0) return [];
+    if (paths.length <= cap) return paths;
+    const pool = paths.slice();
+    for (let i = 0; i < cap; i++) {
+        const j = i + Math.floor(rng.next() * (pool.length - i));
+        const t = pool[i];
+        pool[i] = pool[j];
+        pool[j] = t;
+    }
+    return pool.slice(0, cap);
+}
 
 /** Basename without extension: "Camp/My Note.md" → "My Note". */
 export function noteBaseName(pathOrRef: string): string {

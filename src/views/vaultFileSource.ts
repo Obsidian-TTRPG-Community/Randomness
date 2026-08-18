@@ -120,7 +120,9 @@ export function makeLinkAwareBasenameResolver(
 import {
     TagRollFilter,
     matchesTagRollFilter,
+    sampleTagFiles,
 } from "../resolver/mdContent";
+import { RNG } from "../engine/rng";
 
 /**
  * Vault-wide tag-roll lookup backed by the metadata cache: returns
@@ -164,6 +166,46 @@ export function makeTagFilesLookup(
             // matching notes" (a clear error upstream), not a crash.
         }
         return out.sort();
+    };
+}
+
+/**
+ * The tag-roll candidate lookup for ONE roll.
+ *
+ * Two things the raw `makeTagFilesLookup` can't do on its own:
+ *
+ *  - **Sampling.** `makeTagFilesLookup` returns every match, sorted.
+ *    A block roll can only afford to read `cap` notes off disk, and
+ *    taking the first `cap` of a sorted list would mean a 1500-note
+ *    `#creature` tag never rolled anything past the B's. Pass `cap`
+ *    and the candidates become a uniform random sample instead.
+ *  - **Memoising.** A block roll asks for its candidates twice — once
+ *    to prefetch their text, once when the bundle is built — and a
+ *    random sample must be drawn only once, or the bundle would
+ *    reference notes that were never read.
+ *
+ * `seed` makes the sample deterministic, so a seeded roll picks the
+ * same note every time exactly as it did before the sampling existed.
+ * Omit `cap` (link/linkpath/prop rolls) and every match is returned.
+ */
+export function makeTagRollLookup(
+    plugin: RandomnessPlugin,
+    opts?: { cap?: number; seed?: number }
+): (filter: TagRollFilter) => string[] {
+    const all = makeTagFilesLookup(plugin);
+    const rng = new RNG(opts?.seed);
+    const cache = new Map<string, string[]>();
+    return (filter) => {
+        const key = JSON.stringify(filter);
+        const hit = cache.get(key);
+        if (hit !== undefined) return hit;
+        const matches = all(filter);
+        const out =
+            opts?.cap === undefined
+                ? matches
+                : sampleTagFiles(matches, opts.cap, rng);
+        cache.set(key, out);
+        return out;
     };
 }
 

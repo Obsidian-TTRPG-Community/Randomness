@@ -2,6 +2,22 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.15.1
+
+### Fixed
+- **Tag rolls on a big tag no longer only pick A-names.** The vault
+  lookup returns matching notes sorted by path, and the roll took the
+  first 50 of that list before the engine picked one — so a tag with
+  1500 notes could only ever return notes from the top of the
+  alphabet. `|link`, `|linkpath` and `prop:` rolls now consider every
+  matching note: they build their result from the note's path and its
+  frontmatter, so there is no file I/O to cap. Block rolls (`rdm:#tag`
+  with no mode) read each candidate note off disk, so they keep a
+  50-note ceiling, but it is now a random sample of the matches rather
+  than the alphabetically-first 50. Seeded rolls stay reproducible —
+  the sample is drawn from the roll's own seeded RNG. Reported by
+  Gizmo734.
+
 ## 1.15.0
 
 ### Added

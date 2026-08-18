@@ -20,9 +20,11 @@ import {
     parseDirectTagCall,
     renderPropTemplate,
     matchesTagRollFilter,
+    sampleTagFiles,
     TagRollFilter,
     LINES_PREFIX,
     BLOCKS_PREFIX,
+    TAG_FILE_CAP,
 } from "../../src/resolver/mdContent";
 import {
     inMemorySource,
@@ -1080,5 +1082,95 @@ describe("|sep: end-to-end", () => {
         expect(roll("3[[Loot^loot]]|sep: /\\_", 13, files)).toBe(
             "a ring / a ring / a ring"
         );
+    });
+});
+
+// ─── The note cap (issue: big tags only ever rolled A-names) ───
+
+describe("tag rolls over a tag with more notes than the cap", () => {
+    // 300 notes, named so alphabetical order is obvious: Note 000 …
+    // Note 299. Sorted-then-sliced, a roll could only ever reach the
+    // first TAG_FILE_CAP of these.
+    const PATHS = Array.from(
+        { length: 300 },
+        (_, i) => `Bestiary/Note ${String(i).padStart(3, "0")}.md`
+    );
+    const tagFiles = () => PATHS.slice().sort();
+    const rng = (seed: number) => {
+        let s = seed >>> 0 || 1;
+        return {
+            next() {
+                s = (s * 1664525 + 1013904223) >>> 0;
+                return s / 0x100000000;
+            },
+        };
+    };
+
+    test("sampleTagFiles returns everything when under the cap", () => {
+        const few = PATHS.slice(0, 10);
+        expect(sampleTagFiles(few, TAG_FILE_CAP, rng(1))).toEqual(few);
+    });
+
+    test("sampleTagFiles takes cap distinct items from the input", () => {
+        const out = sampleTagFiles(PATHS, TAG_FILE_CAP, rng(9));
+        expect(out).toHaveLength(TAG_FILE_CAP);
+        expect(new Set(out).size).toBe(TAG_FILE_CAP);
+        for (const p of out) expect(PATHS).toContain(p);
+    });
+
+    test("sampleTagFiles reaches past the alphabetical head", () => {
+        // The regression: a slice(0, cap) of a sorted list can only
+        // ever return the first cap entries.
+        const head = new Set(PATHS.slice(0, TAG_FILE_CAP));
+        const beyond = sampleTagFiles(PATHS, TAG_FILE_CAP, rng(3)).filter(
+            (p) => !head.has(p)
+        );
+        expect(beyond.length).toBeGreaterThan(0);
+    });
+
+    test("sampleTagFiles is deterministic for a given rng seed", () => {
+        expect(sampleTagFiles(PATHS, TAG_FILE_CAP, rng(42))).toEqual(
+            sampleTagFiles(PATHS, TAG_FILE_CAP, rng(42))
+        );
+    });
+
+    test("sampleTagFiles leaves its input untouched", () => {
+        const copy = PATHS.slice();
+        sampleTagFiles(PATHS, TAG_FILE_CAP, rng(5));
+        expect(PATHS).toEqual(copy);
+    });
+
+    test("link rolls are not capped — every match is a candidate", () => {
+        // link/linkpath/prop do no file I/O, so the cap doesn't apply
+        // to them at all: notes late in the alphabet must be reachable.
+        const seen = new Set<string>();
+        for (let seed = 1; seed <= 300; seed++) {
+            const bundle = buildInlineBundle("#monster|link", {
+                notePath: "Session/log.md",
+                noteSource: "",
+                source: inMemorySource({}),
+                tagFiles,
+            });
+            seen.add(new Evaluator(bundle.main, bundle.extras, { seed }).run());
+        }
+        const late = [...seen].filter((s) => {
+            const n = Number(s.match(/Note (\d{3})/)?.[1] ?? "0");
+            return n >= TAG_FILE_CAP;
+        });
+        expect(late.length).toBeGreaterThan(0);
+    });
+
+    test("block rolls still cap how many notes they import", () => {
+        // Block rolls read every candidate off disk, so the cap stays.
+        const bundle = buildInlineBundle("#monster", {
+            notePath: "Session/log.md",
+            noteSource: "",
+            source: inMemorySource(
+                Object.fromEntries(PATHS.map((p) => [p, "A block."]))
+            ),
+            tagFiles,
+        });
+        const tagroll = bundle.main.tables.find((t) => t.name === "__tagroll");
+        expect(tagroll?.items).toHaveLength(TAG_FILE_CAP);
     });
 });

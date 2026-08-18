@@ -117,7 +117,18 @@ export function buildInlineBundle(
                     `which isn't available in this context.`
             );
         }
-        const files = opts.tagFiles(tag.filter).slice(0, TAG_FILE_CAP);
+        // Only block rolls are capped: they Use: every candidate
+        // note, so the engine would have to read them all. `link`,
+        // `linkpath` and `prop` build their items from the path and
+        // the metadata cache, so every matching note stays in play.
+        // Callers hand us an already-sampled list (see
+        // makeTagRollLookup) — this slice is the backstop for callers
+        // that don't sample, and is a no-op when they do.
+        const matches = opts.tagFiles(tag.filter);
+        const files =
+            tag.mode === "block"
+                ? matches.slice(0, TAG_FILE_CAP)
+                : matches;
         if (files.length === 0) {
             throw new Error(`No notes found matching ${tag.label}.`);
         }

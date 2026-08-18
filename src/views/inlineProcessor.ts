@@ -33,7 +33,7 @@ import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
 import { discoverReferencedTables } from "../resolver/autoDiscover";
 import {
     makeLinkAwareBasenameResolver,
-    makeTagFilesLookup,
+    makeTagRollLookup,
     makeTagFrontmatterLookup,
     vaultFileSource,
 } from "./vaultFileSource";
@@ -575,15 +575,23 @@ export async function evaluateInlineExpression(
     // Tag rolls (merge Phase 4) inject Use: lines for tagged notes at
     // bundle-build time — after prefetch has already run — so those
     // files must be fetched here and layered onto the sync source.
-    const tagLookup = makeTagFilesLookup(plugin);
     let syncSource: FileSource = prefetch.source;
     const tagCall = parseDirectTagCall(expr);
     // Only block rolls need the candidates' text — link and prop rolls
     // are built entirely from paths and the metadata cache, so reading
-    // up to TAG_FILE_CAP notes off disk would be pure waste.
+    // notes off disk would be pure waste, and they see every match.
+    // Block rolls take a random sample of TAG_FILE_CAP matches: the
+    // note pick happens in the engine, downstream of this, so capping
+    // a sorted match set would confine a big tag to its first notes
+    // alphabetically. The lookup memoises, so the sample drawn for the
+    // prefetch below is the same one buildInlineBundle sees.
+    const tagLookup = makeTagRollLookup(plugin, {
+        cap: tagCall?.mode === "block" ? TAG_FILE_CAP : undefined,
+        seed: opts?.seed,
+    });
     if (tagCall !== null && tagCall.mode === "block") {
         const tagged: Map<string, string> = new Map();
-        for (const p of tagLookup(tagCall.filter).slice(0, TAG_FILE_CAP)) {
+        for (const p of tagLookup(tagCall.filter)) {
             try {
                 tagged.set(p, await vault.adapter.read(p));
             } catch {
