@@ -381,6 +381,73 @@ describe("evaluator: smoke tests for common patterns", () => {
         expect(e.run()).toBe(expected);
     });
 
+    /*
+     * `\a` in front of a table call or a variable. The lookahead used
+     * to walk the UNEVALUATED node list, which could only read literal
+     * text — it stopped at the first call, saw an empty word, and
+     * "aeiou".includes("") is true, so every one of these came out
+     * "an". Now the article is resolved against real output, which
+     * also makes it work across a table boundary.
+     */
+    describe("escape \\a in front of something that has to be rolled", () => {
+        const rolled = (src: string, extra = "") =>
+            new Evaluator(
+                parseGeneratorFile(`Table: T\n${src}${extra}`),
+                [],
+                { seed: 1 }
+            ).run();
+
+        test("before a table call, consonant", () => {
+            expect(rolled("\\a [@Beast]", "\n\nTable: Beast\nweasel")).toBe(
+                "a weasel"
+            );
+        });
+
+        test("before a table call, vowel", () => {
+            expect(rolled("\\a [@Beast]", "\n\nTable: Beast\nogre")).toBe(
+                "an ogre"
+            );
+        });
+
+        test("before a table call, exception word still wins", () => {
+            expect(rolled("\\a [@Beast]", "\n\nTable: Beast\nhour-glass golem")).toBe(
+                "an hour-glass golem"
+            );
+        });
+
+        test("before a variable", () => {
+            expect(rolled("Set: x=weasel\n\\a {$x}")).toBe("a weasel");
+        });
+
+        test("two in one line, judged independently", () => {
+            expect(
+                rolled(
+                    "\\a [@A] beside \\a [@B]",
+                    "\n\nTable: A\nweasel\n\nTable: B\nelf"
+                )
+            ).toBe("a weasel beside an elf");
+        });
+
+        test("resolves across a table boundary", () => {
+            // The article is the whole of one table's item; the noun
+            // arrives from the caller. Only possible because a marker
+            // with nothing after it survives into the parent render.
+            expect(
+                rolled("[@Art] [@Noun]", "\n\nTable: Art\n\\a\n\nTable: Noun\nelf")
+            ).toBe("an elf");
+        });
+
+        test("a trailing \\a with nothing to judge falls back to 'a'", () => {
+            expect(rolled("ends with \\a")).toBe("ends with a");
+        });
+
+        test("survives a filter applied to the rolled text", () => {
+            expect(
+                rolled("\\a [@Beast >> upper]", "\n\nTable: Beast\nogre")
+            ).toBe("an OGRE");
+        });
+    });
+
     test("parameter passing via 'with'", () => {
         const file = parseGeneratorFile(
             "Table: Main\n[@Sub with hello]\nTable: Sub\nyou said: {$1}"

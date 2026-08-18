@@ -121,6 +121,72 @@ export interface FolderDeckHost {
  * and `Shuffle:` targets. Case-insensitive. */
 const FOLDER_DECK_PREFIX = /^deck:\s*/i;
 
+/**
+ * Marker emitted for a `\a` escape, resolved once the rest of the
+ * line has actually been rendered. U+0001 — a control character no
+ * generator would contain, and one that survives the string filters
+ * (`upper`, `trim`, …) intact.
+ */
+const ARTICLE_MARKER = "\u0001";
+
+/**
+ * Replace `\a` markers with "a" or "an", judged from the word that
+ * really follows in the rendered output.
+ *
+ * IPP3 explicitly promises the common English exceptions, so this
+ * isn't a bare vowel check: "an hour", "a university", "an MBA". The
+ * lists are pragmatic rather than exhaustive — they cover the roots
+ * TTRPG authors actually hit (honest merchant, hourly wage, unicorn,
+ * NPC).
+ *
+ * A marker with nothing after it is left in place: the text that
+ * decides it may still be coming from the caller one level up. The
+ * final output pass clears any that never got an answer.
+ */
+export function resolveArticles(s: string): string {
+    if (!s.includes(ARTICLE_MARKER)) return s;
+    return s.replace(
+        new RegExp(ARTICLE_MARKER + "(\\s*)([A-Za-z]+)", "g"),
+        (_m, gap: string, word: string) => articleFor(word) + gap + word
+    );
+}
+
+/** Strip markers that never found a word — a bare `\a` is just "a". */
+export function clearPendingArticles(s: string): string {
+    return s.includes(ARTICLE_MARKER)
+        ? s.split(ARTICLE_MARKER).join("a")
+        : s;
+}
+
+/** "a" or "an" for one following word. */
+function articleFor(rawWord: string): string {
+    const word = rawWord.toLowerCase();
+    // Vowel-spelt words that sound like consonants.
+    const consonantSounding = [
+        "uni", "use", "user", "ubi", "euro",
+        "european", "eulog", "eunuch", "uten",
+        "unif", "unit", "univ", "ufo",
+        "one", "once",
+    ];
+    // Consonant-spelt words that sound like vowels (silent h).
+    const vowelSounding = [
+        "hour", "honest", "honor", "honour",
+        "heir", "herb", // US pronunciation: silent h
+    ];
+    if (consonantSounding.some((x) => word.startsWith(x))) return "a";
+    if (vowelSounding.some((x) => word.startsWith(x))) return "an";
+    // Acronyms said as letter names: F, H, L, M, N, R, S and X all
+    // begin with a vowel sound ("an FBI agent", "an NPC").
+    if (
+        rawWord.length > 1 &&
+        rawWord === rawWord.toUpperCase() &&
+        "FHLMNRSX".includes(rawWord[0])
+    ) {
+        return "an";
+    }
+    return "aeiou".includes(word[0] ?? "") ? "an" : "a";
+}
+
 export class Evaluator {
     private rng: RNG;
     private vars: Map<string, Value> = new Map();
@@ -305,14 +371,16 @@ export class Evaluator {
         // the first/last rep's lines.
         if (this.file.header) out = this.file.header + "\n\n" + out;
         if (this.file.footer) out = out + "\n\n" + this.file.footer;
-        return out;
+        // A `\a` with nothing after it never found a word to judge;
+        // plain "a" is the only sensible answer at the end of the line.
+        return clearPendingArticles(out);
     }
 
     /** Run a specific table by name (for engine introspection / tests). */
     runByName(name: string): string {
         const t = this.tables.get(name.toLowerCase());
         if (!t) throw new Error(`Unknown table: ${name}`);
-        return this.runTable(t, []);
+        return clearPendingArticles(this.runTable(t, []));
     }
 
     /**
@@ -354,7 +422,7 @@ export class Evaluator {
         // resolves (parallels runTable behaviour).
         this.currentItemIndexStack.push(t.items.indexOf(item) + 1);
         try {
-            return this.renderNodes(nodes);
+            return clearPendingArticles(this.renderNodes(nodes));
         } finally {
             this.currentItemIndexStack.pop();
         }
@@ -604,13 +672,9 @@ export class Evaluator {
     private renderNodes(nodes: Node[]): string {
         let out = "";
         for (let i = 0; i < nodes.length; i++) {
-            const piece = this.renderNode(nodes[i], nodes, i);
-            // \a escape needs to look ahead at the rest for vowel detection
-            out += piece;
+            out += this.renderNode(nodes[i], nodes, i);
         }
-        // Post-process: handle \a (a/an) by looking at the next non-whitespace char.
-        // Simpler: handle inline during render; we use a marker character for now.
-        return out;
+        return resolveArticles(out);
     }
 
     private renderNode(n: Node, allNodes: Node[], index: number): string {
@@ -623,74 +687,26 @@ export class Evaluator {
                     case "_": return " ";
                     case "z": return "";
                     case "a": {
-                        // Look ahead to find first non-whitespace
-                        // word to decide a/an. IPP3 docs explicitly
-                        // promise common English exceptions are
-                        // handled — "an hour", "a university",
-                        // "an MBA" etc. — so this isn't just a
-                        // vowel check.
+                        // Deferred: emit a marker and let renderNodes
+                        // decide once the REST OF THE LINE IS RENDERED.
                         //
-                        // Rule:
-                        //   1. If the upcoming word is in the
-                        //      consonant-sounding exceptions list
-                        //      (starts vowel, sounds consonant),
-                        //      use "a".
-                        //   2. If the upcoming word is in the
-                        //      vowel-sounding exceptions list
-                        //      (starts consonant, sounds vowel),
-                        //      use "an".
-                        //   3. Otherwise default to the vowel
-                        //      rule on the first letter.
+                        // The old code peeked at the unevaluated node
+                        // list, which could only see literal text —
+                        // it stopped dead at a table call or a
+                        // variable, so `\a [@creature]` always came
+                        // out "an creature-name" (an empty lookahead
+                        // reads as a vowel). Peeking harder isn't an
+                        // option: evaluating the next node to look at
+                        // it would roll it twice. So we resolve after
+                        // the fact, against real output. See
+                        // resolveArticles below.
                         //
-                        // The lists below are pragmatic, not
-                        // exhaustive. IPP3 includes ~20-30 common
-                        // exception roots; we match the most common
-                        // ones authors actually hit in TTRPG
-                        // generators (honest merchant, hourly wage,
-                        // university campus, MBA, NPC, etc).
-                        const rest = this.peekRest(allNodes, index + 1);
-                        const wordMatch = rest.match(/^\s*([A-Za-z]+)/);
-                        const word = wordMatch ? wordMatch[1].toLowerCase() : "";
-                        const firstCh = word[0] ?? "";
-
-                        // Words beginning with vowels that take "a"
-                        // (consonant-y or eu/u-as-/juː/ sound).
-                        const consonantSounding = [
-                            "uni", "use", "user", "ubi", "euro",
-                            "european", "eulog", "eunuch", "uten",
-                            "unif", "unit", "univ", "ufo",
-                            "one", "once",
-                        ];
-                        // Words beginning with consonants that take "an"
-                        // (silent-H or letter-name-vowel-sound).
-                        const vowelSounding = [
-                            "hour", "honest", "honor", "honour",
-                            "heir", "herb", // US pronunciation: silent h
-                        ];
-
-                        // Single-letter sequences like "MBA", "FBI",
-                        // "NPC", "RPG" — pronounced as letter names.
-                        // Letter-name first-syllable vowel set: F, H, L,
-                        // M, N, R, S, X (all begin with vowel sound
-                        // when said as a letter). If the word is all
-                        // uppercase (likely an acronym) and starts
-                        // with one of these, use "an".
-                        let useAn: boolean;
-                        if (consonantSounding.some(s => word.startsWith(s))) {
-                            useAn = false;
-                        } else if (vowelSounding.some(s => word.startsWith(s))) {
-                            useAn = true;
-                        } else if (
-                            wordMatch &&
-                            wordMatch[1] === wordMatch[1].toUpperCase() &&
-                            wordMatch[1].length > 1 &&
-                            "FHLMNRSX".includes(wordMatch[1][0])
-                        ) {
-                            useAn = true;
-                        } else {
-                            useAn = "aeiou".includes(firstCh);
-                        }
-                        return useAn ? "an" : "a";
+                        // A marker left at the very end of a render
+                        // survives into the parent's output and is
+                        // resolved there, which is what makes
+                        // `[@article] [@noun]` work across a table
+                        // boundary.
+                        return ARTICLE_MARKER;
                     }
                     case "literal": return n.literal ?? "";
                 }
