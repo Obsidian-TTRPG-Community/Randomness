@@ -17,28 +17,43 @@ version: everything, in one searchable page.
 Prefer to dive straight in:
 
 1. Open **Settings → Randomness**.
-2. Type a folder name in **Generator root** (e.g. `Generators`).
-3. Click **Create folder**, then **Add examples**. This drops
-   five small `.rdm` files into the folder, each demonstrating
-   a different feature with heavy comments.
-4. Open a note and add a fenced codeblock with the language tag
-   `randomness` containing a table call like `[@TavernName]`,
-   then click the codeblock to roll. Try `[@MonsterEncounter]`,
-   `[@Shop]`, or `[@TreasureHoard]` to see the other examples.
+2. Type a folder name in **Generator root** — the folder
+   Randomness searches for your generators (e.g. `Generators`).
+3. Click **Create folder**, then **Add examples**. This creates a
+   `Randomness Examples` sub-folder holding five small `.rdm`
+   files, three walkthrough notes and a `Start Here` note — every
+   one heavily commented.
+4. Open a note and add a fenced codeblock like this one:
 
-For the exact markdown syntax of a fenced codeblock, see
-**Calling from notes** below.
+````text
+```randomness
+[@TavernName]
+```
+````
+
+The block rolls as soon as the note renders — clicking it does
+nothing. The 🎲 Reroll button under the result gives you another.
+`[@Shop]` works the same way. `[@MonsterEncounter]` and
+`[@TreasureHoard]` ask a question first, and a codeblock only
+shows questions it declares itself. Called from a codeblock those
+two come back with blanks where the answers should be, so open
+**03-monster.rdm** or **05-treasure-dictionary.rdm** directly to
+try them.
+
+More on codeblocks and inline calls in **Calling from notes**
+below.
 
 The rest of this document explains the syntax used by those
 examples (and by any community generator you'd pick up).
 
 ## File structure
 
-Generators live in `.rdm` files (or fenced `randomness`
-codeblocks inside notes). Files with the older `.ipt` extension
+Generators live in `.rdm` files, or in fenced `randomness`
+codeblocks inside notes. Files with the older `.ipt` extension
 are read exactly the same way — existing generator libraries
-keep working without changes; new files should use `.rdm`. Each file starts with optional
-directives, then one or more tables.
+keep working without changes; new files should use `.rdm`.
+
+A file is optional directives, then one or more tables.
 
 ```text
 Title: My Generator
@@ -55,17 +70,49 @@ Farewell
 See you soon
 ```
 
-Directives recognised:
+File-level directives, all optional, all before the first
+`Table:`:
 
-- **Title:** display name used in the browser pane and tabs.
-- **Formatting:** `html` (default) lets filters emit `<b>`,
-  `<i>` etc. `text` makes them use plain-text equivalents.
-- **MaxReps:** default repetition count when the caller doesn't
-  specify (see "Repetitions" below).
+- **Title:** display name for the file in the browser pane (the
+  sidebar list of your generators) and in table-name
+  autocomplete. Tabs always show the filename.
+- **Formatting:** `html` (the default, changeable in Settings)
+  lets filters emit `<b>`, `<i>` etc. `text` makes them use
+  plain-text equivalents — see **Filters**.
+- **MaxReps:** how many times a whole-file roll repeats the main
+  table (see **Repetitions**).
 - **Use:** import another `.rdm` file's tables into this one's
-  scope. Path is resolved relative to this file's folder, then
-  to the configured Generator Root, then as a vault-absolute
-  path.
+  scope. The path is tried in order: relative to this file's
+  folder, then `Common/` inside the configured **Generator
+  root**, then the Generator root itself, then as a path from the
+  top of your vault. A bare filename with no folder also falls
+  back to a vault-wide lookup — see **Referencing generators by
+  name**.
+- **Header:** / **Footer:** text placed before and after a
+  whole-file roll's output.
+
+These work anywhere:
+
+- **Set:** / **Define:** a variable — see **Variables**. Before
+  the first `Table:` they're file-wide and run once; inside a
+  table they run again every time that table rolls.
+- **Prompt:** a question shown above the result — see
+  **Prompts**.
+
+These belong to the table above them rather than to the file:
+
+- **Type:** `Lookup` or `Dictionary` — see those sections.
+- **Roll:** the dice a lookup table rolls on.
+- **Default:** the text to use when a lookup roll or a dictionary
+  key matches nothing.
+- **Shuffle:** the name of a table whose deck is reset every time
+  this table is rolled.
+- **Deck:** `persistent` or `session` — whether this table's deck
+  picks are remembered beyond the current roll.
+- **Flip:** a percentage; on each deck pick it sets `{$facing}`
+  to `reversed` that often and `upright` the rest of the time.
+- **EndTable:** close the table early. Lines after it start a new
+  unnamed one.
 
 ## Tables and items
 
@@ -82,11 +129,34 @@ Heavy storm with thunder
 Bitter wind from the north
 ```
 
-Items are sampled uniformly at random. Blank lines and lines
-starting with `//` are comments and ignored.
+Lines before the first `Table:` form an unnamed main table of
+their own. That is why a codeblock containing nothing but
+`[@TavernName]` rolls: the codeblock is itself a one-item table.
 
-**Live** — this block defines its tables right in the note and
-rolls them (hit the codeblock's edit icon to see the source):
+Items are picked at random, each equally likely — unless an item
+begins with a number and a colon, which sets its **weight**:
+
+```text
+Table: road_meeting
+5: a wandering merchant    // picked five times as often
+1: a wyvern                // as this one
+a goblin patrol            // no number means a weight of 1
+```
+
+The `5:` never reaches the output, which is a trap for an item
+that genuinely starts that way: `1975: the year of the comet`
+rolls as *the year of the comet* with a weight of 1975. Escape
+the colon — `1975\: the year of the comet` — to keep the number.
+
+Blank lines are skipped. A line whose first non-space character
+is `//`, `#` or `;` is a comment, and `//` also comments out the
+rest of any line it appears in. That last one bites: an item
+containing `http://example.com` is cut short at `http:`. Escape
+it as `http:\/\/example.com`.
+
+**Live** — this block defines two tables right in the note and
+rolls the first one (hit the codeblock's edit icon to see the
+source):
 
 ```randomness
 Table: Greeting
@@ -119,27 +189,36 @@ the ruins of an old chapel
 a creaking wooden bridge
 ```
 
-Rolling `encounter` might give:
+Rolling `encounter` — by opening the file, or by calling
+`[@encounter]` from a codeblock — might give:
 *"The party meets a wandering merchant in a sunlit clearing."*
 
-The text between brackets can include literal text and other
-calls. Calls nest freely — `[@creature]` can itself call other
-tables, which can call others, and so on.
+A table item can mix plain words with calls, and calls nest
+freely: `[@creature]` can itself call other tables, which can
+call others, and so on.
 
 ### Call variations
 
 | Syntax | What it does |
 | --- | --- |
 | `[@table]` | Roll the table once, insert the result. |
-| `[@N table]` | Roll the table `N` times and run the results together. Add `>> implode` for a separator. |
+| `[@N table]` | Roll the table `N` times and join the results with nothing between them. Add `>> implode` for a separator. |
 | `[@{1d4} table]` | Roll `N` from dice, then roll the table that many times. |
-| `[#N table]` | Pick item number `N` (no roll — deterministic). |
+| `[#N table]` | Pick item number `N`, counting from 1 (no roll — deterministic). A number past the end gives an empty result. |
 | `[#table]` | Pick the item at the *current* item's position — for cross-indexing parallel tables. Only meaningful inside a table item. |
-| `[#<key> table]` | Pick the entry whose key matches `<key>` (dictionary tables). |
+| `[#<key> table]` | Pick the entry whose key matches `<key>` — see **Dictionary tables**. |
 | `[#"key with spaces" table]` | Same, when the key contains whitespace or punctuation. |
-| `[!table]` | Deck pick — don't repeat items until the table's exhausted. |
-| `[!N table]` | Deck pick `N` items without duplicates. |
-| `[|a|b|c]` | Inline table — pick one of `a`, `b`, `c` at random. |
+| `[!table]` | Deck pick — no item repeats until the table runs out, after which further picks come back empty. The deck refills at the start of each roll. |
+| `[!N table]` | Deck pick `N` items with no duplicates. Asking for more than the table holds gives you the whole table and nothing more. |
+| `[|a|b|c]` | Inline table — pick one of `a`, `b`, `c` at random. Options are taken exactly as written, so don't pad the `|` with spaces. |
+
+Table names may contain spaces, and they match without regard to
+case — `[@Weather]` and `[@weather]` are the same call. The
+`[#…]` forms split only the **first** token off as the index or
+key, so `[#2 my table]` still finds `my table`. What can't hold a
+space is the *key*: `[#Knight Bachelor titles]` reads `Knight` as
+the key and goes looking for a table called `Bachelor titles`.
+Quote a spaced key — see **Dictionary tables**.
 
 Examples:
 
@@ -165,11 +244,11 @@ First in line: [@1 hero]. Second: [@1 hero]. Third: [@1 hero].
 > between the results, say so with `implode`:
 >
 > ```text
-> [@4 hero >> implode]           a, b, c, d   (the default glue is ", ")
-> [@4 hero >> implode \n]        one per line
-> [@4 hero >> implode \n\n]      one per paragraph (a blank line between)
-> [@4 hero >> implode <br>]      one per line, in html formatting
-> [@4 hero >> implode ;\_]       a; b; c; d
+> [@4 hero >> implode]        // a, b, c, d — default glue is ", "
+> [@4 hero >> implode \n]     // one per line
+> [@4 hero >> implode \n\n]   // one per paragraph (blank line between)
+> [@4 hero >> implode <br>]   // one per line, in html formatting
+> [@4 hero >> implode ;\_]    // a; b; c; d
 > ```
 >
 > A filter's argument is **trimmed**, and it is never quoted — the
@@ -187,7 +266,8 @@ never joined at all.
 ## Dice
 
 `{NdN}` rolls dice. `{2d6}` rolls two six-siders and sums them.
-Modifiers and arithmetic work as you'd expect.
+Modifiers and arithmetic work as you'd expect. A fractional die
+count rounds up: `{2.5d6}` rolls three dice.
 
 > **Inline shortcut.** Inside generator text the braces are what
 > tell dice from prose, but an inline call that is *nothing but* a
@@ -196,6 +276,11 @@ Modifiers and arithmetic work as you'd expect.
 > is still literal text, because there the words could be the
 > point. An omitted die count is filled in, so `` `rdm:d20` ``
 > works for anyone used to that from `dice:` spans.
+>
+> That fill-in belongs to the shortcut, not to the braces. Inside
+> `{…}` the count is required, and leaving it off fails silently:
+> `{d20}` rolls nothing and renders as an empty string. Write
+> `{1d20}`.
 
 ```text
 Table: damage
@@ -212,7 +297,7 @@ Dice expressions can be used as repetition counts:
 
 ```text
 Table: ambush
-A pack of {1d6+1} wolves appears, and [@{1d3} reaction].
+A pack of {1d6+1} wolves appears, and [@{1d3} reaction >> implode ;\_].
 
 Table: reaction
 they snarl and circle
@@ -220,26 +305,43 @@ they freeze and watch
 they charge immediately
 ```
 
+The `implode` is not decoration — see the warning under **Call
+variations**.
+
 ### Dice modifiers
 
-(Added in the Dice Roller merge.) Suffixes attach directly to a
-dice term — no spaces:
+(Added in v1.3.0, the Dice Roller merge.) Suffixes attach directly
+to a dice term — no spaces. Where a suffix takes a count, leaving
+the count off means 1.
 
 | Suffix | Meaning |
 | --- | --- |
-| `k` / `kh2` | Keep highest (1, or the given count). |
-| `kl2` | Keep lowest. |
-| `dl1` / `dh1` | Drop lowest / highest. |
-| `!` / `!3` / `!i` | Explode: extra die per max roll, chained up to N times (`i` ≈ 100). `!!` works too. |
-| `r` / `r3` / `ri` | Re-roll minimum rolls, up to N times. |
-| `s` / `sd` | Sort results ascending / descending. |
-| `u` | Re-roll until all results are unique. |
-| `cs>=5` | Count successes: each die scores +1 if it meets a condition, −1 on `-=N`, else 0. |
+| `k` / `kh2` | Keep the highest die, or the highest N. Everything else is dropped from the total. |
+| `kl` / `kl2` | Keep the lowest die, or the lowest N. |
+| `dl1` / `dh1` | Drop the lowest / highest N dice. |
+| `!` / `!3` / `!i` | Explode: every die showing its highest face rolls an extra die, chained up to N more times (`i` means "keep going", capped at exactly 100). `!!` is accepted as a synonym — unlike Dice Roller, it does **not** merge the chain into one die. |
+| `r` / `r3` / `ri` | Re-roll any die showing its *lowest* face, up to N times. Lowest means 1 on a `d6`, −1 on `dF`, the range minimum on `d[3,5]`. |
+| `s` / `sa` / `sd` | Sort the dice for display — ascending (`s`, `sa`) or descending (`sd`). The total is unchanged and keep/drop still picks by value, so this shows up only in the breakdown. |
+| `u` | Re-roll duplicates until every die shows a different face. Needs at least as many faces as dice, so an impossible ask like `{7d6u}` is silently left alone. |
+| `cs>=5` | Count successes instead of summing: `{6d6cs>=5}` is how many dice rolled 5 or more. Each kept die scores +1 if it meets any condition written after `cs`, −1 for a `-=N` condition, and 0 otherwise. |
 
 Explode and re-roll take an optional condition that replaces
 their default trigger: `{1d6!i=!3}` explodes anything that isn't
-a 3; `{1d4r<3}` re-rolls 1s and 2s once. Conditions chain and
-any match counts (`{3d6cs>=5-=1}`).
+a 3; `{1d4r<3}` re-rolls 1s and 2s once.
+
+A condition is an operator plus a number: `=N`, `=!N` (not N),
+`>N`, `<N`, `>=N`, `<=N`, and — for `cs` only — `-=N` (also
+spelled `=-N`) to subtract a success. Conditions chain, and for
+explode and re-roll any match triggers. In `cs` a `-=` condition
+is checked first and wins: in `{4d6cs>=1-=1}` a 1 matches both
+clauses and scores −1, not +1.
+
+Suffixes apply in a fixed order, not the order you wrote them in.
+Explode, re-roll, unique and sort run in written order; keep/drop
+always runs last, over whatever dice exist by then; `cs` scores
+last of all, ignoring dropped dice. So `{4d6dl1!}` and `{4d6!dl1}`
+are the same roll, and both drop the lowest of the *five* dice an
+explosion left behind.
 
 ```text
 Table: stats
@@ -252,34 +354,45 @@ Table: shadowrun
 {6d6cs>=5} hits.
 ```
 
-> **Note.** A comparison written against a dice *sum* still works
-> the IPP3 way: `{3d6>=10}` is 1 when the total is ten or more.
-> Success counting only happens with the explicit `cs` marker.
+> **Note.** In `rdm:` calls and generator text, a comparison
+> written against a dice *sum* works the IPP3 way: `{3d6>=10}` is
+> 1 when the total is ten or more, and success counting needs the
+> explicit `cs` marker. A `dice:` span reads a bare condition
+> Dice Roller's way instead — there `dice:3d6>=5` counts hits.
+> See **Dice Roller compatibility**.
 
 ### Special dice
 
 | Syntax | Meaning |
 | --- | --- |
 | `{1d%}` | Percentile — d100. |
-| `{1d66%}` | Digit dice: one die per digit (d6, d6), read as digits (Traveller d66). |
+| `{1d66%}` | Digit dice: each digit of the number before the `%` becomes its own die, and the faces are read as digits rather than added. `1d66%` rolls two d6 and gives 11–66 (the Traveller d66). Keep the count at 1 — `{2d66%}` rolls two of them and *sums* the results. |
 | `{4dF}` | Fudge/Fate dice — each die is −1, 0, or +1. |
-| `{1d[3,5]}` | Custom face range — a die that rolls 3–5. |
+| `{1d[3,5]}` | Custom face range — a die that rolls 3–5. Negative bounds are fine: `{1d[-2,2]}`. |
 
-Modifiers work on these too: `{4dF!}` explodes +1s,
-`{2d[3,5]kh}` keeps the higher of two range dice. (`1d[@table]`
-still means "sides from a table roll", as before — a face range
-is recognised only when the brackets hold exactly `min,max`.)
+Modifiers work on percentile, Fudge and range dice: `{4dF!}`
+explodes +1s, `{2d[3,5]kh}` keeps the higher of two range dice.
+Digit dice are the exception — `{1d66%}` takes no modifiers at
+all, and `{2d66%kh}` is a syntax error. (`1d[@table]` still means
+"sides from a table roll", as before — a face range is recognised
+only when the brackets hold exactly `min,max`.)
 
 ### Seeing what each die rolled
 
-Hover any inline roll for the per-die breakdown —
+Hover any inline roll that rolled dice for the per-die breakdown —
 `4d6dl1 → 5, 3, (1), 6` (dropped dice in parens, explosions
-marked `!`, re-rolls `r`). To put the faces right in the visible
-result — `13 (7, 6)`, the Ironsworn challenge-dice case — turn on
-**Settings → Randomness → Show dice breakdown**, or add the
-`|dice` flag to an individual `dice:` span. Locking commits the
-faces when they're visible, so the record survives in the note.
-The dice tray shows the same breakdown under each history row.
+marked `!`, re-rolls `r`).
+
+To put the faces right in the visible result — `13 (7, 6)`, the
+Ironsworn challenge-dice case — turn on **Settings → Randomness →
+Show dice breakdown**, or add the `|dice` flag to an individual
+`dice:` span. One exception: when a roll has a single kept die and
+that die *is* the result, the faces are left off, because
+`14 (14)` helps nobody.
+
+Locking commits the faces when they're visible, so the record
+survives in the note. The dice tray shows the same breakdown under
+each history row.
 
 ### Seeing the formula next to the result
 
@@ -303,19 +416,25 @@ of a lock is the value you rolled.
 The `Set:` directive assigns a value to a variable. Reference it
 later with `{$name}` or just `{name}`. Names are
 **case-insensitive** — `{$Name}`, `{$name}`, and `{$NAME}` all
-refer to the same value.
+refer to the same value. A name that was never set renders as
+nothing at all — no error, no placeholder — so a typo in
+`{$naem}` shows up as a silent gap in the text.
 
 ```text
 Table: introduction
 Set: name=[@first_name]
 Set: class=[@class]
-{$name} the {$class} steps forward.
-"I am {$name}!" they declare.
+{$name} the {$class} steps forward. "I am {$name}!" they declare.
 ```
 
-`Set:` is **quiet by default** — assigning a variable doesn't
-emit anything. Use it to compute values once and reference them
-multiple times, like consistent character names across an output.
+`Set:` never emits anything — assigning a variable is silent. Use
+it to compute a value once and reference it several times, like a
+character name that has to stay the same across an output.
+
+`Define:` is the lazy twin of `Set:`. `Set: s={1d6}` rolls once
+and reuses that number; `Define: r={1d6}` re-rolls every time you
+write `{$r}`. Use `Set:` for a value that must hold still, and
+`Define:` for a shorthand you want re-rolled at each mention.
 
 ### Variable arithmetic
 
@@ -325,64 +444,109 @@ When a variable holds a numeric value, you can do math on it inside
 ```text
 Set: str=15
 Set: dex=12
-STR mod = {({$str} - 10) / 2}
+STR mod = {floor(({$str} - 10) / 2)}
 Total = {{$str} + {$dex}}
 ```
 
-Variables that look numeric (like `15`) are treated as numbers
-when added; explicit string literals (`'15'`) stay strings and
-concatenate.
+Values that look numeric — `15`, or a variable set to `15` — are
+numbers. `+` concatenates only when **both** sides are non-numeric
+strings: `{'15' + '12'}` is `1512`, but `{'15' + 12}` is `27` and
+`{12 + '15'}` is `27`. Quotes written in a `Set:` are stored
+literally — `Set: s='15'` holds `'15'`, quotes and all — so put
+the quotes in the expression, not in the assignment.
 
 ### Functions
 
-A few functions are available inside `{...}`:
+A few functions are available inside `{...}`. Names are
+case-insensitive, so `MAX(1,2)` works as well as `max(1,2)`.
 
 | Function | What it does |
 | --- | --- |
-| `if(cond, a, b)` | `a` when `cond` is non-zero, else `b`. |
+| `if(cond, a, b)` | `a` when `cond` is non-zero, else `b`. All three arguments are required. |
 | `max(…)` / `min(…)` | Largest / smallest of the arguments. |
-| `abs(n)`, `sign(n)`, `sqrt(n)` | The usual arithmetic. |
-| `round(n)`, `floor(n)`, `ceil(n)` | Rounding. |
-| `length(s)`, `trim(s)`, `substr(s, start, len)` | String helpers (`substr` is 1-indexed). |
+| `abs(n)`, `sign(n)`, `sqrt(n)` | Absolute value; −1 / 0 / 1; square root. `sqrt` of a negative number writes the literal text `NaN` into your note. |
+| `round(n)`, `floor(n)`, `ceil(n)` | Nearest / down / up. Halves round *upward*, so `round(2.5)` is 3 but `round(-2.5)` is −2. |
+| `length(s)`, `trim(s)`, `substr(s, start, len)` | String helpers. `length` trims first, so `length('  ab  ')` is 2. `substr` is 1-indexed; omit `len` (or pass 0) for the rest of the string. |
 | `count(Table)` | How many items a table has. |
 
+Division by zero yields 0 rather than an error: `{15 / 0}` is `0`.
+
 `count()` is the odd one out: its argument is a table **name**, not
-a value, so it isn't evaluated as arithmetic. `count(npcs.Job)`,
-`count("a name with spaces")` and `count({$whichTable})` all work.
-It counts items, so a lookup table with two range rows counts 2 —
-not the size of its dice formula. Counting a table that doesn't
-exist is an error, just like rolling one.
+a value, so it isn't evaluated as arithmetic. The name is taken
+literally, dots and spaces and all, so `count(npcs.Job)` finds a
+table *called* `npcs.Job` — not a `Job` table inside `npcs.rdm`.
+There is no file qualification anywhere; imported tables keep their
+own names. `count("a name with spaces")` and `count({$whichTable})`
+work too. It counts items, so a lookup table with two range rows
+counts 2 — not the size of its dice formula. Counting a table that
+doesn't exist is an error, just like rolling one.
 
 Its main use is rolling an index that stays valid as a table grows:
 `{1d{count(npcs)}}`.
 
 ## Filters
 
-`>>` applies a filter to the result of a call. Filters chain
-left-to-right.
+`>>` applies a filter to whatever is in the brackets before it —
+a table call, a deck pick, an inline table, a variable, or plain
+text. Filters chain left-to-right.
+
+> [!warning] A filter that doesn't exist does nothing, silently
+> An unrecognised filter name is ignored: the value passes through
+> unchanged, with no error and no warning anywhere. An argument in
+> the wrong shape fails the same quiet way — `replace a/b` (no
+> leading `/`) is a no-op, and `eachchar upper` returns an empty
+> string. So when a filter looks like it isn't running, check the
+> name and the argument shape against the list below before
+> assuming you've found a bug.
+
+Given a `Table: creature` whose only item is `goblin`:
 
 ```text
-[@creature >> upper]            // SHOUTS THE CREATURE NAME
-[@name >> proper]               // Title-cases the name
-[@5 items >> sort >> implode]   // sort, then join with ", "
-[@village >> a]                 // "a village" or "an oasis"
+[@creature >> upper]                  GOBLIN
+[@creature >> proper]                 Goblin
+[@creature >> reverse]                nilbog
+[@creature >> length]                 6
+[@creature >> left 3]                 gob
+[@creature >> substr 2 3]             obl
+[@creature >> replace /gob/hob/]      hoblin
+[@3 creature >> implode]              goblin, goblin, goblin
+[@3 creature >> implode \n]           one goblin per line
 ```
 
-Common filters:
+Every filter the engine has:
 
-- **upper / lower** — case conversion
-- **proper** — Title Case
-- **bold / italic / underline** — wrap in `<b>`/`<i>`/`<u>`
-- **sort** — sort alphabetically (multi-rep results)
-- **implode \<glue\>** — join multi-rep results with the glue string.
-  With no glue the join is `, `. The glue is trimmed and taken
-  literally, so use `\n` / `\t` / `\_` for whitespace and don't
-  quote it
-- **replace \<from\>/\<to\>** — substring replace
-- **trim** — strip leading and trailing whitespace
-- **left N / right N / mid N M** — substring extraction
-- **eachchar \<filter\>** — apply a filter to each character
-- **a** — prefix "a" or "an" based on what follows
+| Filter | What it does |
+| --- | --- |
+| `upper` / `lower` | Case conversion. |
+| `proper` | Title Case. |
+| `bold` / `italic` / `underline` | Wrap in `<b>` / `<i>` / `<u>`. Under `Formatting: text` they fall back to `BOLD`, `*italic*` and `"underline"`. |
+| `trim` / `ltrim` / `rtrim` | Strip whitespace from both ends / the left / the right. |
+| `reverse` | Reverse the characters. |
+| `length` | How many characters, as a number. |
+| `left N` / `right N` | The first / last `N` characters. With no `N`, one character. |
+| `substr N M` | `M` characters starting at position `N`, counting from 1. With no `M`, one character; with `M` of `0`, everything from `N` onwards. There is no `mid`. |
+| `at <text>` | Where `<text>` starts, counting from 1 — or `0` if it isn't there. |
+| `replace /<from>/<to>/` | Replace every occurrence. The leading `/` is required; without it the filter does nothing. Either half may contain spaces; write a literal `/` as `\/`. |
+| `+-` (or `plusminus`) | Sign a number: `3` → `+3`, `-3` → `-3`. Anything that isn't a number passes through. |
+| `sort` | Sort a multi-result value alphabetically. |
+| `implode <glue>` | Join a multi-result value with `<glue>`. |
+| `each <table>` | Run every result through `<table>`, which receives it as `{$1}`. |
+| `eachchar <table>` | The same, but one call per character. |
+
+A **multi-result value** is what `[@N table]` and `[!N table]`
+produce. `sort` and `implode` are the two filters that see those
+results as a list rather than as one run-together string; on a
+single result they do nothing.
+
+`implode` with no glue joins with `, `. The glue is **trimmed**
+and never quoted, so `implode ", "` puts the quote marks in the
+result and `implode ; ` loses its trailing space. Write whitespace
+as `\n`, `\t` or `\_` — `implode ;\_` gives `a; b; c`. The full
+set of glues is under "Call variations".
+
+`each` and `eachchar` take a **table name**, not a filter name.
+Naming a filter, or a table that doesn't exist, returns empty text
+without complaining.
 
 ## Repetitions
 
@@ -397,18 +561,21 @@ name inside the brackets:
 ```
 
 A repeated call inserts **nothing** between the results on its own —
-see the warning under "Call variations". Reach for `implode` (or
-`sort >> implode`) whenever the results should be visually separate.
+reach for `implode` (or `sort >> implode`) whenever they should be
+visually separate. The full list of glues is under **Call
+variations**.
 
-The file's `MaxReps:` directive caps the repetition count,
-useful when authors want to allow variable reps but prevent a
-runaway `[@100 expensive_table]`.
+`MaxReps:` does **not** cap a `[@N table]` call. A runaway
+`[@100 expensive_table]` rolls a hundred times whatever the
+directive says, and nothing else in the plugin caps it for you.
+What `MaxReps:` sets is how many times a *whole-file* roll repeats
+the main table — see the next section.
 
 ### `MaxReps:` is the one automatic separator
 
-`MaxReps: N` (or an API/browser roll that asks for `N`) repeats the
-file's **main table** rather than a sub-table call, and those reps
-*are* separated by a blank line, so each one reads as its own block:
+`MaxReps: N` repeats the file's **main table** rather than a
+sub-table call, and those reps *are* separated by a blank line, so
+each one reads as its own block:
 
 ```text
 MaxReps: 3
@@ -426,23 +593,52 @@ Rolling that file gives three descriptions with a blank line between
 them. The two behaviours are different on purpose: a whole-file roll
 is standalone output, while `[@3 Altar]` is almost always embedded in
 a sentence, where an injected blank line would be wrong. If you want
-a different separator on a whole-file roll, wrap the body in a
-sub-table and call it with `implode`.
+a different separator on a whole-file roll, **drop `MaxReps:`** and
+move the repetition into the main table instead:
+
+```text
+Table: Main
+[@3 Altar >> implode \n---\n]
+
+Table: Altar
+A [|cracked|mossy|gilded] altar to [@Deity].
+```
+
+Leaving `MaxReps: 3` in the file as well repeats the whole thing
+three times over — nine altars, not three.
 
 ## Conditionals
 
 `[when]condition[do]...[else]...[end]` — render the `do` branch
-if the condition is truthy, otherwise the `else` branch. Variables
-and dice work inside conditions, and `else` is optional.
+when the condition holds, otherwise the `else` branch. A
+condition containing a comparison holds when the comparison is
+true. A condition without one — just `[when]{$flag}[do]…` —
+holds when the value is anything other than empty or `0`.
+Variables, dice and table calls all work inside conditions,
+`else` is optional, and `[when not]` inverts the test.
 
 ```text
 Set: roll={1d6}
 [when]{$roll}>3[do]A high roll: {$roll}.[else]A low roll: {$roll}.[end]
 ```
 
+> [!warning] Conditionals do **not** nest
+> The parser matches a `[when]` to the *first* `[end]` it finds, so
+> an inner conditional either raises
+> `[when] without matching [do]/[end]` or leaks the literal text
+> `[else]…[end]` straight into your note. The second failure is the
+> nasty one: no error, just markup in the output. Put the inner
+> test in its own table and call that:
+>
+> ```text
+> [when]{$a}>3[do][@heavy_or_light][else]small[end]
+> ```
+
 Comparison operators inside conditions: `=`, `<>`, `<`, `>`,
 `<=`, `>=`. Numeric comparison happens when both sides look
-numeric; otherwise string comparison.
+numeric; otherwise string comparison. String comparison is
+case-sensitive and runs character by character, so `Easy` and
+`easy` are different values and `apple` sorts before `banana`.
 
 ```text
 Prompt: Difficulty {Easy|Hard} Easy
@@ -476,9 +672,13 @@ through as a wiki-link.
 
 ## Lookup tables
 
-A regular table picks one item uniformly. A **lookup table** rolls
-dice and picks the item whose range covers the result. Use
-`Type: Lookup` and give each item a range prefix `N-M:`.
+A regular table picks one item at random, honouring any weights —
+an item written `20: common` is twenty times as likely as one
+written `1: rare`. A **lookup table** instead rolls dice and picks
+the item whose range covers the result. Use `Type: Lookup` and
+give each item a range prefix: `N-M:` for a span, or a bare `N:`
+for a single value. Leading zeros are fine (`01-50:`). On a lookup
+table a bare `N:` is a range of one, not a weight.
 
 ```text
 Table: rarity
@@ -522,17 +722,33 @@ Set: armor_kind=[|light|medium|heavy]
 Wearing {$armor_kind} armor: [#{$armor_kind} armor_bonus]
 ```
 
-Keys with spaces, hyphens, or punctuation need to be quoted:
+Only **spaces** force quoting — the key is split from the table
+name at the first space. Hyphens, apostrophes and other
+punctuation are fine bare (`[#half-elf traits]`). Quote a literal
+key that contains spaces:
 
 ```text
-Set: rank=Knight Bachelor
-Title bonus: [#"Knight Bachelor" titles]
-
 Table: titles
 Type: Dictionary
 Knight Bachelor: +1 reputation in court
 Knight Commander: +3 reputation, 2 retainers
+
+[#"Knight Bachelor" titles]     +1 reputation in court
 ```
+
+Quotes and variables don't mix. A quoted key is taken literally,
+so `[#"{$rank}" titles]` hunts for a key spelled `{$rank}` and
+returns nothing at all — no error, just a gap in the text. Write
+it unquoted: a `{…}` reference counts as one token even when its
+value contains spaces.
+
+```text
+Set: rank=Knight Bachelor
+[#{$rank} titles]               +1 reputation in court
+```
+
+Key matching ignores case, so `[#LIGHT armor_bonus]` finds
+`light:`.
 
 ## Prompts
 
@@ -552,6 +768,12 @@ Table: hero
 The dropdown shows the listed options; the value after `}` is the
 default. Users can change it in the UI and the codeblock re-rolls
 with the new value.
+
+When the label is a single word, the choice is *also* available
+under that name: `Prompt: Race {Human|Elf|Dwarf|Halfling} Human`
+fills both `{$Prompt1}` and `{$Race}`. Prefer the named form —
+inserting a prompt above an existing one renumbers every
+`{$PromptN}` below it, and nothing warns you.
 
 ## Obsidian wiki-syntax — images and links
 
@@ -585,13 +807,15 @@ Variables work inside the brackets, so you can build dynamic
 embeds:
 
 ```text
-!set monster=goblin
+Set: monster=goblin
 ![[images/{monster}.png]]
 ```
 
-If the file doesn't exist in the vault, the link renders as a
-muted dashed-underline span (matching Obsidian's own unresolved-
-link affordance) — it doesn't crash.
+If the target doesn't exist in the vault, nothing crashes. A
+missing image (`![[gone.png]]`) renders as a muted dashed-underline
+span showing the text you wrote. A missing note link (`[[Gone]]`)
+renders as an ordinary Obsidian unresolved link — still clickable,
+and still creating the note the way any unresolved link does.
 
 ## Calling from notes
 
@@ -606,8 +830,9 @@ Use: my-generator.rdm
 ```
 ````
 
-The codeblock both rolls AND brings `my-generator.rdm` into
-the note's scope so inline calls below can reference its tables.
+The codeblock both rolls AND brings `my-generator.rdm` into the
+note's scope, so inline calls anywhere in the note — above the
+codeblock as well as below it — can reference its tables.
 
 **Live** — this codeblock defines a table, and the inline call in
 the sentence below it finds that table through note scope:
@@ -631,9 +856,10 @@ inline calls work anywhere in the note:
 You meet `rdm:[@creature]` on the road.
 ````
 
-Inline calls get **reroll** (🎲) and **lock** (🔒) buttons. Lock
-commits the result into the source text so it survives reloads;
-reroll on a locked call strips the lock.
+An unfilled inline call gets a **re-roll** (🎲) and a **lock** (🔒)
+button. Lock commits the result into the source text so it
+survives reloads. A locked call shows one button instead —
+**unlock** (🔓) — which strips the lock and shows a fresh preview.
 
 > Inline calls don't accept their own `Use:` directive — the
 > syntax inside the brackets is the expression body only. Use a
@@ -642,9 +868,10 @@ reroll on a locked call strips the lock.
 
 ## Rolling on note content
 
-(Added in the Dice Roller merge.) Ordinary markdown tables and
-lists in your notes are rollable — no `.rdm` file needed. Give the
-block an Obsidian **block id** on the line below it:
+(Added in v1.3.0, the Dice Roller merge.) Ordinary markdown tables
+and lists in your notes are rollable — no `.rdm` file needed. Give
+the block an Obsidian **block id** — a `^name` line just after it,
+with up to two blank lines in between:
 
 ```text
 | Tavern |
@@ -655,19 +882,29 @@ block an Obsidian **block id** on the line below it:
 ^taverns
 ```
 
-Then roll it three ways:
+Then roll it four ways:
 
 - **Inline, direct:** `` `rdm:[[Note^taverns]]` `` — rolls a random
-  row, with the usual 🔒/🎲 buttons. Locks work exactly as for any
-  other inline call.
+  row, with the usual 🎲/🔒 buttons (🔓 once locked). Locks work
+  exactly as for any other inline call.
+- **From the same note** — a block-id table is already in scope for
+  inline calls in the note that holds it, so `` `rdm:[@taverns]` ``
+  works with no `Use:` line anywhere.
 - **From a codeblock or generator:** `Use: [[Note]]` brings every
-  block-id table in that note into scope, then `[@taverns]` (and
-  `[@3 taverns]`, filters, deck picks…) works as usual.
+  block-id table in that note into scope, then `[@taverns]`,
+  `[@3 taverns]`, filters like `>> upper` and deck picks like
+  `[!2 taverns]` all work as usual.
 - **From another cell or table** — cells are raw generator syntax,
   so a cell can contain `{2d6}` or `[@OtherTable]` and it evaluates
   on the way out. Nested rollers come for free.
 
 Without a block id a table isn't rollable — the id is its name.
+
+A `[[Note^id]]` roll has to be the *whole* inline expression:
+`` `rdm:You find [[Note^loot]].` `` prints itself rather than
+rolling. To wrap prose around a roll, bring the note into scope
+with `Use: [[Note]]` and write `` `rdm:You find [@loot].` ``
+instead — `[@…]` calls compose freely inside one span.
 
 ### Multi-column tables
 
@@ -682,9 +919,13 @@ A table with several columns produces several rollable names:
 ^npcs
 ```
 
+With `Use: [[Note]]` in a codeblock — or from inside the note that
+holds the table — that gives three names:
+
 - `[@npcs]` — a whole random row (`Alia, brave`)
 - `[@npcs.Name]` / `[@npcs.Trait]` — a random cell from that column
-- `[@npcs.xy]` — a random cell from anywhere in the table
+- `[@npcs.xy]` — a random cell from anywhere in the table (`xy` as
+  in "any x, any y")
 
 Inline, the column pick is `` `rdm:[[Note^npcs|Trait]]` `` and the
 random cell is `` `rdm:[[Note^npcs|xy]]` ``.
@@ -745,15 +986,28 @@ covers the result wins.
 | 1-2        | Ambush   |
 | 3-10       | Nothing  |
 | 11         | Merchant |
-| 13,14      | Storm    |
+| 12,13,14   | Storm    |
 | 15-20      | Ruins    |
 
 ^encounters
 ```
 
 Ranges accept `a-b` (en-dashes too), single values, and comma
-lists. The `dice:` prefix on the header is optional. The full
-modifier grammar works in the formula (`2d6kh1`, `1d%`, …).
+lists. *Every* cell in that first column has to be one of those.
+One stray label and the whole table quietly goes back to being an
+ordinary two-column table, so the roll prints the key cell too —
+`1-3, Low` instead of `Low`.
+
+Cover every value the formula can roll. A result that no row's
+range contains produces empty output, with no error to tell you
+the table has a hole.
+
+The `dice:` prefix on the header is optional, and a bare `d20`
+reads as `1d20`. The formula itself is deliberately narrow: a
+count, sides, and an optional `+n`/`-n` — `1d20`, `d%`, `2d6+1`.
+Keep/drop modifiers like `2d6kh1` are **not** recognised here, and
+a header the engine can't read is exactly the "stray label" case
+above. Put a modifier formula in a cell instead.
 
 ### Lists
 
@@ -772,7 +1026,7 @@ Bulleted and numbered lists work the same way — one entry per item
 
 ### Random lines, blocks, and tagged notes
 
-(Added in the Dice Roller merge, Phase 4.) Whole-note rolls need no
+(Added in v1.3.0, the Dice Roller merge.) Whole-note rolls need no
 block ids at all:
 
 ```text
@@ -780,8 +1034,9 @@ block ids at all:
 `rdm:[[Rumours|block]]`    a random block (paragraph, heading, …)
 `rdm:3[[Rumours|line]]`    three of them, comma-joined
 `rdm:#rumour`              a random block from a random note tagged
-                           #rumour (frontmatter or inline; nested
-                           tags match their parent)
+                           #rumour — in its frontmatter or written
+                           inline in its text; a nested tag like
+                           #rumour/tavern answers to #rumour too
 `rdm:#rumour|link`         a link to a random #rumour note, shown
                            as the note's name
 `rdm:#rumour|linkpath`     the same, but shown as the full vault path
@@ -792,8 +1047,13 @@ still points at the right note wherever it lives in the vault. Use
 `|linkpath` if you want the full path (`Spells/Level 1/Burning
 Hands`) visible instead.
 
-Tag rolls can be narrowed with extra pipe segments — additional tags
-and/or frontmatter properties:
+Like a `[[Note^id]]` roll, a tag roll has to be the whole inline
+expression — `` `rdm:You meet #monster|link today` `` prints itself
+rather than rolling.
+
+Tag rolls can be narrowed with extra pipe segments — additional
+tags, and/or **frontmatter properties**, the `key: value` lines in
+the block at the very top of a note:
 
 ```text
 `rdm:#npc|universe=Eldara|link`   only notes whose `universe`
@@ -808,14 +1068,18 @@ and/or frontmatter properties:
                                   e.g. a CR 3 monster for an encounter
 ```
 
-Segments AND together; commas within a segment OR. Property keys and
-values match case-insensitively; list-valued properties match if any
-entry hits; wikilink values (`universe: "[[Worlds/Eldara]]"`) match
-their target's name or alias. `folder=` is a reserved segment key: it
-restricts candidates to notes under that folder (recursive,
-case-insensitive; comma for OR) rather than filtering a frontmatter
-property. These filters also work under the `dice:` compatibility
-prefix.
+The rules, briefly:
+
+- Segments AND together; commas within one segment OR.
+- Property keys and values match case-insensitively.
+- A list-valued property matches if any entry hits.
+- A wikilink value (`universe: "[[Worlds/Eldara]]"`) matches its
+  target's name or its alias.
+- `folder=` is reserved: it restricts which notes are candidates
+  rather than filtering a property. It is recursive and
+  case-insensitive, and a comma means OR.
+
+These filters also work under the `dice:` compatibility prefix.
 
 Tag rolls use Obsidian's own metadata cache — no Dataview required.
 The note pick happens inside the engine, so seeded rolls are
@@ -840,17 +1104,36 @@ deck so none repeats:
 `rdm:3*|folder=Bestiary|unique|prop:{{name}} (CR {{cr}})`
 ```
 
-Results are comma-joined by default. `|unique` must come before `prop:`
-(which swallows the rest of the line), and asking a `unique` roll for
-more notes than match simply gives you all of them rather than raising
-an error — for a block roll, the 50-note sample is that ceiling. A
-prefix of `1`, or none at all, is a plain single pick.
+Results are comma-joined by default. A prefix of `1`, or none at
+all, is a plain single pick.
+
+`|unique` has to come before `prop:`, because `prop:` swallows
+everything after it. Put it the wrong way round and the literal
+text `|unique` lands in your output:
+
+```text
+`rdm:3*|folder=Bestiary|prop:{{name}}|unique`
+    → Bog Hag|unique, Zombie|unique, Zombie|unique   ✗
+`rdm:3*|folder=Bestiary|unique|prop:{{name}}`
+    → Bog Hag, Zombie                                ✓
+```
+
+Asking a `unique` roll for more notes than match is not an error:
+you simply get all of them. For a block roll, the 50-note sample
+is that ceiling.
 
 #### Choosing the separator
 
-`|sep:` sets what goes between the results. It works on every
-multi-result inline roll — tag rolls, table rolls, line and block
-rolls:
+`|sep:` sets what goes between the results. It works on the inline
+rolls that read your notes: tag rolls (`3#monster`), block-id table
+rolls (`3[[Note^loot]]`), and line and block rolls
+(`3[[Rumours|line]]`). It is **not** part of `[@N table]` — write
+`|sep:` on one of those and the text prints itself. Use the
+`>> implode` filter there instead, as in
+`[@3 Creature >> implode <br>]`.
+
+The examples below roll `^loot`: any single-column block-id table
+of treasure, set up exactly like `^taverns` above.
 
 ```text
 `rdm:3#monster|sep:<br>|link`        one per line
@@ -882,10 +1165,10 @@ before anything else looks at it, so a trailing space is gone before
 `rdm:3[[Note^loot]]|sep: /\_`    → sword / ring / sword   ✓
 ```
 
-A glue that is followed by another segment (`|sep: —\_|link`) keeps
-its trailing space either way, since the trim only reaches the end of
-the whole expression — but writing `\_` always is the habit that
-doesn't bite.
+When another segment follows the glue (`|sep: —\_|link`), the
+trailing space survives either way: the trim only reaches the end of
+the whole expression. Writing `\_` every time is still the habit
+that never bites.
 
 On a wikilink roll `sep:` goes *outside* the brackets, because inside
 them a pipe already means "column pick". On a tag roll it is a segment
@@ -893,8 +1176,8 @@ like `unique`, so it must come before `prop:`. Separator text is never
 evaluated: a glue containing `[@table]` or `{1d6}` prints as itself.
 
 `sep:` with nothing after it joins with nothing at all. Without
-`sep:`, the join stays `, ` — and a single result is never joined, so
-`sep:` on a one-pick call does nothing.
+`sep:`, these rolls join with `, ` — and a single result is never
+joined, so `sep:` on a one-pick call does nothing.
 
 #### Printing the properties, not just the link
 
@@ -947,24 +1230,31 @@ than being read as a table call. (The template around it is yours, so
 to the calling note's folder, then the Generator root, then as a
 vault-rooted path (`[[Campaign/Tables^loot]]`), and finally by
 shortest path anywhere in the vault — so a link that works when you
-click it works when you roll it. The `^block-id`
-picks the table; the whole note's tables come into scope either
-way. Codeblock-defined tables win when a name collides, so a note
-can always override.
+click it works when you roll it. The `^block-id` picks the table;
+the whole note's tables come into scope either way.
+
+Name collisions go two different ways, and the difference is a
+trap. Within one note, a `randomness` codeblock's table wins over
+a block-id table of the same name, so a note can override its own
+markdown. Across notes it is the other way round: a `Use:`d file's
+tables shadow same-named tables in the note doing the `Use:`. You
+cannot override an imported table by redefining it locally — name
+the imported table what you want to roll instead.
 
 ## Card decks
 
 (Added in v1.4.0; block display and card copy buttons in v1.6.0.)
-Folder decks live under `<Generator Root>/Decks/<Name>/` — one image
-per card, an optional `.rdm` dictionary for card text (branch on
-`{$facing}` for tarot-style reversals), a `_back` image, and
-`deck.json` (per-deck settings + state, so a deck travels and syncs
-with its vault).
+Folder decks live under `<Generator root>/Decks/<Name>/`, or plain
+`Decks/<Name>/` at the vault root when no Generator root is set —
+one image per card, an optional `.rdm` dictionary for card text
+(branch on `{$facing}` for tarot-style reversals), a `_back` image,
+and `deck.json` (per-deck settings + state, so a deck travels and
+syncs with its vault).
 
 Three ways to use one:
 
 ```text
-`deck:Weather`       inline span — last drawn card + 🎴 Draw button
+`deck:Weather`       inline span — last drawn card + compact 🎴
 [!deck:Weather]      draw inside any generator table
 ```
 
@@ -979,18 +1269,23 @@ a Draw button and remaining count. Rendering NEVER draws — only the
 explicit 🎴 click advances the deck, so scrolling a note can't burn
 cards.
 
-The sidebar **Decks tab** manages every deck: draw / peek /
-draw-&-bury / undo / shuffle, reversal chance, and history. Click a
-deck's title to collapse it. Hover a drawn card (tab or codeblock)
-for copy buttons: image embed, ready-to-paste deck block, card text,
-and the inline span. Example decks — playing cards, tarot, weather —
-download on demand from **Settings → Randomness → Example decks**.
+The sidebar **Decks tab** manages every deck: **Draw**, **Peek**,
+**Draw & bury**, **Undo** and **Shuffle** buttons, a **Reversed
+chance %** field (0 disables orientation, which is the default),
+and history. Click a deck's title to collapse it. Hover a drawn
+card (tab or codeblock) for copy buttons: image embed,
+ready-to-paste deck block, card text, and the inline span. Example
+decks — playing cards, tarot, weather — download on demand from
+**Settings → Randomness → Example decks**.
 
 ## Dice tray
 
-(Added in the Dice Roller merge.) A sidebar tray for quick rolls —
-open it with the dices ribbon icon or the **Open dice tray**
-command. Tap d4–d100 to build a pool (right-click a die to remove
+(Added in v1.3.0, the Dice Roller merge.) The **Dice** tab of the
+right-sidebar browser pane — quick rolls without touching a note.
+Open it with the **Open dice tray** command, or click the dice
+ribbon icon and pick the Dice tab.
+
+Tap d4–d100 to build a pool (right-click a die to remove
 one), toggle advantage/disadvantage for d20s, step a flat modifier,
 and Roll. The formula box takes anything the `dice:` syntax takes —
 `4d6dl1`, `[[Note^loot]]`, `#tag`, saved aliases — scoped to the
@@ -1002,28 +1297,38 @@ it; click the big result to copy it.
 
 ## Graphical dice
 
-(Added in the Dice Roller merge.) With **Settings → Randomness →
-Graphical dice** on, rolls animate: d6s tumble as a 3D cube, other
-dice spin and settle on the rolled face; dice dropped by keep/drop
-modifiers show dimmed, and multi-die rolls end with a total badge.
-Click anywhere on the dice to dismiss them early. The animation
-plays for dice-tray rolls and for inline `dice:` rolls carrying the
-`|render` flag (plain dice formulas only — the same limit Dice
-Roller had). It's decoration: the engine rolls first and the dice
-land on those exact values, so seeded rolls and locks behave
-identically with the animation on or off.
+(Added in v1.3.0, the Dice Roller merge.) With **Settings →
+Randomness → Graphical dice** on — and it's on by default — rolls
+animate: d6s tumble as a 3D cube, other dice spin and settle on the
+rolled face. Dice dropped by keep/drop modifiers show dimmed, and
+multi-die rolls end with a total badge. Click anywhere on the dice
+to dismiss them early.
+
+The animation plays for every dice-tray roll. For an inline
+`dice:` roll it needs the `|render` flag *and* a click on the span's
+🎲 button — opening a note never animates anything — and the
+expression must be a plain dice formula, the same limit Dice Roller
+had. `|norender` opts a span out.
+
+It's decoration: the engine rolls first and the dice land on those
+exact values, so seeded rolls and locks behave identically with the
+animation on or off.
 
 ## Dice Roller compatibility
 
-(Added in the Dice Roller merge.) Randomness can process inline
-`dice:` code spans written for the Dice Roller plugin — plus its
-`dice+:`, `dice-:`, and `dice-mod:` variants — so old notes keep
-rolling after you retire that plugin.
+(Added in v1.3.0, the Dice Roller merge.) Randomness can process
+inline `dice:` code spans written for the Dice Roller plugin —
+plus its `dice+:`, `dice-:`, and `dice-mod:` variants — so old
+notes keep rolling after you retire that plugin.
 
-Turn it on in **Settings → Randomness → Dice Roller compatibility**.
-It's off by default: leave it off while the separate Dice Roller
-plugin is still enabled, or both plugins will process the same
-spans.
+The toggle lives at **Settings → Randomness → Dice Roller
+compatibility**, and it looks after itself: compat is ON whenever
+the separate Dice Roller plugin is disabled, and OFF while it's
+enabled — so retiring that plugin lights your old `dice:` spans up
+with no configuration at all. Touching the toggle stores an
+explicit choice that overrides the automatic behaviour from then
+on. Turning it on while Dice Roller is still enabled warns you:
+both plugins would process the same spans.
 
 What works, in Dice Roller's own syntax:
 
@@ -1039,51 +1344,130 @@ What works, in Dice Roller's own syntax:
 `dice: [[Note^npcs]]|Trait`   column pick — and |xy for a random cell
 ```
 
+Note where that last pipe sits. Under `dice:` a column pick goes
+*outside* the `]]`; under `rdm:` it goes *inside*, as
+`` `rdm:[[Note^npcs|Trait]]` ``. Getting it backwards errors under
+`dice:` and renders as literal text under `rdm:`.
+
 Every compat span gets the same 🔒/🎲 buttons as `rdm:` — locks are
-the durable replacement for Dice Roller's result saving and
-`dice-mod:` (which are accepted as aliases of `dice:`).
+the durable replacement for Dice Roller's result saving. `dice+:`
+and `dice-:` are plain aliases of `dice:`; `dice-mod:` is not, and
+gets its own note below.
 
-`|text(label)` shows your label and puts the rolled value in the
-hover tooltip (`dice: 1d20+2|text(Dexterity +2)`); `|form` shows
-the formula with the result; `|dice` appends what each die rolled
-(`13 (7, 6)` — see "Seeing what each die rolled" above). `dice-mod:` spans commit their roll
-into the note on first render — the lock form of Dice Roller's
-note-modifying roll. **Formula aliases** from Settings → Randomness
-→ Dice formula aliases work for every compat prefix: define
-`sneak = 4d6dl1` and `dice: sneak` rolls it. `|noform`
-suppresses it when the **Show dice formula** setting is on. The
-remaining flags (`|nodice`, `|avg`, `|none`) are accepted and
-currently ignored. `|render` plays the graphical dice animation for
-plain dice formulas (see below). Whole-note
-rolls work: `dice: [[Note]]` picks a random block, `|line` a random
-line (block-type filters approximate to the block roll), and tag
-rolls `#tag` / `#tag|link` pick from one random tagged note. Still
-unsupported (clear errors): the every-file tag mode (`#tag|+`),
-stunt dice (`dS`), and Genesys narrative dice.
+### Display flags
 
-`rdm:` also gains the repetition prefix on wikilink rolls:
+Appended to the end of the expression:
+
+```text
+|text(Dexterity +2)   show this label; the roll moves to the tooltip
+|form  /  |noform     show / hide the formula next to the result
+|dice                 append what each die rolled — 13 (7, 6)
+|render / |norender   play / suppress the dice animation on 🎲
+```
+
+`|form` and `|noform` override the **Show dice formula** setting;
+see "Seeing what each die rolled" above for the breakdown `|dice`
+produces. Watch the asymmetry: `|dice` opts a span into the
+breakdown, but `|nodice` does **not** opt it back out. That flag —
+along with `|avg`, `|none`, `|paren`, `|noparen`, `|round`,
+`|noround`, `|floor`, `|ceil` and `|signed` — is accepted without
+error and currently does nothing.
+
+`|render` only animates when you click the span's 🎲 button, and
+only for plain dice formulas (the same limit Dice Roller had).
+Opening a note never animates anything. See "Graphical dice" above.
+
+### `dice-mod:` writes to your note
+
+An unfilled `dice-mod:` span commits its roll into the note on
+first render, without waiting for a click — the lock form of Dice
+Roller's note-modifying roll. It's the one prefix that isn't a
+plain alias, so don't scatter it around expecting `dice:`
+behaviour.
+
+### Formula aliases
+
+**Formula aliases** from Settings → Randomness → Dice formula
+aliases work for every compat prefix: define `sneak = 4d6dl1` and
+`dice: sneak` rolls it. `rdm:` spans and the `roll()` API
+deliberately don't resolve aliases, so an expression that happens
+to share a name with one keeps its own meaning.
+
+### Whole-note and tag rolls
+
+`dice: [[Note]]` picks a random block and `dice: [[Note]]|line` a
+random line; block-type filters fall back to the block roll. Tag
+rolls `#tag` and `#tag|link` pick from one random tagged note.
+
+### What isn't supported
+
+The every-file tag mode (`#tag|+`) and Fantasy AGE stunt dice
+(`dS`) are unsupported and say so in plain words.
+
+Genesys narrative dice are unsupported too, but they don't fail
+cleanly. Most notations (`2dp`, `1da`, `1dc`) come back with a
+generic parse error, and `1ds` is worse: it's read as `1d100`
+sorted and returns a plausible-looking number. Convert Genesys
+pools by hand rather than trusting a result.
+
+### What `rdm:` gains in return
+
+`rdm:` also picks up the repetition prefix on wikilink rolls:
 `` `rdm:3[[Note^loot]]` `` rolls three, joined with ", " — or with
-whatever `|sep:` says (see "Choosing the separator"). Both work under
-the `dice:` prefix too.
+whatever `|sep:` says (see "Choosing the separator"). Both work
+under the `dice:` prefix too.
 
 ## Escaping
 
-Use `\` to escape special characters:
+Use `\` to escape special characters. A backslash before anything
+not listed below simply yields that character, so `\]` and `\}`
+work without needing their own entry.
 
 - `\[` — literal `[` (not a table call)
 - `\{` — literal `{` (not an expression)
+- `\\` — literal backslash
 - `\n` — newline
 - `\t` — tab
-- `\_` — space (useful for visible leading/trailing spaces)
+- `\_` — space (see below)
+- `\z` — nothing at all. Useful as a deliberately empty table
+  entry, or as a glue that joins with no separator.
+- `\a` — "a" or "an", chosen from the word that follows. It knows
+  the common English exceptions, so `\a hour` gives "an hour" and
+  `\a university` gives "a university".
+
+### Escaping spaces
+
+`\_` is narrower than it looks. A table entry's *leading*
+whitespace is stripped, so `\_\_indent` is the only way to keep
+it — but trailing spaces survive on their own, and `trail\_\_` and
+`trail  ` come out identical.
+
+Where `\_` really earns its keep is a **filter argument** or an
+**inline span**. Both reach the parser trimmed, so a glue that ends
+in a space has to end in `\_`:
+
+```text
+[!3 Sub >> implode ; ]      // a;c;b — the space was trimmed away
+[!3 Sub >> implode ;\_]     // a; c; b — this is the one you want
+[!3 Sub >> implode "; "]    // a"; "c"; "b — quotes are never stripped
+```
+
+That last line is the trap: filter arguments are never quoted, so
+the quotes come out in the result.
 
 ## Browser pane
 
-The right-sidebar browser shows every `.rdm` file under the
-configured Generator Root (or the whole vault if no root is set).
-Click **Roll** next to any table to see its output in the result
-panel; click 📋 to copy the inline **rdm:** syntax for pasting
-into a note; click 📍 to pin a table to the Favourites section
-at the top of the tree.
+The right-sidebar browser shows every generator file (`.rdm`, and
+legacy `.ipt`) under the configured Generator root — or the whole
+vault if no root is set. Click **Roll** next to any table to see
+its output in the result panel; click 📋 to copy the inline
+**rdm:** syntax for pasting into a note; click 📍 to pin a table
+to the Favourites section at the top of the tree (it becomes 📌 —
+click again to unpin).
+
+The pane has five tabs: **Generators**, **Decks**, **Portraits**,
+**Builder**, and **Dice**. The dice ribbon icon opens the pane on
+its **Generators** tab; the rest are one click along the top.
 
 ## Table-name autocomplete
 
@@ -1147,8 +1531,9 @@ no-op — no duplicate lines.
 (Added in v0.6.0.)
 
 You don't have to manage full paths. Randomness keeps an index of
-every `.rdm` file in your vault (or under the Generator Root, if
-set), so you can reference generators two ways:
+every generator file in your vault — `.rdm` and legacy `.ipt`
+alike, or just those under the Generator root if one is set — so
+you can reference generators two ways:
 
 - **By bare filename in a `Use:` line.** Write `Use: Names.rdm`
   (no folder path) and Randomness finds that file wherever it
@@ -1157,10 +1542,10 @@ set), so you can reference generators two ways:
 - **By table name when rolling.** `rollUnscoped("TableName")` (and
   the sidebar) find the defining file for you.
 
-If two files share a name, Randomness prefers one in the same
-folder as the file referencing it, otherwise picks the first
-alphabetically and logs a one-time console note. To force a
-specific file, use its full path.
+If two files share a name, Randomness prefers one in the
+referencing file's own folder or any folder beneath it; failing
+that it takes the first by full path and logs a one-time console
+note. To force a specific file, use its full path.
 
 The index refreshes automatically when you add, rename, move, or
 edit `.rdm` files. If it ever seems out of date (e.g. after a sync
@@ -1170,8 +1555,15 @@ generator index"** command.
 ## Portraits
 
 (Added in v1.1.0. Needs a **portrait pack** — a folder of layered
-art + `manifest.json`. Set the folder in Settings → Randomness;
-everything below stays invisible until a pack is found.)
+art + `manifest.json`. Click **Settings → Randomness → Install
+Fantasy Portrait Pack** to download one into
+`<Generator root>/fantasy_ink_parts_pack` — or
+`Generators/fantasy_ink_parts_pack` when no root is set. The
+plugin remembers where it landed, so there is no folder field to
+fill in. You can
+also drop a pack into the vault by hand and point a block at it
+with `pack:`. Everything below stays invisible until a pack is
+found.)
 
 Seeded, layered character portraits with rolled names, rendered
 anywhere markdown renders.
@@ -1180,12 +1572,25 @@ anywhere markdown renders.
 
 ````text
 ```portrait
-count: 6        (1-24 portraits, default 1)
-size: 200       (tile width px, default 256)
-seed: gandalf   (stable across reloads; omit for random)
-pack: my_pack   (override the settings pack)
+count: 6
+size: 200
+seed: gandalf
+pack: my_pack
 ```
 ````
+
+Every line is optional. Don't annotate them in place — the parser
+takes everything after the first `:` as the value, so a trailing
+comment becomes part of the seed.
+
+```text
+count:   1-24 portraits, default 1
+size:    tile width in px, 64-1024, default 256
+seed:    stable across reloads. With count > 1 each tile derives
+         its own stable seed, so you get six different faces that
+         stay put. Omit for random
+pack:    override the pack from settings
+```
 
 **Live** (rolls when a pack is installed; otherwise it shows a
 pointer to settings):
@@ -1212,7 +1617,7 @@ seed).
 A portrait inside a sentence, a table cell, or an infobox callout:
 
 ```text
-`portrait:`                 random face, default size (128)
+`portrait:`                 random face, default size (128; 32-1024)
 `portrait: gandalf 96`      bare word = seed, bare number = size
 `portrait: size=160`        key=value form (seed=, size=, pack=)
 `portrait: recipe={…}`      pinned recipe (recipe= must be last)
@@ -1273,8 +1678,11 @@ tR += note ? `Tonight: ${note.link}` : "_no notes in that folder_";
 ```
 
 `randomNote(folder?, { seed? })` searches the folder recursively
-(whole vault when omitted) and returns `{ path, basename, link }`,
-or `null` for an empty folder.
+(whole vault when omitted) and returns
+`{ path, basename, link, frontmatter }`, or `null` for an empty
+folder. `frontmatter` is the note's properties straight from
+Obsidian's metadata cache — `{}` when it has none, so
+`note.frontmatter.cr` is always safe to reach for.
 
 ## Scripting API
 
@@ -1313,18 +1721,18 @@ generator anywhere in your vault without needing a `Use:` line.
 
 - `roll(tableName, opts?)` — roll a named table. Returns a
   result object with `.result` (the text), `.table`,
-  `.expression`, `.source`, `.timestamp`, and `.rollId`.
-  Resolves the table from the calling note's scope (set via
-  `opts.callerNotePath`), so the note must define or `Use:`
-  the table.
+  `.expression`, `.source`, `.timestamp`, `.rollId`, and
+  `.error` (set only when the attempt failed). Resolves the table
+  from the calling note's scope (set via `opts.callerNotePath`),
+  so the note must define or `Use:` the table.
 - `rollUnscoped(tableName, opts?)` — roll a named table found
-  ANYWHERE in the vault, ignoring note scope. Searches every
-  `.rdm` file (under the generator root if set), loads the
-  defining file plus its `Use:` graph, and rolls. Best for
-  scripting and template-generated notes, where you want to roll
-  a generator without first wiring up a note's scope. Pass
-  `opts.filePath` to disambiguate when two files share a table
-  name.
+  ANYWHERE in the vault, ignoring note scope. It searches every
+  generator file — `.rdm` and legacy `.ipt`, under the generator
+  root if one is set — then loads the defining file plus its
+  `Use:` graph and rolls. Reach for it in scripting and
+  template-generated notes, where you want a generator without
+  first wiring up a note's scope. Pass `opts.filePath` to
+  disambiguate when two files share a table name.
 - `rollExpression(expr, opts?)` — roll an arbitrary expression
   like `"[@Names] of [@Origin]"`.
 - `rollFormula(nameOrFormula, opts?)` — roll a dice formula in
@@ -1344,21 +1752,43 @@ generator anywhere in your vault without needing a `Use:` line.
   failure). Returns an unsubscribe function.
 - `randomNote(folder?, opts?)` — a random markdown note from a
   folder (recursive; whole vault when omitted). Returns
-  `{ path, basename, link }` or `null`. `opts.seed` pins the
-  pick.
-- `portraits.*` — the portrait surface: `available()`,
-  `roll({ seed?, gender?, race?, age? })` (constraints reroll
-  until matched), `render(recipe)`, `savePng(p)`,
-  `name(recipe)`, `blockSnippet(recipe)`,
-  `inlineSnippet(recipe, size?)`. All throw without a pack —
-  check `available()` first. Full docs + a Templater NPC-note
+  `{ path, basename, link, frontmatter }` or `null`. `frontmatter`
+  is `{}` when the note has none, so it's always safe to reach
+  into. `opts.seed` pins the pick. This one is synchronous — no
+  `await`.
+- `portraits.*` — the portrait surface: `available(pack?)`,
+  `roll(opts?)`, `render(recipe, opts?)`,
+  `savePng(portraitOrRecipe, opts?)`, `name(recipe, pack?)`,
+  `blockSnippet(recipe)`, `inlineSnippet(recipe, size?)`.
+  `roll` takes `{ seed?, pack?, gender?, race?, age?, maxTries? }`:
+  the three constraints reroll until they match and throw after
+  `maxTries` (default 400), while `seed` pins the portrait exactly
+  and makes constraints inert. `savePng` writes into `opts.folder`
+  (default `Portraits/`) and returns the vault path. `roll`,
+  `render`, `savePng` and `name` throw without a pack — check
+  `available()` first, which returns `false` rather than throwing.
+  `blockSnippet` and `inlineSnippet` are pure string builders and
+  work with no pack at all. Full docs + a Templater NPC-note
   example live in API.md.
 
-**Options** (`opts`): `callerNotePath` sets the scope (which
-`Use:` imports and same-note tables are visible; defaults to the
-active note); `seed` makes the roll deterministic (same seed →
-same result); `promptValues` supplies values for prompts by
-label.
+**Options.** `roll` and `rollExpression` take `callerNotePath`
+(which `Use:` imports and same-note tables are visible; defaults to
+the active note), `seed` (deterministic — same seed → same result),
+`promptValues` (values for prompts, keyed by label), and `dictKey`
+(for a `Type: Dictionary` table, the key to look up; without it a
+dictionary roll comes back empty).
+
+`rollUnscoped` takes `seed`, `promptValues` and `dictKey` too, but
+**not** `callerNotePath` — it ignores scope by design. It takes
+`filePath` instead, to pin which file to read when two of them
+define the same table name.
+
+**Failures don't throw.** A failed roll returns an ordinary result
+whose `.result` is a visible `[ROLL ERROR: …]` marker and whose
+`.error` holds the message, so `if (r.error)` is the test — and
+`onRoll` subscribers see failures as well as successes. The one
+exception is `rollFormula`, which throws when a formula can't be
+translated (it still notifies `onRoll` first).
 
 The API version is at `api.version` and follows semver
 independently of the plugin version, so consumers can check it
@@ -1366,12 +1796,82 @@ and branch on the surface they need.
 
 ## Settings reference
 
-- **Generator Root** — folder where shared generators live.
-  `Use:` paths fall back to this when not found relative to
-  the current note.
-- **Default Formatting** — `html` or `text`. Files can override
-  with their own `Formatting:` directive.
-- **Stable Codeblock Seeds** — when on, codeblocks use a seed
-  derived from their position so re-rendering the same note
-  doesn't shuffle results. Useful for "this codeblock should
-  stay consistent until I edit it".
+Everything under **Settings → Randomness**, with the label exactly
+as it appears there and the default in brackets. (Elsewhere this
+document names a few of these by their *button* text rather than
+their row name — **Open reference** is the button on the **Help &
+reference** row, **Install the guide** the button on
+**Beginner's guide**.)
+
+### Behaviour
+
+- **Generator root** [empty] — vault-relative folder to search when
+  a `Use:` path doesn't resolve against the calling note's own
+  folder. Setting it also *narrows* everything else to that folder:
+  the browser pane, table-name autocomplete, bare-filename `Use:`
+  lookups and `rollUnscoped` all stop seeing generator files
+  outside it. Left blank, they search the whole vault. It decides
+  where the plugin puts things too: decks land in
+  `<Generator root>/Decks/`, installed content and portrait packs
+  directly under the root.
+- **Default formatting** [HTML (rich)] — how the bold/italic/
+  underline filters render for a generator with no `Formatting:`
+  directive. The other option is Plain text, which uses plain-text
+  approximations instead of HTML tags. A per-file `Formatting:`
+  always wins over this.
+- **Stable codeblock seeds** [off] — when on, a codeblock renders
+  the same result across reloads until you edit or reroll it. When
+  off, every render is independent. Turn it on for "this codeblock
+  shouldn't shuffle every time I scroll past it"; use the Lock
+  action instead when you want one specific result preserved for
+  good.
+- **Dice Roller compatibility** [automatic] — process inline
+  `dice:` spans (plus `dice+:`, `dice-:`, `dice-mod:`) with the
+  Randomness engine. Automatic until you touch it: ON whenever the
+  separate Dice Roller plugin is disabled, OFF while it's enabled.
+  Toggling stores an explicit choice that overrides the automatic
+  behaviour from then on. See "Dice Roller compatibility" above.
+- **Graphical dice** [on] — animate rolls with tumbling dice, in
+  the dice tray and for inline rolls carrying `|render`. Cosmetic
+  only: the engine rolls first and the dice land on those values,
+  so seeds and locks are unaffected.
+- **Show dice breakdown** [off] — append what each die rolled to
+  inline results: `13 (7, 6)` instead of `13`. Handy for games like
+  Ironsworn where the individual dice matter. Hovering a roll shows
+  the breakdown either way, and `dice:` spans can opt in per-roll
+  with `|dice`.
+- **Show dice formula** [off] — show what was rolled next to the
+  result: `2d6+3 → 11` instead of `11`. Only applies to calls that
+  actually rolled dice, so table rolls are unaffected. `dice:`
+  spans override it per-roll with `|form` and `|noform`. Display
+  only — a lock still commits just the result.
+- **Dice formula aliases** [none] — one `alias = formula` per
+  line. `sneak = 4d6dl1` makes `dice: sneak` roll 4d6-drop-lowest.
+  This is the same store the dice tray's ★ button writes to and
+  that `api.rollFormula()` reads, so a formula saved anywhere rolls
+  everywhere. Dice Roller's saved formulas paste straight in.
+
+### Actions
+
+Buttons rather than settings. Nothing is downloaded until clicked.
+
+- **Beginner's guide** — install a small folder of guide notes, one
+  per feature, every example live and rollable. Re-running
+  refreshes them.
+- **Help & reference** — open this document as a note.
+- **Create folder** / **Add example generators** — create the
+  Generator root and seed it with commented example `.rdm` files.
+- **Install Fantasy Portrait Pack** — download a portrait pack into
+  `<Generator root>/fantasy_ink_parts_pack`, or
+  `Generators/fantasy_ink_parts_pack` with no root set. There is no
+  folder field to fill in: the plugin records where the pack landed.
+- **Install Fantasy Hub content** — the bundled generator library.
+- **Example decks** — Playing cards, Tarot, or Weather, each
+  downloaded into `<Generator root>/Decks/` on click.
+- **Browse community generators** / **Share your own generators** —
+  open GitHub in a browser.
+
+Four more values are stored but have no control, because the UI
+writes them for you: which browser folders are expanded, your
+pinned Favourites, which decks are collapsed, and the portrait pack
+location.

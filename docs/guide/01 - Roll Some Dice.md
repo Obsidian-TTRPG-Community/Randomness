@@ -1,6 +1,11 @@
 # 01 - Roll Some Dice
 
-Every example here is live. 🎲 re-rolls, 🔒 keeps the result.
+Everything on this page is really rolling right now. Click 🎲 next
+to any answer for a new one, or 🔒 to keep the one you've got.
+
+(Still got the old **Dice Roller** plugin switched on? Turn it off
+first — Settings → Community plugins. While it's on, it grabs these
+`dice:` rolls and the settings below won't do anything.)
 
 ## Plain rolls
 
@@ -26,42 +31,65 @@ Every example here is live. 🎲 re-rolls, 🔒 keeps the result.
 
 ## Watch them tumble
 
-Add `|render` and the dice animate: `dice: 4d6dl1|render`
+Add `|render` and the dice tumble across the screen — but only
+when you ask for a *new* roll: `dice: 4d6dl1|render`, then click
+its 🎲.
 
-(Turn animations on or off in Settings → Randomness →
-Graphical dice.)
+(Turn the tumbling on or off in Settings → Randomness →
+Graphical dice. It starts switched on.)
 
 ## See what each die rolled
 
-Hover any roll — the tooltip shows every die's face (dropped
-dice in parens). Want it right in the result, like `13 (7, 6)`?
-Add `|dice`: `dice: 2d10|dice` — or flip **Settings → Randomness
-→ Show dice breakdown** to make every roll do it. Perfect for
-Ironsworn-style challenge dice, where the individual faces are
-the whole point.
+Rest your mouse on any roll. A little box pops up showing what
+each die landed on. Dice that got thrown away have brackets round
+them, like `(1)`.
+
+Want to see the faces right there in the sentence instead of `13`,
+like `13 (7, 6)`? Add `|dice`: `dice: 2d10|dice`. To make *every*
+roll do it, switch on **Settings → Randomness → Show dice
+breakdown**.
+
+Some games — Ironsworn is the famous one — care about what each
+die shows, not the total. This is for those.
 
 ## See the formula too
 
 Prefer `2d6+3 → 11` over a bare `11`? Turn on **Settings →
-Randomness → Show dice formula**. It applies to every inline dice
-roll, whichever prefix you use, and leaves table rolls alone. On a
-`dice:` span you can override it per roll with `|form` and
-`|noform`.
+Randomness → Show dice formula**. Every dice roll in your notes
+then shows its sum this way, no matter whether you wrote `dice:`
+or `rdm:`. Table rolls are left alone. And on any one `dice:` roll
+you can disagree with the setting: `|form` forces the formula on,
+`|noform` forces it off.
 
 ## Dice inside sentences and tables
 
-Both of these roll the same d10:
+Both of these do exactly the same thing — roll two d10 and add
+them:
 
 ```text
 `rdm:2d10`
 `rdm:{2d10}`
 ```
 
-An inline call that's *only* a formula doesn't need the braces. You
-need them as soon as there's text around the dice, which is what the
-next bit is about — `` `rdm:you take 2d6` `` is just words.
+If the whole thing is *just* dice, you can skip the curly
+brackets. The moment you put words around the dice, you need them.
+Without them nothing rolls — `` `rdm:you take 2d6` `` just prints
+those exact words back at you. With them,
+`` `rdm:you take {2d6}` `` gives you "you take 7".
 
-Inside generator text, dice go in curly braces:
+Once you start writing your own tables — the next chapter, and
+chapter 5 — dice always live inside curly brackets. Here is what
+one of those tables looks like while you are typing it:
+
+````text
+```randomness
+Table: Loot
+You find {2d6} gold coins and {1d4} shiny buttons.
+```
+````
+
+And here is that same block actually running. Obsidian swaps the
+whole block for the result:
 
 ```randomness
 Table: Loot

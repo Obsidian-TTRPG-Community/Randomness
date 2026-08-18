@@ -1,7 +1,9 @@
 # 03 - Lock It In
 
-Rolls change every time a note re-renders. When you get a result
-you want to KEEP — a name, a shop, a plot twist — lock it.
+An unlocked roll is only a *preview*. It stays the same while
+Obsidian is open, but nothing is written down — close Obsidian and
+it rolls a new answer next time. When you get a result you want to
+KEEP — a name, a shop, a plot twist — lock it.
 
 ## Try it
 
@@ -16,28 +18,35 @@ Your rival's name is `rdm:[@rivals]`.
 
 ^rivals
 
-Hover the result and click 🔒. Done — that result is now written
-into your note itself. It survives closing Obsidian, syncing to
-your phone, everything. Click 🎲 on a locked roll to unlock and
-roll fresh.
+See the two little buttons just before the name? Click the 🔒.
+Done — that result is now written into your note itself. It
+survives closing Obsidian, syncing to your phone, everything.
 
-Peek at this note in source mode after locking: you'll see the
-result stored right in the text, after a `⟹` arrow. It's your
-note, not hidden plugin data.
+A locked roll drops down to a single button, 🔓 — click it to
+unlock and roll fresh.
+
+Want to see where the answer went? Press Ctrl/Cmd+E to flip the
+note into edit mode. Your roll is sitting right there in the
+writing, after a `⟹` arrow — like
+`` `rdm:[@rivals]⟹Madame Halibut` ``. It is part of your note now.
+Nothing is hidden anywhere else, so it goes wherever your note
+goes.
 
 ## Lock everything at once
 
-Two commands (Ctrl/Cmd+P):
+Two shortcuts. Press Ctrl/Cmd+P to open Obsidian's command box,
+then start typing the name:
 
-- **Lock all rdm: in current note** — locks every unfilled roll,
-  keeping exactly what's on screen.
+- **Lock all unfilled rdm: in current note** — locks every roll
+  that isn't locked yet, keeping exactly what's on screen.
 - **Reroll all rdm: in current note** — unlocks everything for a
   fresh start.
 
 ## Rolls that lock themselves
 
-`dice-mod:` rolls once and locks immediately — the first time the
-note renders, the result is written in and stays:
+`dice-mod:` rolls once and locks itself straight away. The first
+time the note opens, Randomness rolls it, writes the answer into
+your note, and never touches it again:
 
 ```text
 Treasure: `dice-mod: 2d6 * 10` gold

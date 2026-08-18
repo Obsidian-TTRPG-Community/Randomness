@@ -630,8 +630,8 @@ Notes:
 
 ## Versioning
 
-`api.version` is the API surface version (currently `1.0.0`), **not** the
-plugin version. Consumers can check it:
+`api.version` is the API surface version (see the header at the top of
+this file), **not** the plugin version. Consumers can check it:
 
 ```js
 const api = app.plugins.plugins["randomness"]?.api;

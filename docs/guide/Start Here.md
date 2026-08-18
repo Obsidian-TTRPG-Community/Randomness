@@ -12,13 +12,14 @@ Type a dice roll between backticks, starting with `dice:`
 
 The goblin hits you for `dice: 2d6 + 3` damage.
 
-Click the 🎲 to roll again. Click the 🔒 to keep the number
-forever.
+Two tiny buttons sit just in front of the number. Click 🎲 for a
+new number. Click 🔒 to keep this one forever.
 
 ## 2. Roll on a table you made
 
-This is a plain markdown table. The `^snacks` label underneath
-gives it a name:
+Here is an ordinary table — the kind you can make in any note.
+The `^snacks` line underneath is its name tag. Every table you
+want to roll on needs one, always starting with `^`:
 
 | Snack |
 | ----- |
@@ -29,13 +30,19 @@ gives it a name:
 
 ^snacks
 
-Now roll on it: you find `rdm:[@snacks]` in your bag.
+Now roll on it. `dice:` is for dice; for everything *else* you use
+`rdm:` — same backticks, and the table's name goes in `[@ ]`:
+
+you find `rdm:[@snacks]` in your bag.
 
 ## 3. Use the dice tray
 
-Click the **dices icon** in the left ribbon (or press Ctrl/Cmd+P
-and run "Open dice tray"). Tap some dice, hit **Roll**, and watch
-them tumble.
+Press Ctrl/Cmd+P, type "Open dice tray", and hit Enter. Tap some
+dice, hit **Roll**, and watch them tumble.
+
+(You can also click the 🎲 icon in the strip of icons down the
+left edge. That opens the same panel, but on its **Generators**
+tab — click **Dice** along the top to reach the tray.)
 
 ## Where to next
 

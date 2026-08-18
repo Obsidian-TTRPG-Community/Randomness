@@ -5,40 +5,62 @@ Made a great table? Use it everywhere.
 ## The zero-setup way
 
 If a table lives in a `.rdm` file under your **Generator root**
-(Settings → Randomness), just call it by name from any note:
+(Settings → Randomness), just call it by name from any note —
+the `Weather` table you made in chapter 05, for example:
 
 ```text
-`rdm:[@TavernName]`
+`rdm:[@Weather]`
 ```
 
-Randomness finds the file for you. Type `rdm:[@` and a popup even
-suggests every table it knows — pick one and any needed imports
-are added automatically.
+Randomness finds the file for you. Even better, you barely have
+to type it. Start a roll and stop after the `@`:
+
+```text
+`rdm:[@
+```
+
+A little menu pops up listing every table in your vault. Pick one
+and it finishes the name for you. If that table lives somewhere
+this note can't see yet, Randomness quietly adds the line that
+fetches it — more on that line just below.
 
 ## Borrowing tables from another note
 
-A note's block-id tables come along when you name the note:
+Back in chapter 02 you named a table by putting `^` and a name on
+the line underneath it. Any note's `^` tables can be rolled from
+anywhere, as long as you name the note as well as the table:
 
 ```text
-`rdm:[[Locations/Taverns^taverns]]`
+`rdm:[[02 - Random Tables In Your Notes^taverns]]`
 ```
 
-Or bring ALL of another note's tables into this note with a
-`randomness` codeblock. Add a `Use:` line naming the note (shown
-here indented so it displays instead of running):
+Or bring ALL of another note's tables into this note at once.
+Start a block with three backticks and the word `randomness`,
+then a `Use:` line naming the note you're borrowing from. `Use:`
+means "go and fetch that note's tables for me".
+
+It looks like this — indented here only so you can read it, so
+when you type it yourself start every line hard against the left
+edge:
 
     ```randomness
-    Use: [[Locations/Taverns]]
+    Use: [[02 - Random Tables In Your Notes]]
     Tonight: [@taverns]
     ```
 
-After that `Use:` line, inline calls in the same note can see
-those tables too.
+One `Use:` line does the whole note. From then on, any roll you
+type between backticks anywhere else in this note can use those
+tables too — the block doesn't have to sit next to them.
 
-## The browser pane
+## The sidebar
 
-Click the dice ribbon icon. Every generator in your vault, in a
-folder tree: **Roll** to try a table, 📋 to copy a ready-made
-inline call, 📍 to pin favourites to the top.
+Click the 🎲 icon in the strip of icons down the left edge of
+Obsidian. A panel opens listing every generator in your vault,
+sorted into folders. Next to each table are three buttons:
+
+- **Roll** — try the table right there.
+- 📋 — copy the ready-made roll, so you can paste it straight
+  into a note.
+- 📍 — pin a favourite so it sits at the top of the list.
 
 Next: [[08 - Coming From Dice Roller]]
