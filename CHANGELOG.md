@@ -2,6 +2,63 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.16.0
+
+### Fixed
+- **The reference and the guide now say what the engine actually
+  does.** Every example in both was executed against the engine
+  rather than read, and about sixty of them were wrong. The
+  documentation had been describing features that were never
+  implemented: the filter list advertised `a` and `mid`, neither of
+  which exists, and gave the wrong argument shapes for `replace` and
+  `eachchar` — all four failed silently, because an unrecognised
+  filter returns your text unchanged with no error. `MaxReps:` was
+  described as capping `[@100 expensive_table]`; it does not, and
+  nothing does. `|sep:` was offered for `[@N table]`, which ignores
+  it — use `>> implode` there. An embed example used a `!set`
+  directive that has never existed, so it rendered a broken link.
+
+  The **Settings reference** had been truncated mid-sentence and
+  shipped that way: three settings of eight, no defaults, and three
+  labels that don't match what Obsidian shows you. It now lists all
+  eight with their real labels and defaults, plus the buttons.
+  Dice Roller compatibility is documented properly as automatic —
+  on whenever the Dice Roller plugin is disabled — rather than "off
+  by default", which it never was.
+
+  Also corrected: several dice modifiers do less than their names
+  suggest (`s`/`sd` only reorder the displayed dice, `u` is skipped
+  entirely when you ask for more dice than faces), a `-=` condition
+  in `cs` is tested first and wins, keep/drop always applies last
+  whatever order you write the suffixes in, and `dice: 1ds` quietly
+  rolls a d100 instead of a Genesys setback die.
+
+- **`\a` picked the wrong article in front of a rolled value.**
+  `\a [@creature]` was always "an", whatever the table returned,
+  because the lookahead read the unevaluated call rather than its
+  result. It now decides from the rendered text, and works across a
+  table boundary — an item that is just `\a` can take its noun from
+  the caller.
+
+### Changed
+- **The beginner's guide is rewritten for someone new to all of
+  this.** The old version explained `^` as "a block id" and `prop:`
+  as "a template" — swapping one unknown word for another. Terms
+  are now defined the first time they appear, in plain language,
+  and the concepts that used to arrive undefined (block ids,
+  frontmatter properties, codeblocks, variables, conditionals) are
+  introduced before they get used. Chapter 1 warns you to turn Dice
+  Roller off before its settings will do anything, and chapter 8
+  tells you the one thing that does not migrate by itself: saved
+  formulas need pasting into **Dice formula aliases**.
+
+### Added
+- **The documentation now runs in CI.** Every generator example in
+  the docs is executed on each build, and every filter and directive
+  the docs name is checked against what the engine implements —
+  reading both lists out of the source, so they cannot drift. A
+  wrong example is no longer invisible to the test suite.
+
 ## 1.15.1
 
 ### Fixed
