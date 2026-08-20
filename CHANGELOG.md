@@ -2,6 +2,33 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.17.1
+
+### Fixed
+- **Clicking a button in Live Preview no longer throws you back to
+  raw source.** Live Preview is a text editor with rendered markdown
+  drawn into it, so a click on one of our buttons was also a click
+  into the document: the cursor moved there, and Live Preview did
+  what it always does when the cursor lands inside something — it
+  showed you the source. The button worked, but your roll turned
+  back into `` `rdm:[@thing]` `` under the cursor every single time,
+  which made the whole plugin awkward to use in the mode most people
+  write in.
+
+  The cursor moves on mouse-down, before any click handler runs, so
+  the controls now stop those events outright and mark themselves as
+  somewhere a cursor can't go. This covers every button we draw into
+  a note: an inline roll's 🎲 / 🔒 / 📌, a codeblock's Reroll, a
+  deck's Draw, and a portrait's Reroll.
+
+  The result *text* is deliberately left alone — clicking it is
+  still how you put the cursor into a roll to edit or delete it.
+
+- **Keeping a result as plain text no longer disturbs the rest of
+  the note.** The edit replaced the whole document, which cost Live
+  Preview its scroll position, folded sections and selection. It now
+  rewrites only the roll itself.
+
 ## 1.17.0
 
 ### Added
