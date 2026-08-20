@@ -2,6 +2,36 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.17.0
+
+### Added
+- **Keep a result as plain text.** Inline rolls now have a third
+  button, **📌**, next to re-roll and lock. It replaces the whole
+  call with what it rolled — backticks, prefix and expression all
+  gone — so the result becomes ordinary prose you can write around.
+  Roll as many times as you like first; 📌 keeps whichever result
+  you are looking at, including the formula when `|form` is on.
+
+  Lock and 📌 answer different questions. Lock says "this result is
+  the answer, but keep the machine". 📌 says "this is now just words
+  in my note". Ctrl+Z undoes a 📌 while the note is open; after that
+  the expression is gone, which is the point. Requested by Nedreow
+  in issue #3.
+
+### Changed
+- **`dice-mod:` leaves plain text behind, the way it used to in Dice
+  Roller.** It rolled once and then locked itself, which left a
+  `` `dice-mod:1d20|form⟹7` `` span sitting in the note wearing an
+  unlock button that could not work: unlocking stripped the lock,
+  the note re-rendered, and the span immediately committed itself
+  again. Now it bakes on first render — `` `dice-mod:1d20|form` ``
+  becomes the words `1d20 → 7` and there is nothing left to click.
+
+  Spans locked by older versions are left exactly as they are;
+  upgrading rewrites nothing. Unlocking one turns it into an
+  ordinary `dice:` call instead of handing it straight back to the
+  bake, so it becomes a roll you can actually play with.
+
 ## 1.16.0
 
 ### Fixed
