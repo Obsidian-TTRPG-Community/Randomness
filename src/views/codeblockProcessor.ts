@@ -45,6 +45,13 @@ import type { PromptDecl } from "../engine/ast";
 import { setSanitisedHtmlWithLinks } from "./sanitiser";
 import { parseDeckBlock, renderDeckBlock } from "./deckInlineProcessor";
 import { makeEditorSafe } from "./editorSafeControls";
+import { findBlocks } from "../resolver/mdExtractor";
+import { parseFileSource } from "../resolver/fileResolver";
+import {
+    extractMarkdownContentTables,
+    noteBaseName,
+} from "../resolver/mdContent";
+import type { GeneratorFile } from "../engine/ast";
 
 /**
  * Build the codeblock-processor function to pass to
@@ -207,11 +214,30 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
             basenameResolver,
         });
 
-        // Step 2b: auto-discover tables referenced by name but not
-        // defined here or in a Use:'d file — the vault index maps a
-        // table name to the file that defines it. Purely additive and
-        // lowest-priority, so explicit definitions always win.
+        // Step 2a: the rest of THIS NOTE.
+        //
+        // An inline `rdm:` call has always seen the note's other
+        // `randomness` blocks and its `^block-id` tables; a codeblock
+        // saw neither, so `[@Party]` in one block could not reach a
+        // `Table: Party` defined in the block below it — the same note,
+        // in front of the user, invisible. That asymmetry had no
+        // rationale behind it, only history, and it read as a bug every
+        // time someone hit it (issue #5).
+        //
+        // Added as extras filtered against what is already defined, so
+        // this block's own tables and anything it explicitly `Use:`s
+        // still win. Sitting before discovery means a name the note
+        // defines is never fetched from a generator file instead: the
+        // table you can see beats the one you cannot.
         let extras = bundle.extras;
+        const noteScope = this.noteScopeFile(bundle.main, bundle.extras);
+        if (noteScope !== null) extras = [...extras, noteScope];
+
+        // Step 2b: auto-discover tables referenced by name but not
+        // defined here, in a Use:'d file, or elsewhere in the note —
+        // the vault index maps a table name to the file that defines
+        // it. Purely additive and lowest-priority, so explicit
+        // definitions always win.
         if (this.plugin.vaultIndex) {
             await this.plugin.vaultIndex.prewarm();
             const discovered = await discoverReferencedTables({
@@ -271,6 +297,89 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         return {
             output: evaluator.run(),
             prompts: bundle.main.prompts,
+        };
+    }
+
+    /**
+     * The rest of the containing note as a GeneratorFile: every OTHER
+     * `randomness` block's tables, plus the note's `^block-id` tables
+     * and lists.
+     *
+     * Names already defined by `already` (this block, and anything it
+     * `Use:`s) are dropped, so note scope can only ever ADD — the
+     * table you wrote in this block always wins over a same-named one
+     * further down the note.
+     *
+     * Returns null when the note contributes nothing, so the common
+     * case allocates nothing and the bundle is byte-identical to what
+     * it was before.
+     */
+    private noteScopeFile(
+        main: GeneratorFile,
+        useExtras: GeneratorFile[]
+    ): GeneratorFile | null {
+        // `getSectionInfo().text` is the whole note source, already in
+        // memory — no disk read, and it is what the inline path pays
+        // for separately. Null in some render contexts (exports, some
+        // previews); note scope is simply absent there rather than
+        // worth an async read in a synchronous stretch.
+        const noteSource = this.ctx.getSectionInfo(this.containerEl)?.text;
+        if (!noteSource) return null;
+
+        const taken = new Set<string>();
+        for (const f of [main, ...useExtras]) {
+            for (const t of f.tables) taken.add(t.name.toLowerCase());
+        }
+
+        // Other blocks are concatenated and parsed as one file, so
+        // tables split across several blocks share a namespace the way
+        // the inline path already treats them.
+        //
+        // Their `Use:` lines are NOT followed. Parsing records them but
+        // resolving them would need its own prefetch pass — the
+        // synchronous resolver can only read files the async prefetch
+        // already pulled in, and that pass walked this block's imports
+        // only. In practice auto-discovery covers it: a table named in
+        // this block is looked up in the vault index regardless of
+        // which file holds it. What is genuinely out of reach is a
+        // sibling block importing a file whose tables this block never
+        // names — rare, and `Use:` here fixes it.
+        const blockSource = findBlocks(noteSource)
+            .map((b) => b.content)
+            .join("\n\n");
+        const virtualPath = this.ctx.sourcePath + ".__noteScope.ipt";
+        const parsed =
+            blockSource.trim() === ""
+                ? null
+                : parseFileSource(virtualPath, blockSource);
+
+        const tables = (parsed?.tables ?? []).filter(
+            (t) => !taken.has(t.name.toLowerCase())
+        );
+        for (const t of tables) taken.add(t.name.toLowerCase());
+
+        // `^block-id` tables and lists in the note's markdown. Lowest
+        // of the low: a codeblock definition of the same name wins.
+        for (const t of extractMarkdownContentTables(
+            noteSource,
+            noteBaseName(this.ctx.sourcePath)
+        )) {
+            if (taken.has(t.name.toLowerCase())) continue;
+            taken.add(t.name.toLowerCase());
+            tables.push(t);
+        }
+
+        if (tables.length === 0) return null;
+        // Tables only. Directives are deliberately NOT inherited: a
+        // sibling block's `MaxReps:`, `Prompt:` or `Set:` belongs to
+        // that block, and pulling them in here would let one block
+        // silently change how another renders. `uses` is empty for the
+        // reason given above: sibling imports are not resolved here.
+        return {
+            uses: [],
+            topLevelSets: [],
+            prompts: [],
+            tables,
         };
     }
 }

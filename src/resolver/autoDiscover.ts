@@ -163,14 +163,61 @@ function synthFile(tables: GeneratorFile["tables"]): GeneratorFile {
  */
 function collectFileRefs(file: GeneratorFile): string[] {
     const out = new Set<string>();
+    const dynamic = { seen: false };
     for (const a of file.topLevelSets) {
-        if (a.valueSource) collectRefsFromText(a.valueSource, out);
+        if (a.valueSource) collectRefsFromText(a.valueSource, out, dynamic);
     }
     for (const t of file.tables) {
         for (const ref of tableRefs(t)) out.add(ref);
+        if (tableHasDynamicRef(t)) dynamic.seen = true;
+    }
+    // A table name built at roll time — `[@{$Prompt1}]` — is invisible
+    // to a static scan: we cannot know what `{$Prompt1}` will hold, so
+    // nothing gets discovered and the roll fails with "Unknown table"
+    // even though the file defining it is sitting in the generator
+    // root. (Issue #5.)
+    //
+    // A `Prompt:` is the one case where the possible values ARE known
+    // statically: the author wrote them out. So when a file contains a
+    // dynamic reference, every prompt option becomes a candidate name.
+    // Gated on `dynamic` deliberately — without it, a prompt offering
+    // "Easy|Hard" would pull in any file that happened to define a
+    // table called Easy, which nobody asked for.
+    //
+    // This stays additive and lowest-priority like the rest of
+    // discovery: a candidate that matches no table in the index is
+    // simply dropped.
+    if (dynamic.seen) {
+        for (const p of file.prompts) {
+            for (const opt of p.options) {
+                const name = opt.trim().toLowerCase();
+                if (name !== "") out.add(name);
+            }
+        }
     }
     return [...out];
 }
+
+/** Does this table build a table name at roll time? */
+function tableHasDynamicRef(t: TableDecl): boolean {
+    const cached = DYNAMIC_REFS_CACHE.get(t);
+    if (cached !== undefined) return cached;
+    const probe = { seen: false };
+    const sink = new Set<string>();
+    if (t.rollExpr) collectRefsFromText(t.rollExpr, sink, probe);
+    if (t.defaultValue) collectRefsFromText(t.defaultValue, sink, probe);
+    for (const a of t.inTableSets) {
+        if (a.valueSource) collectRefsFromText(a.valueSource, sink, probe);
+    }
+    for (const item of t.items) {
+        if (item.rawContent) collectRefsFromText(item.rawContent, sink, probe);
+    }
+    DYNAMIC_REFS_CACHE.set(t, probe.seen);
+    return probe.seen;
+}
+
+/** Companion to TABLE_REFS_CACHE; same lifetime, same reasoning. */
+const DYNAMIC_REFS_CACHE = new WeakMap<TableDecl, boolean>();
 
 /**
  * Per-table reference cache. Auto-discovery runs on every inline span,
@@ -202,38 +249,54 @@ function tableRefs(t: TableDecl): string[] {
 }
 
 /** Parse a raw content string and harvest table references from it. */
-function collectRefsFromText(text: string, out: Set<string>): void {
+function collectRefsFromText(
+    text: string,
+    out: Set<string>,
+    dynamic?: { seen: boolean }
+): void {
     let nodes: Node[];
     try {
         nodes = parseContent(text);
     } catch {
         return; // unparseable fragment — nothing to harvest
     }
-    for (const n of nodes) collectRefsFromNode(n, out);
+    for (const n of nodes) collectRefsFromNode(n, out, dynamic);
 }
 
 /** Walk a single content node, recursing into nested raw sources. */
-function collectRefsFromNode(n: Node, out: Set<string>): void {
+function collectRefsFromNode(
+    n: Node,
+    out: Set<string>,
+    dynamic?: { seen: boolean }
+): void {
     switch (n.type) {
         case "subtable_roll":
         case "subtable_pick":
         case "deck_pick": {
             const name = staticTableName(n.tableSource);
             if (name) out.add(name);
-            for (const p of n.withParams ?? []) collectRefsFromText(p, out);
-            if (n.repsSource) collectRefsFromText(n.repsSource, out);
+            // No static name means the name is built at roll time.
+            else if (n.tableSource.trim() !== "" && dynamic) {
+                dynamic.seen = true;
+            }
+            for (const p of n.withParams ?? []) {
+                collectRefsFromText(p, out, dynamic);
+            }
+            if (n.repsSource) collectRefsFromText(n.repsSource, out, dynamic);
             if (n.type === "subtable_pick" && n.indexSource) {
-                collectRefsFromText(n.indexSource, out);
+                collectRefsFromText(n.indexSource, out, dynamic);
             }
             break;
         }
         case "inline_table":
-            for (const o of n.options) collectRefsFromText(o, out);
+            for (const o of n.options) collectRefsFromText(o, out, dynamic);
             break;
         case "conditional":
-            collectRefsFromText(n.conditionSource, out);
-            collectRefsFromText(n.thenSource, out);
-            if (n.elseSource) collectRefsFromText(n.elseSource, out);
+            collectRefsFromText(n.conditionSource, out, dynamic);
+            collectRefsFromText(n.thenSource, out, dynamic);
+            if (n.elseSource) {
+                collectRefsFromText(n.elseSource, out, dynamic);
+            }
             break;
         default:
             // text / escape / expression / dice / variable /

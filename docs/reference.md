@@ -834,6 +834,19 @@ The codeblock both rolls AND brings `my-generator.rdm` into the
 note's scope, so inline calls anywhere in the note — above the
 codeblock as well as below it — can reference its tables.
 
+Scope runs the other way too: a codeblock can call tables defined
+anywhere else in the same note, whether in another `randomness`
+block or in a `^block-id` markdown table. Order doesn't matter —
+a block at the top can call a table defined at the bottom. On a
+name clash the block's own definition wins, then anything it
+`Use:`s, then the rest of the note, then auto-discovery.
+
+Tables are shared between blocks; directives are not. A `Prompt:`,
+`MaxReps:` or `Set:` belongs to the block that declares it, so one
+block can never quietly change how another renders. The one thing
+that doesn't cross a block boundary is a `Use:` line: to import a
+file, put the `Use:` in the block that needs it.
+
 **Live** — this codeblock defines a table, and the inline call in
 the sentence below it finds that table through note scope:
 
@@ -1571,6 +1584,22 @@ If two files share a name, Randomness prefers one in the
 referencing file's own folder or any folder beneath it; failing
 that it takes the first by full path and logs a one-time console
 note. To force a specific file, use its full path.
+
+**Names built at roll time.** A call like `[@{$Prompt1}]` picks its
+table from a variable, so there is no name to look up until the
+roll happens — which means a table sitting in some other file can't
+be found in advance. One case is covered: when a block contains a
+call like this, every option of its `Prompt:` declarations is
+treated as a possible table name, so
+
+```text
+Prompt: Party Member {Krish|Quinlan|Party} Party
+[@{$Prompt1}]
+```
+
+finds `Krish.rdm`, `Quinlan.rdm` and `Party.rdm` wherever they
+live. A name that comes from anywhere else — a `Set:`, a table roll
+— still needs a `Use:` line, or the table in the same note.
 
 The index refreshes automatically when you add, rename, move, or
 edit `.rdm` files. If it ever seems out of date (e.g. after a sync
