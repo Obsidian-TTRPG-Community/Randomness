@@ -20,11 +20,21 @@
  * not a place a caret can go at all — the same trick CodeMirror uses
  * for its own widgets.
  *
- * Deliberately NOT applied to the result text of an inline roll. That
- * would make the expression unreachable: clicking the text is how you
- * put the cursor in it to edit or delete the call. Only the controls
- * are sealed off, so the buttons behave like buttons and the text
- * behaves like text.
+ * **Scope: the whole rendered element, not just its buttons.** 1.17.1
+ * guarded only the controls, on the theory that leaving the result
+ * text clickable kept the expression reachable for editing. Users
+ * reported no improvement, and a CodeMirror harness driven in a real
+ * browser showed why: people click the element, not the 14-pixel
+ * button inside it, and a click on the result text moved the caret
+ * exactly as before. The same harness showed the wider guard costs
+ * nothing — the keyboard still walks into the span and reveals its
+ * source after the same number of presses, and selecting the line
+ * still yields the same text, because CodeMirror hands you the source
+ * of a replaced range either way.
+ *
+ * So editing a roll means putting the cursor on it with the keyboard,
+ * or clicking just past it — the same way Obsidian's own embeds
+ * behave. Clicking it operates it.
  */
 
 /** Pointer events that move a caret before any click handler runs. */
@@ -36,14 +46,18 @@ const CARET_EVENTS = ["pointerdown", "mousedown", "touchstart"] as const;
  *
  * Returns the element, so it can wrap a construction expression.
  */
-export function makeEditorSafe<T extends HTMLElement>(el: T): T {
+export function makeEditorSafe<T extends HTMLElement>(
+    el: T,
+    opts: { selectable?: boolean } = {}
+): T {
     // An island the caret can't enter. CodeMirror marks its own
     // widgets this way; without it the browser will still try to
     // place a cursor inside on a stray drag or a keyboard nav.
     el.contentEditable = "false";
-    // Belt and braces for themes that re-enable selection: a control
-    // is not text, and starting a drag-select on it is never useful.
-    el.style.userSelect = "none";
+    // A control is not text, and starting a drag-select on it is never
+    // useful. A whole rendered result IS text, though — in Reading
+    // view people select and copy it — so `selectable` opts out.
+    if (opts.selectable !== true) el.style.userSelect = "none";
     for (const type of CARET_EVENTS) {
         el.addEventListener(
             type,

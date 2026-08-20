@@ -29,6 +29,7 @@
  */
 
 import { MarkdownPostProcessorContext, Notice, TFile } from "obsidian";
+import { makeEditorSafe } from "../views/editorSafeControls";
 import type RandomnessPlugin from "../views/main";
 import { composePack, composeFromRecipe, Composed, PortraitRecipe } from "./pack";
 import { saveComposedPng } from "./png";
@@ -137,6 +138,7 @@ export function buildPortraitInlineProcessor(plugin: RandomnessPlugin) {
 
             const span = activeDocument.createElement("span");
             span.className = "randomness-portrait-inline";
+            makeEditorSafe(span, { selectable: true });
             setWidthPx(span, params.size);
             span.textContent = "…";
             code.replaceWith(span);

@@ -759,6 +759,11 @@ export function replaceCodeElement(
     // `>> bold` a <b>, so textContent gives the rendered words rather
     // than the markdown that produced them. Re-rolls update this.
     span.dataset.randomnessText = props.result;
+    // The WHOLE span, not just the buttons: in Live Preview a click on
+    // the result text moved the caret into the codespan and unrendered
+    // it, which is what people were actually reporting. Selectable, so
+    // the text can still be copied in Reading view.
+    makeEditorSafe(span, { selectable: true });
     if (props.tooltip !== undefined) span.title = props.tooltip;
     if (props.isLocked) span.classList.add("randomness-inline-locked");
     else span.classList.add("randomness-inline-preview");

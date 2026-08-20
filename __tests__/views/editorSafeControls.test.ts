@@ -14,11 +14,14 @@
  * stop that — the caret has already moved.
  *
  * These tests pin the guard rather than the symptom, because the
- * symptom needs a real editor. What they can prove: the pointer-down
- * events are defaulted-and-stopped, the element is marked
- * non-editable, and — the part most easily lost in a refactor — the
- * RESULT TEXT is deliberately left unguarded so a user can still
- * click into the expression to edit it.
+ * symptom needs a real editor: they prove the pointer-down events are
+ * defaulted-and-stopped and the element is marked non-editable, not
+ * that a note stops flickering.
+ *
+ * That gap bit once. 1.17.1 guarded only the CONTROLS, these tests
+ * passed, and users reported no change — because they click the
+ * element, not the button inside it. The scope of the guard is the
+ * thing to get right here, so it is asserted explicitly below.
  */
 
 import { makeEditorSafe } from "../../src/views/editorSafeControls";
@@ -128,18 +131,37 @@ describe("inline span: what is guarded and what is not", () => {
         buttons.forEach((b) => expect(controls?.contains(b)).toBe(true));
     });
 
-    test("the RESULT text is deliberately left clickable", () => {
-        // Guarding the result too would seal the expression away
-        // entirely: clicking the text is how you get a cursor into
-        // the call to edit or delete it. If a future change starts
-        // guarding the whole span, this fails and should be argued
-        // with rather than deleted.
+    test("the RESULT text is guarded too — clicking it must not move the caret", () => {
+        // This test used to assert the OPPOSITE, on the theory that
+        // leaving the result clickable kept the expression reachable
+        // for editing. That theory was wrong, and users said so: they
+        // click the element, not the small button inside it, so the
+        // caret moved and Live Preview unrendered the roll exactly as
+        // before.
+        //
+        // A CodeMirror harness driven in a real browser settled it —
+        // guarding the whole span costs nothing. The keyboard still
+        // walks into the span and reveals its source after the same
+        // number of presses, and selecting the line still yields the
+        // same text either way, because CodeMirror hands you the
+        // source of a replaced range regardless.
         const span = render();
         const result = span.querySelector(
             ".randomness-inline-result"
         ) as HTMLElement;
         expect(result).not.toBeNull();
-        expect(result.contentEditable).not.toBe("false");
-        expect(fire(result, "mousedown").defaultPrevented).toBe(false);
+        // The guard sits on the span, so a click anywhere inside it —
+        // including on the result — is caught on the way down.
+        expect(span.contentEditable).toBe("false");
+        expect(fire(result, "mousedown").defaultPrevented).toBe(true);
+        expect(fire(result, "pointerdown").defaultPrevented).toBe(true);
+    });
+
+    test("the result text stays selectable, so it can still be copied", () => {
+        // Reading view has no caret to protect and people copy rolled
+        // results out of it. `user-select: none` on the span would
+        // take that away for no benefit.
+        const span = render();
+        expect(span.style.userSelect).not.toBe("none");
     });
 });

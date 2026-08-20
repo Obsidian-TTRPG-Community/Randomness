@@ -59,6 +59,7 @@ export async function renderDeckBlock(
     const deck = await plugin.decks.getDeck(deckName);
     const box = activeDocument.createElement("div");
     box.className = "randomness-deck-block";
+    makeEditorSafe(box, { selectable: true });
     container.appendChild(box);
 
     if (!deck) {
@@ -158,6 +159,7 @@ async function renderDeckSpan(
     const deck = await plugin.decks.getDeck(deckName);
     const span = activeDocument.createElement("span");
     span.className = "randomness-inline randomness-deck-inline";
+    makeEditorSafe(span, { selectable: true });
 
     if (!deck) {
         span.classList.add("randomness-inline-error");
