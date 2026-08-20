@@ -2,6 +2,35 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.18.0
+
+### Fixed
+- **A `randomness` block can now use tables from the rest of its own
+  note.** A block calling `[@Party]` could not reach a `Table: Party`
+  defined in the block directly below it — the same note, visible on
+  screen, and the roll failed with "Unknown table: Party". Inline
+  `` `rdm:` `` calls had always been able to see the whole note; only
+  codeblocks were sealed off, for no reason anyone would recognise
+  as intentional. They now see the note's other blocks and its
+  `^block-id` markdown tables, in either direction: a block at the
+  top can call a table defined at the bottom.
+
+  Tables are shared; directives are not. A `Prompt:`, `MaxReps:` or
+  `Set:` still belongs to the block that declares it, so no block can
+  quietly change how another renders. On a name clash the block's own
+  table wins, then anything it `Use:`s, then the rest of the note.
+  Reported by huffn in issue #5.
+
+- **A table chosen by a prompt can live in another file.**
+  `[@{$Prompt1}]` builds its table name while rolling, so there was
+  no name for Randomness to go looking for beforehand, and the roll
+  failed even with the file sitting in the generator root. A block
+  that picks a table this way now treats each of its `Prompt:`
+  options as a name worth finding. The same report; it was the
+  detail that a `[when]…[@Party]` workaround DID work from the
+  generator root, while the prompt version didn't, that separated
+  the two causes.
+
 ## 1.17.1
 
 ### Fixed
