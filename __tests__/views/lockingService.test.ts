@@ -14,6 +14,7 @@
 import {
     parseInlineCall,
     serialiseInlineCall,
+    applyBakeToSource,
     applyLockToSource,
     applyUnlockToSource,
     transformAllInlineCalls,
@@ -432,5 +433,89 @@ describe("findAllInlineCallPositions", () => {
         const src = "abc `rdm:[@A]` def";
         const positions = findAllInlineCallPositions(src);
         expect(src[positions[0].sourceOffset]).toBe("`");
+    });
+});
+
+// ────────── applyBakeToSource (issue #3) ──────────
+
+describe("applyBakeToSource", () => {
+    test("replaces the whole codespan, backticks included", () => {
+        expect(
+            applyBakeToSource("You meet `rdm:[@npc]` here.", "[@npc]", 0, "a goblin")
+        ).toBe("You meet a goblin here.");
+    });
+
+    test("nothing of the call survives — no prefix, no backticks", () => {
+        const out = applyBakeToSource("`rdm:[@npc]`", "[@npc]", 0, "Bob");
+        expect(out).toBe("Bob");
+        expect(out).not.toContain("`");
+        expect(out).not.toContain("rdm:");
+    });
+
+    test("targets one occurrence and leaves its twins alone", () => {
+        const src = "`rdm:[@npc]` and `rdm:[@npc]` and `rdm:[@npc]`";
+        expect(applyBakeToSource(src, "[@npc]", 1, "Bob")).toBe(
+            "`rdm:[@npc]` and Bob and `rdm:[@npc]`"
+        );
+    });
+
+    test("bakes a locked call too, dropping the stored result", () => {
+        expect(
+            applyBakeToSource("`rdm:[@npc]⟹Bob`", "[@npc]", 0, "Bob")
+        ).toBe("Bob");
+    });
+
+    test("bakes a compat-prefixed call", () => {
+        expect(
+            applyBakeToSource("roll `dice-mod:1d20`", "1d20", 0, "1d20 → 7", "dice-mod:")
+        ).toBe("roll 1d20 → 7");
+    });
+
+    test("leaves a call with a different prefix alone", () => {
+        const src = "`dice:1d20`";
+        expect(applyBakeToSource(src, "1d20", 0, "7", "rdm:")).toBe(src);
+    });
+
+    test("multi-line text is written as-is", () => {
+        // An inline roll CAN produce newlines (`>> implode \n`). We
+        // don't collapse them: the author asked for those lines.
+        expect(applyBakeToSource("`rdm:[@x]`", "[@x]", 0, "a\nb")).toBe("a\nb");
+    });
+
+    test("text containing backticks doesn't reopen a codespan", () => {
+        // The replacement is raw, so this is really a note about what
+        // the caller may hand us — pinning it so a future change that
+        // re-wraps the output can't slip through unnoticed.
+        expect(applyBakeToSource("`rdm:[@x]`", "[@x]", 0, "a `b` c")).toBe(
+            "a `b` c"
+        );
+    });
+});
+
+// ────────── unlocking a dice-mod: span demotes it (issue #3) ──────────
+
+describe("applyUnlockToSource with a replacement prefix", () => {
+    test("dice-mod: becomes dice: so it stops re-committing", () => {
+        expect(
+            applyUnlockToSource(
+                "`dice-mod:1d20⟹7`",
+                "1d20",
+                0,
+                "dice-mod:",
+                "dice:"
+            )
+        ).toBe("`dice:1d20`");
+    });
+
+    test("demoting to the native prefix omits it entirely", () => {
+        expect(
+            applyUnlockToSource("`dice-mod:[@x]⟹Bob`", "[@x]", 0, "dice-mod:", "rdm:")
+        ).toBe("`rdm:[@x]`");
+    });
+
+    test("without a replacement the prefix is preserved", () => {
+        expect(
+            applyUnlockToSource("`dice:1d20⟹7`", "1d20", 0, "dice:")
+        ).toBe("`dice:1d20`");
     });
 });

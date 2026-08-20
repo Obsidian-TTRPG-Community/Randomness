@@ -42,16 +42,31 @@ then start typing the name:
 - **Reroll all rdm: in current note** — unlocks everything for a
   fresh start.
 
-## Rolls that lock themselves
+## Turning a roll into ordinary words
 
-`dice-mod:` rolls once and locks itself straight away. The first
-time the note opens, Randomness rolls it, writes the answer into
-your note, and never touches it again:
+Locking keeps the roll AND the answer. Sometimes you just want the
+answer — a name you're happy with, sitting in your sentence like
+you typed it yourself.
+
+That's the third button, **📌**. Click it and the whole roll
+vanishes, leaving only what it said. No buttons, no backticks,
+nothing to click ever again. Roll as many times as you like first;
+📌 keeps whichever one you're looking at.
+
+It can't be undone from the note afterwards — the roll is gone —
+so it's Ctrl+Z if you change your mind straight away.
+
+## Rolls that do it for you
+
+`dice-mod:` skips the buttons entirely. The first time the note
+opens, Randomness rolls it once and writes the answer straight
+into your note as plain text:
 
 ```text
 Treasure: `dice-mod: 2d6 * 10` gold
 ```
 
-Great for loot you generate once and never want to change.
+becomes `Treasure: 70 gold`. Great for loot you generate once and
+never want to think about again.
 
 Next: [[04 - Random Lines, Blocks and Tags]]

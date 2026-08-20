@@ -856,10 +856,24 @@ inline calls work anywhere in the note:
 You meet `rdm:[@creature]` on the road.
 ````
 
-An unfilled inline call gets a **re-roll** (🎲) and a **lock** (🔒)
-button. Lock commits the result into the source text so it
-survives reloads. A locked call shows one button instead —
-**unlock** (🔓) — which strips the lock and shows a fresh preview.
+An unfilled inline call gets three buttons:
+
+- **🎲 re-roll** — another result. Nothing is written to the note.
+- **🔒 lock** — commit the result into the source as
+  `` `rdm:[@creature]⟹a goblin` ``, so it survives reloads. The
+  call is still there, so you can unlock and roll again.
+- **📌 keep as plain text** — replace the whole call with its
+  result. The backticks, the prefix and the expression all go, and
+  what's left is ordinary prose. Use this once you've rolled
+  something you want to write around. Ctrl+Z undoes it while the
+  note is open; after that the expression is gone for good.
+
+A locked call shows one button instead — **unlock** (🔓) — which
+strips the lock and shows a fresh preview.
+
+Lock and keep-as-text answer different questions. Lock says "this
+result is the answer, but keep the machine"; keep-as-text says
+"this result is now just words in my note".
 
 > Inline calls don't accept their own `Use:` directive — the
 > syntax inside the brackets is the expression body only. Use a
@@ -885,8 +899,8 @@ with up to two blank lines in between:
 Then roll it four ways:
 
 - **Inline, direct:** `` `rdm:[[Note^taverns]]` `` — rolls a random
-  row, with the usual 🎲/🔒 buttons (🔓 once locked). Locks work
-  exactly as for any other inline call.
+  row, with the usual 🎲/🔒/📌 buttons (🔓 once locked). Locking
+  and keeping-as-text work exactly as for any other inline call.
 - **From the same note** — a block-id table is already in scope for
   inline calls in the note that holds it, so `` `rdm:[@taverns]` ``
   works with no `Use:` line anywhere.
@@ -1349,10 +1363,11 @@ Note where that last pipe sits. Under `dice:` a column pick goes
 `` `rdm:[[Note^npcs|Trait]]` ``. Getting it backwards errors under
 `dice:` and renders as literal text under `rdm:`.
 
-Every compat span gets the same 🔒/🎲 buttons as `rdm:` — locks are
-the durable replacement for Dice Roller's result saving. `dice+:`
-and `dice-:` are plain aliases of `dice:`; `dice-mod:` is not, and
-gets its own note below.
+Every compat span gets the same 🎲/🔒/📌 buttons as `rdm:` — locks
+are the durable replacement for Dice Roller's result saving, and
+📌 keeps a result as plain text. `dice+:` and `dice-:` are plain
+aliases of `dice:`; `dice-mod:` is not, and gets its own note
+below.
 
 ### Display flags
 
@@ -1379,11 +1394,21 @@ Opening a note never animates anything. See "Graphical dice" above.
 
 ### `dice-mod:` writes to your note
 
-An unfilled `dice-mod:` span commits its roll into the note on
-first render, without waiting for a click — the lock form of Dice
-Roller's note-modifying roll. It's the one prefix that isn't a
-plain alias, so don't scatter it around expecting `dice:`
-behaviour.
+A `dice-mod:` span rolls once on first render and replaces itself
+with plain text — the same thing Dice Roller's note-modifying roll
+did. `` `dice-mod:1d20|form` `` becomes the words `1d20 → 7`, and
+there is no span left afterwards: no buttons, nothing to unlock,
+nothing to re-roll. Display flags are applied before it bakes, so
+what lands in the note is what you would have seen on screen.
+
+It's the one prefix that isn't a plain alias, so don't scatter it
+around expecting `dice:` behaviour. Ctrl+Z puts the expression
+back while the note is open.
+
+Spans locked by older versions (`` `dice-mod:1d20⟹7` ``) are left
+alone. Unlocking one turns it into a plain `dice:` call rather than
+handing it back to the bake, so it becomes a roll you can play
+with.
 
 ### Formula aliases
 

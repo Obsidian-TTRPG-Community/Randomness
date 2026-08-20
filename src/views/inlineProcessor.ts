@@ -24,7 +24,9 @@
  */
 
 import {
+    Editor,
     MarkdownPostProcessorContext,
+    MarkdownView,
     TFile,
 } from "obsidian";
 import { Evaluator } from "../engine/evaluator";
@@ -55,6 +57,7 @@ import { diceCompatEnabled } from "./settings";
 import { FileSource } from "../resolver/fileResolver";
 import {
     parseInlineCall,
+    applyBakeToSource,
     applyLockToSource,
     applyUnlockToSource,
     PreviewKey,
@@ -467,15 +470,6 @@ async function processOne(
         isLocked = false;
     }
 
-    // Dice Roller's `dice-mod:` writes its roll straight into the
-    // note. A lock is our durable form of exactly that, so an
-    // unfilled dice-mod span commits itself on first render — the
-    // write triggers a re-render, which shows the locked state.
-    if (!isLocked && (call.prefix ?? INLINE_PREFIX) === "dice-mod:") {
-        await lockCall(ctx, plugin, call, occurrence);
-        return;
-    }
-
     // Display flags (Dice Roller compat): `|text(label)` shows the
     // label with the rolled value in the tooltip; `|form` shows the
     // formula alongside the result. Applied here AND on re-roll (see
@@ -485,6 +479,22 @@ async function processOne(
         tooltip,
         breakdown,
     } = decorateDiceResult(call, result, plugin, trace);
+
+    // Dice Roller's `dice-mod:` wrote its roll straight into the note
+    // as text, and that is what the prefix means: roll once, keep the
+    // words, stop being a roll. We used to lock instead, which left a
+    // `dice-mod:…⟹7` span sitting in the note wearing an unlock
+    // button that could not work — unlocking stripped the lock, the
+    // re-render saw an unfilled dice-mod span, and it committed
+    // itself again immediately (issue #3).
+    //
+    // Baking after `decorateDiceResult` rather than before is what
+    // makes `dice-mod: 1d20|form` bake as "1d20 → 7" instead of a
+    // bare "7": the flags are part of what the author asked to keep.
+    if (!isLocked && (call.prefix ?? INLINE_PREFIX) === "dice-mod:") {
+        await bakeCall(ctx, plugin, call, occurrence, displayResult);
+        return;
+    }
 
     // Render and keep a handle on the span we built — onReroll for an
     // unfilled call updates it in place without needing a re-render
@@ -496,6 +506,19 @@ async function processOne(
         isLocked,
         expr: call.expr,
         onLock: () => lockCall(ctx, plugin, call, occurrence),
+        onBake: () =>
+            bakeCall(
+                ctx,
+                plugin,
+                call,
+                occurrence,
+                // Bake what is on screen NOW, not what was on screen
+                // when this span was first built: a re-roll repaints
+                // the result element in place without re-rendering,
+                // so the element is the only reliable source of the
+                // current text.
+                currentResultText(span) ?? displayResult
+            ),
         onReroll: () =>
             rerollCall(
                 ctx,
@@ -699,6 +722,12 @@ interface InlineRenderProps {
     isLocked: boolean;
     expr: string;
     onLock: () => Promise<void> | void;
+    /**
+     * Replace the whole call with its result as ordinary text. Absent
+     * on a locked span — a locked call is already a durable record,
+     * and the useful move from there is to unlock and re-roll.
+     */
+    onBake?: () => Promise<void> | void;
     onReroll: () => Promise<void> | void;
     /**
      * Optional: when present, the result is rendered with wiki-
@@ -724,6 +753,11 @@ export function replaceCodeElement(
 ): HTMLElement {
     const span = activeDocument.createElement("span");
     span.className = "randomness-inline";
+    // The display text as SOURCE, kept for baking. Reading it back off
+    // the DOM would not do: by then `[[Note]]` has become an <a> and
+    // `>> bold` a <b>, so textContent gives the rendered words rather
+    // than the markdown that produced them. Re-rolls update this.
+    span.dataset.randomnessText = props.result;
     if (props.tooltip !== undefined) span.title = props.tooltip;
     if (props.isLocked) span.classList.add("randomness-inline-locked");
     else span.classList.add("randomness-inline-preview");
@@ -766,6 +800,26 @@ export function replaceCodeElement(
             void props.onLock();
         });
         controls.appendChild(lockBtn);
+
+        // Bake (📌) goes last, after the two reversible actions.
+        // Pinning the result into the note as plain text is the one
+        // control here you cannot undo from the note afterwards —
+        // the call is gone — so it sits furthest from the 🎲 a user
+        // clicks repeatedly. Requested in issue #3: the point is to
+        // roll until you like the answer, then keep the answer and
+        // lose the machinery.
+        if (props.onBake !== undefined) {
+            const bakeBtn = makeControlButton(
+                "📌",
+                "Keep as plain text (removes the roll — Ctrl+Z to undo)"
+            );
+            bakeBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                void (props.onBake as () => Promise<void> | void)();
+            });
+            controls.appendChild(bakeBtn);
+        }
     }
 
     span.appendChild(controls);
@@ -964,12 +1018,24 @@ async function rerollCall(
         // as the lock-targets-the-top one. Both are now position-
         // aware.
         plugin.previewRegistry.delete(previewKey);
+        const prefix = call.prefix ?? INLINE_PREFIX;
+        // Unlocking a `dice-mod:` span demotes it to `dice:`.
+        //
+        // Notes written before 1.17 still hold `dice-mod:…⟹7` spans,
+        // and `dice-mod:` now bakes on sight — so unlocking one and
+        // leaving the prefix alone would bake it on the very next
+        // render, which is the same trap as the old relock loop from
+        // the other direction. Dropping `-mod` is what the reporter
+        // asked for anyway: it turns the span into an ordinary roll
+        // you can play with (issue #3).
+        const newPrefix = prefix === "dice-mod:" ? "dice:" : prefix;
         await modifyNote(plugin, ctx.sourcePath, (source) => {
             return applyUnlockToSource(
                 source,
                 call.expr,
                 occurrence,
-                call.prefix ?? INLINE_PREFIX
+                prefix,
+                newPrefix
             );
         });
         return;
@@ -1032,6 +1098,7 @@ async function rerollCall(
                 ? `${call.expr}\n${breakdown}`
                 : call.expr;
     }
+    span.dataset.randomnessText = display;
     setSanitisedHtmlWithLinks(
         resultSpan ?? span,
         markdownLite(display),
@@ -1055,6 +1122,110 @@ async function modifyNote(
     const file = plugin.app.vault.getAbstractFileByPath(notePath);
     if (!(file instanceof TFile)) return;
     await plugin.app.vault.process(file, transform);
+}
+
+/** The display text a span is currently showing, as markdown source. */
+function currentResultText(span: HTMLElement): string | null {
+    const t = span.dataset.randomnessText;
+    return t === undefined || t === "" ? null : t;
+}
+
+/**
+ * The open editor for a note, or null when it isn't open in one.
+ *
+ * `vault.process` writes the file underneath the editor, which is
+ * fine for a lock — the `⟹result` is still a call, and unlocking
+ * puts it back. Baking has no undo of its own: the expression is
+ * gone from the note. Going through the editor instead puts the
+ * change on the editor's own undo stack, so Ctrl+Z restores the
+ * call. A note being rendered without an editor (reading view, a
+ * hover preview, an embed) falls back to `vault.process`.
+ */
+function editorFor(
+    plugin: RandomnessPlugin,
+    notePath: string
+): Editor | null {
+    let found: Editor | null = null;
+    try {
+        plugin.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+            if (found !== null) return;
+            const view = leaf.view;
+            if (view instanceof MarkdownView && view.file?.path === notePath) {
+                found = view.editor;
+            }
+        });
+    } catch {
+        // Defensive, matching the rest of this file: a partial app
+        // shape (test fixtures, an embedder building a minimal
+        // plugin) means no editor, not a failed bake.
+        return null;
+    }
+    return found;
+}
+
+/**
+ * Apply a source transform, preferring the editor so the change is
+ * undoable. The editor path replaces the whole document in one
+ * operation, which Obsidian records as a single undo step — the
+ * cursor is restored afterwards so a bake doesn't move the caret out
+ * from under someone mid-sentence.
+ */
+async function modifyNoteUndoable(
+    plugin: RandomnessPlugin,
+    notePath: string,
+    transform: (source: string) => string
+): Promise<void> {
+    const editor = editorFor(plugin, notePath);
+    if (editor === null) {
+        await modifyNote(plugin, notePath, transform);
+        return;
+    }
+    const before = editor.getValue();
+    const after = transform(before);
+    if (after === before) return;
+    const cursor = editor.getCursor();
+    editor.setValue(after);
+    try {
+        editor.setCursor(cursor);
+    } catch {
+        // Cursor was past the new end of the document (the bake
+        // shortened it). Harmless — leave the editor where it lands.
+    }
+}
+
+/**
+ * Bake a call: replace the whole codespan with the text currently on
+ * screen, so what is left in the note is ordinary prose.
+ *
+ * Uses the DISPLAYED result — `|form`, `|text(…)` and a visible dice
+ * breakdown all bake as they appeared — which is the whole point:
+ * what you were looking at is what you keep.
+ */
+async function bakeCall(
+    ctx: MarkdownPostProcessorContext,
+    plugin: RandomnessPlugin,
+    call: InlineCall,
+    occurrence: number,
+    displayText: string
+): Promise<void> {
+    // Drop this call's preview AND every later one for the same
+    // expression: baking removes a call from the source, so the spans
+    // below it shift down an occurrence and would otherwise redisplay
+    // the value that was just baked.
+    plugin.previewRegistry.deleteFrom(
+        ctx.sourcePath,
+        callKey(call),
+        occurrence
+    );
+    await modifyNoteUndoable(plugin, ctx.sourcePath, (source) =>
+        applyBakeToSource(
+            source,
+            call.expr,
+            occurrence,
+            displayText,
+            call.prefix ?? INLINE_PREFIX
+        )
+    );
 }
 
 /**

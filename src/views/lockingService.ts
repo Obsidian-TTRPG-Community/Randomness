@@ -214,12 +214,44 @@ export function applyUnlockToSource(
     source: string,
     targetExpr: string,
     occurrence: number,
-    targetPrefix: string = INLINE_PREFIX
+    targetPrefix: string = INLINE_PREFIX,
+    newPrefix: string = targetPrefix
 ): string {
     return transformNthMatch(source, targetPrefix, targetExpr, occurrence, () => ({
         expr: targetExpr,
-        prefix: targetPrefix,
+        ...(newPrefix === INLINE_PREFIX ? {} : { prefix: newPrefix }),
     }));
+}
+
+/**
+ * Transform a full note source by BAKING a specific inline call: the
+ * whole codespan, backticks and prefix included, is replaced by the
+ * given text.
+ *
+ * This is the one transform that is not reversible from the note —
+ * afterwards there is no call left to re-roll, only the words it
+ * produced. That is the point: a baked result is ordinary note text,
+ * indistinguishable from something typed by hand, which is what makes
+ * it useful in a sentence you are still writing.
+ *
+ * `text` is the DISPLAYED result rather than the raw one, so `|form`,
+ * `|text(…)` and a visible dice breakdown all bake exactly as they
+ * appeared on screen.
+ */
+export function applyBakeToSource(
+    source: string,
+    targetExpr: string,
+    occurrence: number,
+    text: string,
+    targetPrefix: string = INLINE_PREFIX
+): string {
+    return transformNthMatch(
+        source,
+        targetPrefix,
+        targetExpr,
+        occurrence,
+        () => text
+    );
 }
 
 /**
@@ -230,7 +262,7 @@ export function applyUnlockToSource(
  */
 export function transformAllInlineCalls(
     source: string,
-    transform: (call: InlineCall) => InlineCall | null
+    transform: (call: InlineCall) => InlineCall | string | null
 ): string {
     // Match `rdm:...` inside backticks. We use a careful pattern:
     //   `rdm:` then any chars except backtick until closing backtick.
@@ -243,6 +275,10 @@ export function transformAllInlineCalls(
             if (!call) return whole;
             const updated = transform(call);
             if (updated === null) return whole;
+            // A string replaces the whole codespan, backticks and
+            // all — that's how baking drops out of the plugin's
+            // syntax entirely and leaves ordinary note text.
+            if (typeof updated === "string") return updated;
             return "`" + serialiseInlineCall(updated) + "`";
         }
     );
@@ -261,7 +297,7 @@ function transformNthMatch(
     targetPrefix: string,
     targetExpr: string,
     occurrence: number,
-    transform: (call: InlineCall) => InlineCall
+    transform: (call: InlineCall) => InlineCall | string
 ): string {
     let seen = 0;
     return transformAllInlineCalls(source, (call) => {
@@ -425,6 +461,39 @@ export class PreviewRegistry {
     delete(key: PreviewKey): void {
         this.map.delete(keyString(key));
         this.traces.delete(keyString(key));
+    }
+
+    /**
+     * Drop this expression's previews from `fromOccurrence` onward,
+     * in one note.
+     *
+     * Baking is the one action that REMOVES a call from the source,
+     * so every later call of the same expression shifts down an
+     * occurrence. Their cached previews are keyed by occurrence, so
+     * without this the span below a baked one would redisplay the
+     * value that was just baked. Dropping the tail makes them
+     * re-evaluate instead.
+     */
+    deleteFrom(
+        sourcePath: string,
+        expr: string,
+        fromOccurrence: number
+    ): void {
+        // Keys are `sourcePath \0 occurrence \0 expr` — the
+        // occurrence sits in the MIDDLE, so this splits rather than
+        // matching a prefix. The expr may itself contain anything
+        // except a null byte, hence the rejoin.
+        for (const k of [...this.map.keys()]) {
+            const parts = k.split("\u0000");
+            if (parts.length < 3) continue;
+            if (parts[0] !== sourcePath) continue;
+            if (parts.slice(2).join("\u0000") !== expr) continue;
+            const n = Number(parts[1]);
+            if (Number.isFinite(n) && n >= fromOccurrence) {
+                this.map.delete(k);
+                this.traces.delete(k);
+            }
+        }
     }
 
     /** Drop every preview for a given note. */

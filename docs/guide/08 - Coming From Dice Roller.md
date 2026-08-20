@@ -32,7 +32,7 @@ Afterwards they roll exactly as they used to.
 ## Your other kinds of roll
 
 ```text
-`dice-mod: 2d6 * 10`      rolls once, then writes the answer in
+`dice-mod: 2d6 * 10`      rolls once, leaves plain text behind
 `dice+: 1d20`             accepted (the 🔒 lock does the saving now)
 `dice-: 1d20`             accepted too
 `dice: [[Loot^gems]]`     roll on a table in another note

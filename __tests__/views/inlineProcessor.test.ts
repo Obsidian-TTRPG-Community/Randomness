@@ -137,14 +137,16 @@ function containerWithCode(text: string): HTMLElement {
  */
 function getButton(
     el: ParentNode,
-    which: "lock" | "reroll" | "unlock"
+    which: "lock" | "reroll" | "unlock" | "bake"
 ): HTMLButtonElement | null {
     const label =
         which === "lock"
             ? "Lock this preview"
             : which === "unlock"
               ? "Unlock (rolls a fresh preview)"
-              : "Re-roll";
+              : which === "bake"
+                ? "Keep as plain text (removes the roll — Ctrl+Z to undo)"
+                : "Re-roll";
     return el.querySelector(
         `button[aria-label="${label}"]`
     ) as HTMLButtonElement | null;
@@ -1177,5 +1179,241 @@ describe("Dice Roller display flags survive a re-roll (pipeline)", () => {
         getButton(wrap, "reroll")!.click();
         await new Promise((r) => setTimeout(r, 40));
         expect(text()).toMatch(/^2d6\+3 → \d+$/);
+    });
+});
+
+// ────────── Baking to plain text (issue #3) ──────────
+
+describe("bake: turning a result into ordinary note text", () => {
+    const NOTE = [
+        "```randomness",
+        "Table: T",
+        "Alpha",
+        "```",
+        "",
+        "Body with `rdm:[@T]`.",
+    ].join("\n");
+
+    test("the bake button writes plain text and removes the call", async () => {
+        const p = fakePlugin({ files: { "note.md": NOTE } });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("rdm:[@T]");
+        await proc(wrap, fakeCtx("note.md"));
+
+        getButton(wrap, "bake")!.click();
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(1);
+        const after = p.writeLog[0].after;
+        expect(after).toContain("Body with Alpha.");
+        expect(after).not.toContain("rdm:[@T]");
+        expect(after).not.toContain("⟹");
+    });
+
+    test("an unfilled span offers all three controls", async () => {
+        const p = fakePlugin({ files: { "note.md": NOTE } });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("rdm:[@T]");
+        await proc(wrap, fakeCtx("note.md"));
+
+        expect(wrap.querySelectorAll("button").length).toBe(3);
+        expect(getButton(wrap, "reroll")).not.toBeNull();
+        expect(getButton(wrap, "lock")).not.toBeNull();
+        expect(getButton(wrap, "bake")).not.toBeNull();
+    });
+
+    test("a locked span offers no bake button", async () => {
+        // Baking a locked call would be a second way to spend a
+        // result that is already committed; the useful move from
+        // there is to unlock and roll again.
+        const locked = NOTE.replace("`rdm:[@T]`", "`rdm:[@T]⟹Bob`");
+        const p = fakePlugin({ files: { "note.md": locked } });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("rdm:[@T]⟹Bob");
+        await proc(wrap, fakeCtx("note.md"));
+
+        expect(wrap.querySelectorAll("button").length).toBe(1);
+        expect(getButton(wrap, "bake")).toBeNull();
+    });
+
+    test("bakes the value on screen NOW, not the one first rendered", async () => {
+        const many = [
+            "```randomness",
+            "Table: T",
+            "Alpha",
+            "Beta",
+            "Gamma",
+            "Delta",
+            "```",
+            "",
+            "Body with `rdm:[@T]`.",
+        ].join("\n");
+        const p = fakePlugin({ files: { "note.md": many } });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("rdm:[@T]");
+        await proc(wrap, fakeCtx("note.md"));
+
+        const rerollBtn = getButton(wrap, "reroll")!;
+        for (let i = 0; i < 8; i++) {
+            rerollBtn.click();
+            await new Promise((r) => setTimeout(r, 5));
+        }
+        const shown = wrap.querySelector(".randomness-inline-result")
+            ?.textContent;
+        expect(shown).toBeTruthy();
+
+        getButton(wrap, "bake")!.click();
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(1);
+        expect(p.writeLog[0].after).toContain(`Body with ${shown}.`);
+    });
+
+    test("baking the middle of three identical calls leaves the others", async () => {
+        const noteSource = [
+            "```randomness",
+            "Table: T",
+            "Alpha",
+            "```",
+            "",
+            "`rdm:[@T]` `rdm:[@T]` `rdm:[@T]`",
+        ].join("\n");
+        const p = fakePlugin({ files: { "note.md": noteSource } });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithMultipleCodes([
+            "rdm:[@T]",
+            "rdm:[@T]",
+            "rdm:[@T]",
+        ]);
+        await proc(wrap, fakeCtxFullSection("note.md"));
+
+        const spans = wrap.querySelectorAll(".randomness-inline");
+        expect(spans.length).toBe(3);
+        const bakeBtn = Array.from(
+            (spans[1] as HTMLElement).querySelectorAll("button")
+        ).find((b) => b.title.startsWith("Keep as plain text")) as
+            HTMLButtonElement;
+        expect(bakeBtn).toBeTruthy();
+        bakeBtn.click();
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(1);
+        expect(p.writeLog[0].after).toContain(
+            "`rdm:[@T]` Alpha `rdm:[@T]`"
+        );
+    });
+
+    test("baking drops the cached previews below it, which have shifted up", () => {
+        // Occurrence keys are positional, and a bake REMOVES a call —
+        // so occurrence 2 becomes occurrence 1. Without dropping the
+        // tail, the span below a baked one redisplays the value that
+        // was just baked.
+        const reg = new PreviewRegistry();
+        const k = (occurrence: number) => ({
+            sourcePath: "note.md",
+            expr: "[@T]",
+            occurrence,
+        });
+        reg.set(k(0), "first");
+        reg.set(k(1), "second");
+        reg.set(k(2), "third");
+        reg.set(
+            { sourcePath: "note.md", expr: "[@Other]", occurrence: 2 },
+            "untouched"
+        );
+        reg.set({ sourcePath: "other.md", expr: "[@T]", occurrence: 2 }, "elsewhere");
+
+        reg.deleteFrom("note.md", "[@T]", 1);
+
+        expect(reg.get(k(0))).toBe("first");
+        expect(reg.get(k(1))).toBeUndefined();
+        expect(reg.get(k(2))).toBeUndefined();
+        // Other expressions and other notes are not collateral.
+        expect(
+            reg.get({ sourcePath: "note.md", expr: "[@Other]", occurrence: 2 })
+        ).toBe("untouched");
+        expect(
+            reg.get({ sourcePath: "other.md", expr: "[@T]", occurrence: 2 })
+        ).toBe("elsewhere");
+    });
+});
+
+describe("dice-mod: bakes itself (issue #3)", () => {
+    const compat = { diceRollerCompatChoice: true };
+
+    test("an unfilled dice-mod: span writes plain text, not a locked call", async () => {
+        const note = "Roll: `dice-mod:1d20`.";
+        const p = fakePlugin({
+            files: { "note.md": note },
+            settings: compat,
+        });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("dice-mod:1d20");
+        await proc(wrap, fakeCtx("note.md"));
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(1);
+        const after = p.writeLog[0].after;
+        // The whole call is gone — this is the fix for the unlock
+        // loop, because there is no span left to unlock.
+        expect(after).not.toContain("dice-mod:");
+        expect(after).not.toContain("`");
+        expect(after).not.toContain("⟹");
+        expect(after).toMatch(/^Roll: \d+\.$/);
+    });
+
+    test("|form bakes the formula too, as it appeared on screen", async () => {
+        // The reporter's exact case: `dice-mod: 1d20|form` should
+        // leave "1d20 → 7" in the note, not a bare number and not a
+        // span. Baking after the display flags are applied is what
+        // makes that work.
+        const p = fakePlugin({
+            files: { "note.md": "Roll: `dice-mod:1d20|form`." },
+            settings: compat,
+        });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("dice-mod:1d20|form");
+        await proc(wrap, fakeCtx("note.md"));
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(1);
+        expect(p.writeLog[0].after).toMatch(/^Roll: 1d20 → \d+\.$/);
+    });
+
+    test("unlocking a legacy dice-mod: span demotes it to dice:", async () => {
+        // Notes written before this change still hold locked
+        // dice-mod: spans. Unlocking one used to hand it straight
+        // back to the auto-commit path; now it becomes an ordinary
+        // roll the user can actually play with.
+        const p = fakePlugin({
+            files: { "note.md": "Roll: `dice-mod:1d20⟹7`." },
+            settings: compat,
+        });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("dice-mod:1d20⟹7");
+        await proc(wrap, fakeCtx("note.md"));
+
+        getButton(wrap, "unlock")!.click();
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(1);
+        expect(p.writeLog[0].after).toBe("Roll: `dice:1d20`.");
+    });
+
+    test("a locked dice-mod: span is left alone on render", async () => {
+        // Upgrading must not rewrite anyone's existing notes.
+        const p = fakePlugin({
+            files: { "note.md": "Roll: `dice-mod:1d20⟹7`." },
+            settings: compat,
+        });
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("dice-mod:1d20⟹7");
+        await proc(wrap, fakeCtx("note.md"));
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(0);
+        expect(wrap.querySelector(".randomness-inline-result")?.textContent).toBe(
+            "7"
+        );
     });
 });
