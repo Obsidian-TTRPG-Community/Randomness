@@ -51,7 +51,7 @@ function makeFakeAdapter(files: Record<string, string> = {}) {
 /** A minimal TFile stand-in. The real `TFile instanceof TFile` check
  * in inlineProcessor.modifyNote relies on the obsidian mock's TFile
  * class being instanceable; we new-up that exported class. */
-import { TFile } from "obsidian";
+import { MarkdownView, TFile } from "obsidian";
 
 function fakePlugin(opts: {
     files?: Record<string, string>;
@@ -1415,5 +1415,114 @@ describe("dice-mod: bakes itself (issue #3)", () => {
         expect(wrap.querySelector(".randomness-inline-result")?.textContent).toBe(
             "7"
         );
+    });
+});
+
+// ────────── the undoable write path (Live Preview) ──────────
+
+describe("bake through an open editor", () => {
+    /**
+     * A minimal Editor stand-in that records what range was replaced.
+     * The point of the test is that a bake edits the CHANGED SPAN
+     * only: replacing the whole document works, but in Live Preview
+     * it throws away scroll position, folds and selection — the very
+     * jolt this area is being complained about.
+     */
+    function fakeEditor(initial: string) {
+        const state = { value: initial };
+        const calls: Array<{ text: string; from: number; to: number }> = [];
+        return {
+            calls,
+            state,
+            editor: {
+                getValue: () => state.value,
+                offsetToPos: (n: number) => ({ offset: n }),
+                replaceRange(
+                    text: string,
+                    from: { offset: number },
+                    to: { offset: number }
+                ) {
+                    calls.push({ text, from: from.offset, to: to.offset });
+                    state.value =
+                        state.value.slice(0, from.offset) +
+                        text +
+                        state.value.slice(to.offset);
+                },
+            },
+        };
+    }
+
+    function pluginWithEditor(path: string, source: string) {
+        const f = fakeEditor(source);
+        const p: any = fakePlugin({ files: { [path]: source } });
+        // MarkdownView is a class in the obsidian mock; the real
+        // editorFor() does an instanceof check, so build a real one.
+        const view = Object.create(MarkdownView.prototype);
+        view.file = { path };
+        view.editor = f.editor;
+        p.app.workspace.getLeavesOfType = () => [{ view }];
+        return { p, f };
+    }
+
+    test("edits only the changed span, not the whole document", async () => {
+        const source = [
+            "```randomness",
+            "Table: T",
+            "Alpha",
+            "```",
+            "",
+            "A long line of prose that must not be rewritten.",
+            "",
+            "Body with `rdm:[@T]` and more prose after it.",
+        ].join("\n");
+        const { p, f } = pluginWithEditor("note.md", source);
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("rdm:[@T]");
+        await proc(wrap, fakeCtx("note.md"));
+
+        getButton(wrap, "bake")!.click();
+        await new Promise((r) => setTimeout(r, 30));
+
+        // One edit, and a narrow one: the replaced range must be no
+        // wider than the call itself.
+        expect(f.calls.length).toBe(1);
+        const { from, to } = f.calls[0];
+        expect(to - from).toBeLessThanOrEqual("`rdm:[@T]`".length);
+        expect(source.slice(from, to)).toContain("rdm:[@T]");
+
+        // And the result is right.
+        expect(f.state.value).toContain("Body with Alpha and more prose");
+        expect(f.state.value).toContain("A long line of prose that must not");
+
+        // The vault write path must NOT also have fired — that would
+        // be a second, non-undoable edit racing the first.
+        expect(p.writeLog.length).toBe(0);
+    });
+
+    test("falls back to the vault when the note isn't open in an editor", async () => {
+        const note = "Body with `rdm:[@T]`.";
+        const p: any = fakePlugin({
+            files: {
+                "note.md": [
+                    "```randomness",
+                    "Table: T",
+                    "Alpha",
+                    "```",
+                    "",
+                    note,
+                ].join("\n"),
+            },
+        });
+        // fakePlugin gives `workspace: {}` — no getLeavesOfType at
+        // all, which is also what a partial embedder looks like.
+        const proc = buildInlineProcessor(p as any);
+        const wrap = containerWithCode("rdm:[@T]");
+        await proc(wrap, fakeCtx("note.md"));
+
+        getButton(wrap, "bake")!.click();
+        await new Promise((r) => setTimeout(r, 30));
+
+        expect(p.writeLog.length).toBe(1);
+        expect(p.writeLog[0].after).toContain("Body with Alpha.");
     });
 });

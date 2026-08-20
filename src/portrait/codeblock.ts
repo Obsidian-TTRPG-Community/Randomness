@@ -26,6 +26,7 @@ import {
     Notice,
     TFile,
 } from "obsidian";
+import { makeEditorSafe } from "../views/editorSafeControls";
 import type RandomnessPlugin from "../views/main";
 import { composePack, composeFromRecipe, Composed, PortraitRecipe, RawManifest } from "./pack";
 import { saveComposedPng } from "./png";
@@ -209,6 +210,7 @@ class PortraitCodeblockChild extends MarkdownRenderChild {
                 ? "Block has a fixed seed — edit or remove the seed line to reroll"
                 : "Roll new portraits";
         reroll.addEventListener("click", () => void this.render());
+        makeEditorSafe(reroll);
         bar.appendChild(reroll);
 
         const grid = makeChildDiv(this.containerEl, "randomness-portrait-grid");

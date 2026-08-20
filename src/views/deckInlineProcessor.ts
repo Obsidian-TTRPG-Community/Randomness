@@ -14,6 +14,7 @@
  */
 
 import { MarkdownPostProcessorContext, Notice, TFile } from "obsidian";
+import { makeEditorSafe } from "./editorSafeControls";
 import { markdownLite, setSanitisedHtml } from "./sanitiser";
 import type { DrawResult, FolderDeck } from "../decks/deckService";
 import { paintCard } from "./decksTab";
@@ -99,6 +100,7 @@ export async function renderDeckBlock(
         );
     };
 
+    makeEditorSafe(drawBtn);
     drawBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -183,6 +185,7 @@ async function renderDeckSpan(
         paintDeckBody(plugin, body, fresh, last);
     };
 
+    makeEditorSafe(drawBtn);
     drawBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         e.preventDefault();

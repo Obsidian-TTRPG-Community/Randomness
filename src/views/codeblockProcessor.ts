@@ -44,6 +44,7 @@ import { renderPromptControls, initialPromptValues } from "./promptUI";
 import type { PromptDecl } from "../engine/ast";
 import { setSanitisedHtmlWithLinks } from "./sanitiser";
 import { parseDeckBlock, renderDeckBlock } from "./deckInlineProcessor";
+import { makeEditorSafe } from "./editorSafeControls";
 
 /**
  * Build the codeblock-processor function to pass to
@@ -333,6 +334,9 @@ export function renderRerollButton(
     button.textContent = "🎲 Reroll";
     button.setAttribute("aria-label", "Reroll");
     button.addEventListener("click", () => onReroll());
+    // Live Preview: pressing Reroll must not drop the caret into the
+    // codeblock and unrender it.
+    makeEditorSafe(button);
     bar.appendChild(button);
     return button;
 }

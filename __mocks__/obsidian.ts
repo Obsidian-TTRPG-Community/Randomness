@@ -312,6 +312,20 @@ export class ItemView {
     }
 }
 
+/**
+ * Minimal MarkdownView. inlineProcessor's `editorFor` does an
+ * `instanceof MarkdownView` check to find the editor for a note, so
+ * a test that wants to exercise the editor write path needs a real
+ * constructor to build against.
+ */
+export class MarkdownView extends ItemView {
+    file: TFile | null = null;
+    editor: Editor = new MockEditor([]);
+    getViewType(): string {
+        return "markdown";
+    }
+}
+
 export class TextFileView extends ItemView {
     data: string = "";
     file: TFile | null = null;

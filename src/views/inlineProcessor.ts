@@ -29,6 +29,7 @@ import {
     MarkdownView,
     TFile,
 } from "obsidian";
+import { makeEditorSafe } from "./editorSafeControls";
 import { Evaluator } from "../engine/evaluator";
 import { buildInlineBundle } from "../resolver/scope";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
@@ -774,6 +775,9 @@ export function replaceCodeElement(
     // CSS hides whichever button is contextually irrelevant later.
     const controls = activeDocument.createElement("span");
     controls.className = "randomness-inline-controls";
+    // Live Preview: a click here must press a button, not move the
+    // editor's caret into the codespan and reveal its source.
+    makeEditorSafe(controls);
 
     // Locked spans wear the open-padlock icon: clicking it unlocks
     // (strips the ⟹result from the source), and the re-render shows a
@@ -1183,14 +1187,30 @@ async function modifyNoteUndoable(
     const before = editor.getValue();
     const after = transform(before);
     if (after === before) return;
-    const cursor = editor.getCursor();
-    editor.setValue(after);
-    try {
-        editor.setCursor(cursor);
-    } catch {
-        // Cursor was past the new end of the document (the bake
-        // shortened it). Harmless — leave the editor where it lands.
+
+    // Replace only the span that actually changed, not the whole
+    // document. `setValue` would work, but in Live Preview it
+    // rewrites every line: the editor loses scroll position, folds
+    // and selection, which is exactly the jolt people already
+    // complain about there. Narrowing to the changed range keeps the
+    // edit local, and it is still one undo step.
+    let start = 0;
+    const maxStart = Math.min(before.length, after.length);
+    while (start < maxStart && before[start] === after[start]) start++;
+    let backwards = 0;
+    const maxBack = maxStart - start;
+    while (
+        backwards < maxBack &&
+        before[before.length - 1 - backwards] ===
+            after[after.length - 1 - backwards]
+    ) {
+        backwards++;
     }
+    editor.replaceRange(
+        after.slice(start, after.length - backwards),
+        editor.offsetToPos(start),
+        editor.offsetToPos(before.length - backwards)
+    );
 }
 
 /**
