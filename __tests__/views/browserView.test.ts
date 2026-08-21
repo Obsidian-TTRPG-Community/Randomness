@@ -193,6 +193,83 @@ describe("discoverGenerators", () => {
 
 // ────────── rollTable ──────────
 
+describe("discoverGenerators: Hidden: tables (issue #6)", () => {
+    const src = (extra = "") =>
+        [
+            "Title: Loot",
+            "Table: Hoard",
+            "[@Coins] and [@Gems]",
+            "",
+            "Table: Coins",
+            "Hidden:",
+            "a purse of silver",
+            "",
+            "Table: Gems",
+            "Hidden: yes",
+            "a cracked opal",
+            extra,
+        ].join("\n");
+
+    test("hidden tables are left out of the browser list", async () => {
+        const p = fakePlugin({ files: { "Generators/loot.rdm": src() } });
+        const [r] = await discoverGenerators(p as any);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.gen.tables.map((t) => t.name)).toEqual(["Hoard"]);
+            expect(r.gen.hiddenCount).toBe(2);
+        }
+    });
+
+    test("the star stays on the real entry point when it is hidden", async () => {
+        // isMain must be computed BEFORE filtering. Otherwise hiding
+        // the first table promotes whichever one survives, and the ★
+        // starts pointing at a table that is not what rolling the
+        // file rolls.
+        const p = fakePlugin({
+            files: {
+                "Generators/x.rdm": [
+                    "Table: Entry",
+                    "Hidden:",
+                    "x",
+                    "",
+                    "Table: Second",
+                    "y",
+                ].join("\n"),
+            },
+        });
+        const [r] = await discoverGenerators(p as any);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.gen.tables).toEqual([{ name: "Second", isMain: false }]);
+        }
+    });
+
+    test("a file with no Hidden: is unchanged", async () => {
+        const p = fakePlugin({
+            files: {
+                "Generators/plain.rdm": "Table: A\nx\n\nTable: B\ny",
+            },
+        });
+        const [r] = await discoverGenerators(p as any);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.gen.tables.map((t) => t.name)).toEqual(["A", "B"]);
+            expect(r.gen.hiddenCount).toBe(0);
+        }
+    });
+
+    test("Hidden: no keeps a table listed", async () => {
+        const p = fakePlugin({
+            files: {
+                "Generators/y.rdm": "Table: A\nHidden: no\nx",
+            },
+        });
+        const [r] = await discoverGenerators(p as any);
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.gen.tables.map((t) => t.name)).toEqual(["A"]);
+    });
+});
+
 describe("rollTable", () => {
     test("rolls a specific named table, not just the main", async () => {
         const p = fakePlugin({

@@ -28,7 +28,7 @@ export class ParseError extends Error {
 const COMMAND_KEYWORDS = [
     "use", "set", "define", "table", "type", "roll", "default",
     "shuffle", "prompt", "header", "footer", "maxreps", "formatting",
-    "title", "endtable", "with", "deck", "flip"
+    "title", "endtable", "with", "deck", "flip", "hidden"
 ] as const;
 
 type CommandKeyword = typeof COMMAND_KEYWORDS[number];
@@ -44,7 +44,7 @@ type CommandKeyword = typeof COMMAND_KEYWORDS[number];
  * relying on undocumented (and inconsistent) IPP3 behaviour; we
  * follow the spec.
  */
-const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable|Deck|Flip)\s*:/i;
+const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable|Deck|Flip|Hidden)\s*:/i;
 
 /** Split source into logical lines, applying line continuations (`&` at EOL). */
 function preprocessLines(source: string): { text: string; lineNum: number }[] {
@@ -410,6 +410,28 @@ export function parseGeneratorFile(source: string): GeneratorFile {
                     );
                 }
                 currentTable.flipChance = pct;
+                continue;
+            }
+
+            // Hidden: — presentation only, and only for the browser
+            // pane. Bare `Hidden:` reads as yes, because that is what
+            // someone typing it means; the explicit no exists so a
+            // table can be un-hidden without deleting the line.
+            if (keyword === "hidden") {
+                if (!currentTable) {
+                    throw new ParseError("Hidden: outside a Table", lineNum);
+                }
+                const v = rest.trim().toLowerCase();
+                if (v === "" || ["yes", "true", "1", "on"].includes(v)) {
+                    currentTable.hidden = true;
+                } else if (["no", "false", "0", "off"].includes(v)) {
+                    currentTable.hidden = false;
+                } else {
+                    throw new ParseError(
+                        `Hidden: expected yes or no, got '${rest.trim()}'`,
+                        lineNum
+                    );
+                }
                 continue;
             }
 

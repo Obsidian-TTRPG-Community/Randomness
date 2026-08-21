@@ -19,6 +19,12 @@ export interface GenFileInfo {
     title: string;
     /** Tables in declaration order; first is the entry point. */
     tables: { name: string; isMain: boolean }[];
+    /**
+     * How many of the file's tables carry `Hidden:` and were left out
+     * of `tables`. Only used to distinguish an empty file from one
+     * whose tables are all hidden.
+     */
+    hiddenCount?: number;
     /** If the file couldn't be parsed, the error message. */
     error?: string;
 }

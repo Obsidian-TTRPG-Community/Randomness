@@ -71,6 +71,13 @@ interface DiscoveredGenerator {
     title: string;
     /** Tables in declaration order; the first is the "main" entry point. */
     tables: { name: string; isMain: boolean }[];
+    /**
+     * How many tables carry `Hidden:`. Only used to tell "this file
+     * has nothing in it" apart from "this file's tables are all
+     * hidden" — an author who hides everything should not be told
+     * their file is empty.
+     */
+    hiddenCount?: number;
 }
 
 /**
@@ -339,6 +346,7 @@ export class BrowserView extends ItemView {
                       path: d.gen.path,
                       title: d.gen.title,
                       tables: d.gen.tables,
+                      hiddenCount: d.gen.hiddenCount,
                   }
                 : {
                       path: d.path,
@@ -586,7 +594,10 @@ export class BrowserView extends ItemView {
                     "div",
                     "randomness-browser-entry-note"
                 );
-                note.textContent = "(no tables)";
+                note.textContent =
+                    (file.hiddenCount ?? 0) > 0
+                        ? `(${file.hiddenCount} hidden)`
+                        : "(no tables)";
                 return;
             }
             const tableList = el(wrap, "div", "randomness-browser-tables");
@@ -1135,13 +1146,25 @@ async function discoverOne(
             parsed.title?.trim() ||
             file.basename ||
             file.path;
-        const tables = parsed.tables.map((t, i) => ({
-            name: t.name,
-            isMain: i === 0,
-        }));
+        // `isMain` is computed against the FULL list before hiding —
+        // the ★ means "rolling the file rolls this one", and that is
+        // still the first table even if it or its neighbours are
+        // hidden. Filtering first would move the star onto whichever
+        // table happened to survive (issue #6).
+        const tables = parsed.tables
+            .map((t, i) => ({
+                name: t.name,
+                isMain: i === 0,
+                hidden: t.hidden === true,
+            }))
+            .filter((t) => !t.hidden)
+            .map(({ name, isMain }) => ({ name, isMain }));
+        const hiddenCount = parsed.tables.filter(
+            (t) => t.hidden === true
+        ).length;
         return {
             ok: true,
-            gen: { path: file.path, title, tables },
+            gen: { path: file.path, title, tables, hiddenCount },
         };
     } catch (err) {
         return {

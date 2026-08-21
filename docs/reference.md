@@ -111,6 +111,8 @@ These belong to the table above them rather than to the file:
   picks are remembered beyond the current roll.
 - **Flip:** a percentage; on each deck pick it sets `{$facing}`
   to `reversed` that often and `upright` the rest of the time.
+- **Hidden:** keep this table out of the browser pane's list — see
+  **Browser pane**.
 - **EndTable:** close the table early. Lines after it start a new
   unnamed one.
 
@@ -1506,6 +1508,42 @@ click again to unpin).
 The pane has five tabs: **Generators**, **Decks**, **Portraits**,
 **Builder**, and **Dice**. The dice ribbon icon opens the pane on
 its **Generators** tab; the rest are one click along the top.
+
+### Hiding helper tables
+
+A generator's entry table often calls others that exist only to
+serve it — the pieces a name is assembled from, the sub-tables a
+description draws on. All of them show in the browser, which buries
+the one table you actually want to roll.
+
+`Hidden:` takes a table out of that list:
+
+```text
+Table: Hoard
+[@Coins] and [@Gems]
+
+Table: Coins
+Hidden:
+a purse of silver
+
+Table: Gems
+Hidden:
+a cracked opal
+```
+
+The browser then offers `Hoard` alone.
+
+It changes nothing else. A hidden table still rolls, still answers
+to its name from anywhere, still autocompletes, and is still visible
+to the scripting API — this is about tidying a list, not about
+making a table less usable. `Hidden: no` un-hides one without
+deleting the line.
+
+Hiding the FIRST table doesn't change which table the file rolls —
+that's still the first one declared, hidden or not. It only stops
+the browser listing it, so the ★ disappears along with the row. A
+file whose tables are all hidden shows a count instead of its
+tables, rather than pretending to be empty.
 
 ## Table-name autocomplete
 

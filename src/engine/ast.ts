@@ -48,6 +48,15 @@ export type TableDecl = {
     /** `Flip: N%` — deck picks set {$facing} to reversed N% of the
      * time, upright otherwise. Undefined = no orientation. */
     flipChance?: number;
+    /**
+     * `Hidden:` — keep this table out of the generator browser's list.
+     * A presentation flag only: the table still rolls, still
+     * autocompletes, and is still visible to the API. It is for the
+     * helper tables a generator calls internally, which crowd the
+     * browser without ever being something you would roll on their
+     * own (issue #6).
+     */
+    hidden?: boolean;
 };
 
 export type TableItem = {
