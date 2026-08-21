@@ -2,6 +2,38 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.19.0
+
+### Added
+- **Inline rolls now work in Live Preview.** They never have. A
+  `` `rdm:[@Loot]` `` or `` `dice: 1d20` `` sat in the editor as the
+  raw text you typed, and clicking it just put your cursor in it and
+  showed the backticks — which is what people have been reporting as
+  "clicking flips me back to source mode". Only Reading view ever
+  rendered them.
+
+  The reason is that Obsidian offers plugins the *block* elements of a
+  note — which is why ```randomness codeblocks have always rolled in
+  the editor — but draws inline code spans itself and never offers
+  those. Randomness now renders them through the editor directly, so
+  a roll looks and behaves the same in both views: same result, same
+  🎲 / 🔒 / 📌 buttons, doing the same things. A roll you have already
+  seen keeps its value when you switch views rather than re-rolling.
+
+  Put your cursor in a roll and you get your expression back, so they
+  are still editable. Rolls inside fenced code blocks stay as text —
+  a `` ```text `` block showing example syntax is not meant to roll at
+  the reader.
+
+### Fixed
+- **Buttons rendered into a note no longer move the editor's cursor.**
+  Clicking a codeblock's Reroll, a deck's Draw or a portrait's Reroll
+  counted as a click into the document, which in Live Preview can
+  unrender whatever the cursor lands in. They are now sealed off from
+  the editor. This was shipped in 1.17.1 as a fix for the inline
+  problem above; it was not that fix, but it is a real one for the
+  surfaces it covers.
+
 ## 1.18.0
 
 ### Fixed
