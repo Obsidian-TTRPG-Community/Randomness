@@ -12,6 +12,7 @@
 
 import { Plugin, Notice, TFile } from "obsidian";
 import { installEditorSafeGuard } from "./editorSafeControls";
+import { inlineRollLivePreview } from "./livePreviewExtension";
 import {
     RandomnessSettings,
     DEFAULT_SETTINGS,
@@ -138,6 +139,11 @@ export default class RandomnessPlugin extends Plugin {
 
         // Register the inline rdm: post-processor.
         this.registerMarkdownPostProcessor(buildInlineProcessor(this));
+        // ...and the other half of the same job, for Live Preview.
+        // Obsidian never hands inline code spans to a post-processor,
+        // so without this an inline roll is raw text in the editor —
+        // which it had been for the plugin's entire history.
+        this.registerEditorExtension(inlineRollLivePreview(this));
 
         // Register the custom view for .ipt files.
         registerIptView(this);

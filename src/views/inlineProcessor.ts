@@ -493,7 +493,7 @@ async function processOne(
     // makes `dice-mod: 1d20|form` bake as "1d20 → 7" instead of a
     // bare "7": the flags are part of what the author asked to keep.
     if (!isLocked && (call.prefix ?? INLINE_PREFIX) === "dice-mod:") {
-        await bakeCall(ctx, plugin, call, occurrence, displayResult);
+        await bakeCall(ctx.sourcePath, plugin, call, occurrence, displayResult);
         return;
     }
 
@@ -506,10 +506,10 @@ async function processOne(
         breakdown,
         isLocked,
         expr: call.expr,
-        onLock: () => lockCall(ctx, plugin, call, occurrence),
+        onLock: () => lockCall(ctx.sourcePath, plugin, call, occurrence),
         onBake: () =>
             bakeCall(
-                ctx,
+                ctx.sourcePath,
                 plugin,
                 call,
                 occurrence,
@@ -522,7 +522,7 @@ async function processOne(
             ),
         onReroll: () =>
             rerollCall(
-                ctx,
+                ctx.sourcePath,
                 plugin,
                 call,
                 occurrence,
@@ -901,8 +901,8 @@ export function renderInlineError(
 // handles the rest, including triggering re-renders.
 // ────────────────────────────────────────────────────────────────────
 
-async function lockCall(
-    ctx: MarkdownPostProcessorContext,
+export async function lockCall(
+    sourcePath: string,
     plugin: RandomnessPlugin,
     call: InlineCall,
     occurrence: number
@@ -920,7 +920,7 @@ async function lockCall(
     // stayed unfilled. By keying the lookup AND the source-write
     // by occurrence, each call's lock now targets its own data.
     const previewKey: PreviewKey = {
-        sourcePath: ctx.sourcePath,
+        sourcePath: sourcePath,
         expr: callKey(call),
         occurrence,
     };
@@ -934,13 +934,13 @@ async function lockCall(
             const collected: DiceTraceEntry[] = [];
             const fresh = await evaluateInlineExpression(
                 evalSourceOf(call, plugin.settings.diceFormulas),
-                ctx.sourcePath,
+                sourcePath,
                 plugin,
                 { diceTrace: collected }
             );
             plugin.previewRegistry.set(previewKey, fresh, collected);
             return lockWithResult(
-                ctx,
+                sourcePath,
                 plugin,
                 call,
                 occurrence,
@@ -955,7 +955,7 @@ async function lockCall(
     // source too (that's the durable "what did I roll" record).
     // Tooltip-only breakdowns are ephemeral by design.
     return lockWithResult(
-        ctx,
+        sourcePath,
         plugin,
         call,
         occurrence,
@@ -968,14 +968,14 @@ async function lockCall(
     );
 }
 
-async function lockWithResult(
-    ctx: MarkdownPostProcessorContext,
+export async function lockWithResult(
+    sourcePath: string,
     plugin: RandomnessPlugin,
     call: InlineCall,
     occurrence: number,
     result: string
 ): Promise<void> {
-    await modifyNote(plugin, ctx.sourcePath, (source) => {
+    await modifyNote(plugin, sourcePath, (source) => {
         // Target THIS occurrence in the source — applyLockToSource
         // treats occurrence as the 0-indexed position among ALL
         // same-expression calls (locked or not), which is the
@@ -1010,8 +1010,8 @@ async function lockWithResult(
  * replaced the whole span), and means a rapid sequence of rerolls
  * doesn't accumulate orphaned DOM nodes.
  */
-async function rerollCall(
-    ctx: MarkdownPostProcessorContext,
+export async function rerollCall(
+    sourcePath: string,
     plugin: RandomnessPlugin,
     call: InlineCall,
     occurrence: number,
@@ -1038,7 +1038,7 @@ async function rerollCall(
         // asked for anyway: it turns the span into an ordinary roll
         // you can play with (issue #3).
         const newPrefix = prefix === "dice-mod:" ? "dice:" : prefix;
-        await modifyNote(plugin, ctx.sourcePath, (source) => {
+        await modifyNote(plugin, sourcePath, (source) => {
             return applyUnlockToSource(
                 source,
                 call.expr,
@@ -1063,7 +1063,7 @@ async function rerollCall(
             rendered ??
             (await evaluateInlineExpression(
                 evalSourceOf(call, plugin.settings.diceFormulas),
-                ctx.sourcePath,
+                sourcePath,
                 plugin,
                 // A re-roll click is an explicit action: persistent
                 // deck draws commit here (and only here, in the
@@ -1112,7 +1112,7 @@ async function rerollCall(
         resultSpan ?? span,
         markdownLite(display),
         plugin,
-        ctx.sourcePath
+        sourcePath
     );
 }
 
@@ -1226,8 +1226,8 @@ async function modifyNoteUndoable(
  * breakdown all bake as they appeared — which is the whole point:
  * what you were looking at is what you keep.
  */
-async function bakeCall(
-    ctx: MarkdownPostProcessorContext,
+export async function bakeCall(
+    sourcePath: string,
     plugin: RandomnessPlugin,
     call: InlineCall,
     occurrence: number,
@@ -1238,11 +1238,11 @@ async function bakeCall(
     // below it shift down an occurrence and would otherwise redisplay
     // the value that was just baked.
     plugin.previewRegistry.deleteFrom(
-        ctx.sourcePath,
+        sourcePath,
         callKey(call),
         occurrence
     );
-    await modifyNoteUndoable(plugin, ctx.sourcePath, (source) =>
+    await modifyNoteUndoable(plugin, sourcePath, (source) =>
         applyBakeToSource(
             source,
             call.expr,
