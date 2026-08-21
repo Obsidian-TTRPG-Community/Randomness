@@ -2,6 +2,34 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.20.0
+
+### Added
+- **`Hidden:` keeps helper tables out of the browser.** A generator's
+  entry table usually calls others that exist only to serve it, and
+  the browser listed all of them — so the one table you actually
+  wanted to roll sat buried among its own plumbing. Put `Hidden:`
+  under a table and it drops out of that list:
+
+  ```text
+  Table: Hoard
+  [@Coins] and [@Gems]
+
+  Table: Coins
+  Hidden:
+  a purse of silver
+  ```
+
+  It changes nothing else. The table still rolls, still answers to
+  its name, still autocompletes, and the scripting API still sees it
+  — this tidies a list, it does not make a table less usable.
+  `Hidden: no` un-hides one without deleting the line.
+
+  Hiding the first table doesn't change which table the file rolls;
+  that is still the first one declared. And a file whose tables are
+  all hidden says so, rather than claiming to be empty. Requested by
+  SerhiiDeianov in issue #6.
+
 ## 1.19.0
 
 ### Added
