@@ -24,7 +24,10 @@
  * thing to get right here, so it is asserted explicitly below.
  */
 
-import { makeEditorSafe } from "../../src/views/editorSafeControls";
+import {
+    makeEditorSafe,
+    installEditorSafeGuard,
+} from "../../src/views/editorSafeControls";
 import { replaceCodeElement } from "../../src/views/inlineProcessor";
 
 /** Dispatch a cancelable, bubbling event and report both outcomes. */
@@ -163,5 +166,72 @@ describe("inline span: what is guarded and what is not", () => {
         // take that away for no benefit.
         const span = render();
         expect(span.style.userSelect).not.toBe("none");
+    });
+});
+
+describe("the document-level guard (survives a DOM clone)", () => {
+    /** Register the guard on this jsdom document, capturing teardown. */
+    function install(): () => void {
+        const off: Array<() => void> = [];
+        installEditorSafeGuard({
+            registerDomEvent: (el, type, cb, options) => {
+                el.addEventListener(type, cb, options);
+                off.push(() => el.removeEventListener(type, cb, options));
+            },
+        });
+        return () => off.forEach((f) => f());
+    }
+
+    test("a CLONE of a guarded element is still protected", () => {
+        // cloneNode carries attributes but not listeners, so the
+        // per-element guard is gone on a clone. Obsidian is free to
+        // copy post-processed DOM into its own widget, and a browser
+        // harness confirmed this is the case the element guard cannot
+        // cover. The marker is an attribute precisely so this one can.
+        const teardown = install();
+        try {
+            const root = editorLike();
+            const original = makeEditorSafe(document.createElement("span"), {
+                selectable: true,
+            });
+            const clone = original.cloneNode(true) as HTMLElement;
+            root.appendChild(clone);
+
+            // The clone kept the marker...
+            expect(clone.hasAttribute("data-randomness-guard")).toBe(true);
+            // ...and the document guard acts on it.
+            expect(fire(clone, "mousedown").defaultPrevented).toBe(true);
+        } finally {
+            teardown();
+        }
+    });
+
+    test("it acts on a descendant of a guarded element, not just the element", () => {
+        const teardown = install();
+        try {
+            const root = editorLike();
+            const span = makeEditorSafe(document.createElement("span"), {
+                selectable: true,
+            });
+            const inner = document.createElement("span");
+            span.appendChild(inner);
+            root.appendChild(span.cloneNode(true) as HTMLElement);
+            const clonedInner = root.querySelector("span span") as HTMLElement;
+            expect(fire(clonedInner, "mousedown").defaultPrevented).toBe(true);
+        } finally {
+            teardown();
+        }
+    });
+
+    test("it leaves everything else alone", () => {
+        const teardown = install();
+        try {
+            const root = editorLike();
+            const plain = document.createElement("span");
+            root.appendChild(plain);
+            expect(fire(plain, "mousedown").defaultPrevented).toBe(false);
+        } finally {
+            teardown();
+        }
     });
 });

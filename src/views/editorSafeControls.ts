@@ -41,6 +41,18 @@
 const CARET_EVENTS = ["pointerdown", "mousedown", "touchstart"] as const;
 
 /**
+ * Marker attribute for guarded elements.
+ *
+ * An attribute rather than a class list because it survives
+ * `cloneNode`, and a clone is the one case the per-element listeners
+ * cannot survive: Obsidian is free to copy post-processed DOM into its
+ * own widget, and `cloneNode` carries attributes and inline styles but
+ * NOT event listeners. The document-level guard below matches on this,
+ * so it keeps working on a clone.
+ */
+const GUARD_ATTR = "data-randomness-guard";
+
+/**
  * Make an element the editor will not treat as a place to put the
  * cursor. Call it on any control rendered into a note.
  *
@@ -54,6 +66,7 @@ export function makeEditorSafe<T extends HTMLElement>(
     // widgets this way; without it the browser will still try to
     // place a cursor inside on a stray drag or a keyboard nav.
     el.contentEditable = "false";
+    el.setAttribute(GUARD_ATTR, "");
     // A control is not text, and starting a drag-select on it is never
     // useful. A whole rendered result IS text, though — in Reading
     // view people select and copy it — so `selectable` opts out.
@@ -74,4 +87,44 @@ export function makeEditorSafe<T extends HTMLElement>(
         );
     }
     return el;
+}
+
+/**
+ * The second layer: one set of listeners on the document, matching
+ * guarded elements by attribute.
+ *
+ * Why both. The per-element listeners handle popout windows, which
+ * have their own `document` this never sees. The document listeners
+ * handle the case the per-element ones cannot — a clone. Neither is
+ * redundant, and a browser-driven CodeMirror harness confirmed the
+ * split: with the DOM cloned, the element guard fails and this one
+ * holds.
+ *
+ * Registered through `registerDomEvent` so it is torn down with the
+ * plugin.
+ */
+export function installEditorSafeGuard(plugin: {
+    registerDomEvent: (
+        el: Document,
+        type: string,
+        cb: (e: Event) => void,
+        options?: AddEventListenerOptions
+    ) => void;
+}): void {
+    for (const type of CARET_EVENTS) {
+        plugin.registerDomEvent(
+            document,
+            type,
+            (e: Event) => {
+                const target = e.target;
+                if (!(target instanceof Element)) return;
+                if (target.closest(`[${GUARD_ATTR}]`) === null) return;
+                e.preventDefault();
+                e.stopPropagation();
+            },
+            // Capture, so this runs before the editor's own handlers
+            // wherever they sit in the tree.
+            { capture: true }
+        );
+    }
 }

@@ -11,6 +11,7 @@
  */
 
 import { Plugin, Notice, TFile } from "obsidian";
+import { installEditorSafeGuard } from "./editorSafeControls";
 import {
     RandomnessSettings,
     DEFAULT_SETTINGS,
@@ -92,6 +93,12 @@ export default class RandomnessPlugin extends Plugin {
         // Deck service — must exist before any processor that can
         // reference decks renders.
         this.decks = new DeckService(this);
+        // Live Preview: stop a click on anything we render into a note
+        // from moving the editor's caret into it and unrendering it.
+        // Belt to the per-element braces in makeEditorSafe — this layer
+        // is the one that survives Obsidian cloning our DOM.
+        installEditorSafeGuard(this);
+
         this.registerMarkdownPostProcessor(buildDeckInlineProcessor(this));
         // Keep the deck cache honest when deck folders change on disk.
         this.registerEvent(
