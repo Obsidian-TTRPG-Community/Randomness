@@ -39,10 +39,10 @@ const context = await esbuild.context({
     external: [
         "obsidian",
         "electron",
-        // CodeMirror modules Obsidian provides at runtime. We don't
-        // currently use any CM6 APIs but listing them future-proofs
-        // the config against accidental bundling if a dependency
-        // ever pulls them in transitively.
+        // CodeMirror modules Obsidian provides at runtime. The Live
+        // Preview extension imports @codemirror/state and
+        // @codemirror/view, so these must stay external — bundling a
+        // second copy of CM6 would break the editor.
         "@codemirror/autocomplete",
         "@codemirror/collab",
         "@codemirror/commands",

@@ -27,6 +27,7 @@
 import {
     makeEditorSafe,
     installEditorSafeGuard,
+    NO_SELECT_CLASS,
 } from "../../src/views/editorSafeControls";
 import { replaceCodeElement } from "../../src/views/inlineProcessor";
 
@@ -91,7 +92,7 @@ describe("makeEditorSafe", () => {
     test("marks the element as somewhere the caret cannot go", () => {
         const btn = makeEditorSafe(document.createElement("button"));
         expect(btn.contentEditable).toBe("false");
-        expect(btn.style.userSelect).toBe("none");
+        expect(btn.classList.contains(NO_SELECT_CLASS)).toBe(true);
     });
 
     test("returns the element, so it can wrap a construction", () => {
@@ -165,7 +166,7 @@ describe("inline span: what is guarded and what is not", () => {
         // results out of it. `user-select: none` on the span would
         // take that away for no benefit.
         const span = render();
-        expect(span.style.userSelect).not.toBe("none");
+        expect(span.classList.contains(NO_SELECT_CLASS)).toBe(false);
     });
 });
 

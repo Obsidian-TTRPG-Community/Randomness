@@ -53,6 +53,16 @@ const CARET_EVENTS = ["pointerdown", "mousedown", "touchstart"] as const;
 const GUARD_ATTR = "data-randomness-guard";
 
 /**
+ * Class that carries `user-select: none` (see styles.css).
+ *
+ * A class rather than an inline style: Obsidian's plugin review
+ * disallows writing to `el.style`, and a class survives `cloneNode`
+ * exactly as an inline style does, so the guard still holds on a
+ * copied subtree.
+ */
+export const NO_SELECT_CLASS = "randomness-no-select";
+
+/**
  * Make an element the editor will not treat as a place to put the
  * cursor. Call it on any control rendered into a note.
  *
@@ -70,7 +80,7 @@ export function makeEditorSafe<T extends HTMLElement>(
     // A control is not text, and starting a drag-select on it is never
     // useful. A whole rendered result IS text, though — in Reading
     // view people select and copy it — so `selectable` opts out.
-    if (opts.selectable !== true) el.style.userSelect = "none";
+    if (opts.selectable !== true) el.classList.add(NO_SELECT_CLASS);
     for (const type of CARET_EVENTS) {
         el.addEventListener(
             type,

@@ -730,9 +730,7 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
         let frontmatter: Record<string, unknown> = {};
         try {
             frontmatter =
-                (plugin.app.metadataCache.getFileCache(f)?.frontmatter as
-                    | Record<string, unknown>
-                    | undefined) ?? {};
+                plugin.app.metadataCache.getFileCache(f)?.frontmatter ?? {};
         } catch {
             // Metadata cache unavailable (API drift, or a note the
             // cache hasn't indexed yet): an empty property bag beats

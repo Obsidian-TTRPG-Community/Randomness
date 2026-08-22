@@ -315,7 +315,7 @@ function renderTable(el: Element, ctx: Ctx): string {
 
     const out = [
         line(pad(rows[0])),
-        line(new Array(width).fill("---")),
+        line(new Array<string>(width).fill("---")),
         ...rows.slice(1).map((r) => line(pad(r))),
     ];
     return `\n\n${out.join("\n")}\n\n`;

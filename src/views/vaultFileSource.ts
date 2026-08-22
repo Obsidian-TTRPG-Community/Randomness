@@ -36,10 +36,9 @@ export function vaultFileSource(vault: Vault): AsyncFileSource {
         // Defensive: some test mocks / older Vault versions don't
         // expose getFiles. In that case the case-insensitive fallback
         // is unavailable; only the literal-path path applies.
-        const getFiles = (vault as Vault & { getFiles?: () => { path: string }[] })
-            .getFiles;
-        if (typeof getFiles !== "function") return m;
-        for (const f of getFiles.call(vault)) {
+        const v = vault as Vault & { getFiles?: () => { path: string }[] };
+        if (typeof v.getFiles !== "function") return m;
+        for (const f of v.getFiles()) {
             m.set(f.path.toLowerCase(), f.path);
         }
         return m;
@@ -154,9 +153,7 @@ export function makeTagFilesLookup(
                 for (const t of fmList) {
                     tags.add(String(t).trim().replace(/^#/, "").toLowerCase());
                 }
-                const fmAll = fc.frontmatter as
-                    | Record<string, unknown>
-                    | undefined;
+                const fmAll = fc.frontmatter;
                 if (matchesTagRollFilter(tags, fmAll, filter, f.path)) {
                     out.push(f.path);
                 }
@@ -220,9 +217,7 @@ export function makeTagFrontmatterLookup(
 ): (path: string) => Record<string, unknown> | undefined {
     return (path) => {
         try {
-            return plugin.app.metadataCache.getCache(path)?.frontmatter as
-                | Record<string, unknown>
-                | undefined;
+            return plugin.app.metadataCache.getCache(path)?.frontmatter;
         } catch {
             // Defensive, matching makeTagFilesLookup: cache API drift
             // degrades to "no properties", not a crash.

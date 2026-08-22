@@ -92,11 +92,15 @@ export class DeckService {
     /** folderPath → loaded deck. Invalidated by vault events. */
     private cache = new Map<string, FolderDeck>();
     private listeners = new Set<() => void>();
-    private saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    // `window.setTimeout` (not the bare global) so the timers belong
+    // to the window the view lives in — a popout window has its own,
+    // and ids from one are meaningless to the other. It returns a
+    // number in a browser/Electron renderer.
+    private saveTimers = new Map<string, number>();
     /** In-generator persistent table-deck states, keyed
      * `<entry path>::<table name lowercased>`. */
     private tableStates: Record<string, DeckState> | null = null;
-    private tableStateSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    private tableStateSaveTimer: number | null = null;
 
     constructor(plugin: RandomnessPlugin) {
         this.plugin = plugin;
@@ -393,10 +397,10 @@ export class DeckService {
 
     private scheduleSave(deck: FolderDeck): void {
         const existing = this.saveTimers.get(deck.folderPath);
-        if (existing !== undefined) clearTimeout(existing);
+        if (existing !== undefined) window.clearTimeout(existing);
         this.saveTimers.set(
             deck.folderPath,
-            setTimeout(() => {
+            window.setTimeout(() => {
                 this.saveTimers.delete(deck.folderPath);
                 void this.saveDeck(deck);
             }, 400)
@@ -427,7 +431,7 @@ export class DeckService {
         const pending = [...this.saveTimers.keys()];
         for (const key of pending) {
             const timer = this.saveTimers.get(key);
-            if (timer !== undefined) clearTimeout(timer);
+            if (timer !== undefined) window.clearTimeout(timer);
             this.saveTimers.delete(key);
             const deck = this.cache.get(key);
             if (deck) await this.saveDeck(deck);
@@ -469,7 +473,7 @@ export class DeckService {
     private async saveTableStates(immediate = false): Promise<void> {
         if (this.tableStates === null) return;
         if (this.tableStateSaveTimer !== null) {
-            clearTimeout(this.tableStateSaveTimer);
+            window.clearTimeout(this.tableStateSaveTimer);
             this.tableStateSaveTimer = null;
         }
         const write = async (): Promise<void> => {
@@ -483,7 +487,7 @@ export class DeckService {
             }
         };
         if (immediate) return write();
-        this.tableStateSaveTimer = setTimeout(() => {
+        this.tableStateSaveTimer = window.setTimeout(() => {
             this.tableStateSaveTimer = null;
             void write();
         }, 400);
@@ -553,7 +557,7 @@ export class DeckService {
             return s;
         };
 
-        const service = this;
+        const formatCardInline = this.formatCardInline.bind(this);
         const touchedDecks = new Set<FolderDeck>();
         let touchedTables = false;
 
@@ -589,7 +593,7 @@ export class DeckService {
                 );
                 if (!rec) return null;
                 if (commit) touchedDecks.add(deck);
-                return service.formatCardInline(deck, rec);
+                return formatCardInline(deck, rec);
             },
             reset(name: string): void {
                 const deck = byName.get(cardSlug(name));

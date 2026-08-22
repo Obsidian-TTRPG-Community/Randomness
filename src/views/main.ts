@@ -17,7 +17,6 @@ import {
     RandomnessSettings,
     DEFAULT_SETTINGS,
     RandomnessSettingsTab,
-    isDiceRollerPluginEnabled,
     diceCompatEnabled,
 } from "./settings";
 import { installDiceRollerShim } from "./diceRollerShim";

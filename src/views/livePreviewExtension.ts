@@ -30,7 +30,7 @@
  *     you have already seen shows the same value in both.
  */
 
-import { Extension, Prec, StateEffect, StateField } from "@codemirror/state";
+import { Extension, Prec, StateEffect } from "@codemirror/state";
 import {
     Decoration,
     DecorationSet,
@@ -291,7 +291,7 @@ const displayCache = (p: RandomnessPlugin) => scratch(p).display;
 export function inlineRollLivePreview(plugin: RandomnessPlugin): Extension {
     const build = (view: EditorView): DecorationSet => {
         // Source mode shows you the text you wrote, on purpose.
-        if (!view.state.field(editorLivePreviewField as StateField<boolean>)) {
+        if (!view.state.field(editorLivePreviewField)) {
             return Decoration.none;
         }
         const sourcePath = sourcePathFor(plugin, view);

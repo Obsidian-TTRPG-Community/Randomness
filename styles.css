@@ -1226,3 +1226,13 @@
     color: var(--text-muted);
     font-size: var(--font-ui-smaller);
 }
+
+/* Controls rendered into a note are not text, and starting a
+ * drag-select on one is never useful. `makeEditorSafe()` adds this
+ * class unless the element is a whole rendered result — those people
+ * do select and copy. A class rather than an inline style so no
+ * JavaScript writes to `el.style`; it survives `cloneNode` just the
+ * same, which the editor guard relies on. */
+.randomness-no-select {
+    user-select: none;
+}

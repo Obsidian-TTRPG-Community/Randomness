@@ -95,7 +95,7 @@ async function paintAll(
 
     if (scroller !== null) {
         scroller.scrollTop = scrollTop;
-        activeWindow.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
             scroller.scrollTop = scrollTop;
         });
     }

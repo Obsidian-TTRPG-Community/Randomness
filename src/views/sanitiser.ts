@@ -285,7 +285,7 @@ export function markdownLite(text: string): string {
     // the escaped character so the emphasis passes can't see it.
     const escaped: string[] = [];
     out = out.replace(
-        /\\([\\*_~#|`\[\]{}()<>+\-.!])/g,
+        /\\([\\*_~#|`[\]{}()<>+\-.!])/g,
         (_m, ch: string) => {
             escaped.push(ch);
             return ESC + (escaped.length - 1) + ESC;
