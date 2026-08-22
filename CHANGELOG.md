@@ -2,6 +2,35 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.20.1
+
+### Fixed (review compliance)
+- **In-note controls take `user-select: none` from the stylesheet.**
+  `makeEditorSafe()` — the helper that keeps a roll's 🎲 / 🔒 / 📌,
+  a codeblock's Reroll and a deck's Draw clickable in Live Preview —
+  set that property from JavaScript, which Obsidian's automated
+  plugin review flags. It now adds a `randomness-no-select` class
+  defined in `styles.css`. A class survives `cloneNode` exactly as
+  the inline style did, so the guard still holds when Obsidian
+  copies rendered DOM into a widget of its own, and whole rendered
+  results stay selectable so they can still be copied.
+- **Timers belong to the window the view lives in.** Deck-state
+  saves and the Decks tab's scroll restore called the bare global
+  `setTimeout` / `clearTimeout` / `requestAnimationFrame`; in a
+  popped-out window those belong to a different window than the one
+  showing the view. They now go through `window.*` explicitly.
+- **`@codemirror/state` and `@codemirror/view` are declared
+  dependencies.** The Live Preview extension added in 1.19.0 imports
+  them, but they were only present transitively. Both remain
+  `external` in the build — Obsidian provides CodeMirror at runtime
+  — so `main.js` is unaffected.
+- **Tidying with no behaviour attached:** four type assertions that
+  did not change a type, an unused import, a redundant escape inside
+  a regex character class, a `const service = this` alias, and an
+  untyped `new Array()` whose `.fill()` therefore passed an unsafe
+  argument. Nothing in this release changes what the plugin does;
+  all 1,610 tests pass unchanged.
+
 ## 1.20.0
 
 ### Added
