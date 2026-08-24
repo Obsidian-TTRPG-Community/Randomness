@@ -2,7 +2,7 @@
 
 All notable changes to the Randomness plugin.
 
-## Unreleased
+## 1.21.0
 
 ### Added
 - **Quarter-turn decks.** A deck can now turn its cards any of
