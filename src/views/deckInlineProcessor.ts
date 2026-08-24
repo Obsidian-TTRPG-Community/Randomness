@@ -17,6 +17,7 @@ import { MarkdownPostProcessorContext, Notice, TFile } from "obsidian";
 import { makeEditorSafe } from "./editorSafeControls";
 import { markdownLite, setSanitisedHtml } from "./sanitiser";
 import type { DrawResult, FolderDeck } from "../decks/deckService";
+import { applyFacingClass, facingLabel } from "../decks/deckModel";
 import { paintCard } from "./decksTab";
 import type RandomnessPlugin from "./main";
 
@@ -244,9 +245,7 @@ function paintDeckBody(
         if (file instanceof TFile) {
             const img = activeDocument.createElement("img");
             img.className = "randomness-deck-inline-img";
-            if (last.facing === "reversed") {
-                img.classList.add("is-reversed");
-            }
+            applyFacingClass(img, last.facing);
             img.src = plugin.app.vault.getResourcePath(file);
             img.alt = last.card.name;
             body.appendChild(img);
@@ -256,7 +255,7 @@ function paintDeckBody(
     const nameEl = activeDocument.createElement("span");
     nameEl.className = "randomness-deck-inline-name";
     nameEl.textContent =
-        last.card.name + (last.facing === "reversed" ? " (reversed)" : "");
+        last.card.name + facingLabel(last.facing);
     if (last.text !== undefined && last.text.trim() !== "") {
         // Card text goes into the tooltip so the span stays compact;
         // the Decks tab shows it in full.

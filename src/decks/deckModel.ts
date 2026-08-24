@@ -18,7 +18,53 @@
  * vault-facing loader/saver lives in deckService.ts.
  */
 
-export type Facing = "upright" | "reversed";
+/**
+ * Card orientation. `upright`/`reversed` are the tarot pair (half
+ * turn); `right`/`left` are the quarter turns — `right` is 90°
+ * clockwise (the card's left edge ends up on top), `left` is 90°
+ * anticlockwise. Square cards with a reading on each edge (Story
+ * Engine, map tiles) use all four.
+ */
+export type Facing = "upright" | "right" | "reversed" | "left";
+
+/** All facings in clockwise order; index = quarter turns clockwise. */
+export const FACINGS: readonly Facing[] = ["upright", "right", "reversed", "left"];
+
+/** Clockwise quarter-turn count (0–3) for a facing. */
+export function facingTurns(f: Facing): number {
+    const i = FACINGS.indexOf(f);
+    return i < 0 ? 0 : i;
+}
+
+/** Human suffix for a non-upright card, e.g. " (reversed)"; "" when upright. */
+export function facingLabel(f: Facing): string {
+    return f === "upright" ? "" : ` (${f})`;
+}
+
+/**
+ * CSS class for a facing on a card image (rotation is done in CSS so
+ * a non-upright card is the same file, just turned). "" for upright.
+ */
+export function facingClass(f: Facing): string {
+    switch (f) {
+        case "reversed": return "is-reversed";
+        case "right": return "is-turned-right";
+        case "left": return "is-turned-left";
+        default: return "";
+    }
+}
+
+/** Add the facing's CSS class to an image element (no-op when upright). */
+export function applyFacingClass(img: HTMLElement, f: Facing): void {
+    const c = facingClass(f);
+    if (c !== "") img.classList.add(c);
+}
+
+/**
+ * How a deck's cards may turn: `half` — upright or reversed (tarot);
+ * `quarter` — any of the four orientations (square cards / tiles).
+ */
+export type TurnMode = "half" | "quarter";
 
 export interface DeckCard {
     /** Display name: image basename or dictionary key. */
@@ -41,9 +87,31 @@ export interface DeckSettings {
      * only when the user opts in.
      */
     flip: number;
+    /**
+     * Which orientations a turned card can land in. Absent in
+     * deck.json files written before quarter turns existed → `half`.
+     */
+    turn?: TurnMode;
 }
 
-export const DEFAULT_DECK_SETTINGS: DeckSettings = { flip: 0 };
+export const DEFAULT_DECK_SETTINGS: DeckSettings = { flip: 0, turn: "half" };
+
+/** Settings shape accepted by the draw helpers (a bare number = flip %). */
+export type FacingRoll = number | Pick<DeckSettings, "flip" | "turn">;
+
+/**
+ * Roll a facing: with probability `flip`% the card is turned; a turned
+ * card is `reversed` in half mode, or uniformly one of right /
+ * reversed / left in quarter mode.
+ */
+export function rollFacing(opts: FacingRoll, rand: Rand): Facing {
+    const flip = typeof opts === "number" ? opts : opts.flip;
+    const turn = typeof opts === "number" ? "half" : (opts.turn ?? "half");
+    if (!(flip > 0) || rand() * 100 >= flip) return "upright";
+    if (turn !== "quarter") return "reversed";
+    const turned: Facing[] = ["right", "reversed", "left"];
+    return turned[Math.min(2, Math.floor(rand() * 3))];
+}
 
 export interface DrawnRecord {
     /** Index into the deck's card list. */
@@ -221,14 +289,13 @@ function hasBadIndex(state: DeckState, cardCount: number): boolean {
  */
 export function drawTop(
     state: DeckState,
-    flip: number,
+    flip: FacingRoll,
     rand: Rand,
     now: () => number = Date.now
 ): DrawnRecord | null {
     const index = state.remaining.shift();
     if (index === undefined) return null;
-    const facing: Facing =
-        flip > 0 && rand() * 100 < flip ? "reversed" : "upright";
+    const facing = rollFacing(flip, rand);
     const rec: DrawnRecord = { index, facing, ts: now() };
     state.drawn.push(rec);
     return rec;
@@ -246,13 +313,12 @@ export function peekTop(state: DeckState, n: number): number[] {
  */
 export function drawAndReplace(
     state: DeckState,
-    flip: number,
+    flip: FacingRoll,
     rand: Rand
 ): { index: number; facing: Facing } | null {
     const index = state.remaining.shift();
     if (index === undefined) return null;
-    const facing: Facing =
-        flip > 0 && rand() * 100 < flip ? "reversed" : "upright";
+    const facing = rollFacing(flip, rand);
     const pos = Math.floor(rand() * (state.remaining.length + 1));
     state.remaining.splice(pos, 0, index);
     return { index, facing };

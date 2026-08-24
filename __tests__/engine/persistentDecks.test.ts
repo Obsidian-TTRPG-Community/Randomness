@@ -146,6 +146,52 @@ describe("Flip: sets {$facing} per deck pick", () => {
     });
 });
 
+describe("Turn: directive", () => {
+    test("Turn: quarter defaults the chance to 100%", () => {
+        const t = parseGeneratorFile("Table: T\nTurn: quarter\nx\n").tables[0];
+        expect(t.turnMode).toBe("quarter");
+        expect(t.flipChance).toBe(100);
+    });
+
+    test("Turn: half defaults the chance to 50%", () => {
+        const t = parseGeneratorFile("Table: T\nTurn: half\nx\n").tables[0];
+        expect(t.turnMode).toBe("half");
+        expect(t.flipChance).toBe(50);
+    });
+
+    test("Turn: quarter 25% sets both; an earlier Flip: is kept when no % given", () => {
+        const t = parseGeneratorFile("Table: T\nTurn: quarter 25%\nx\n").tables[0];
+        expect(t.flipChance).toBe(25);
+        const u = parseGeneratorFile("Table: T\nFlip: 30\nTurn: quarter\nx\n").tables[0];
+        expect(u.turnMode).toBe("quarter");
+        expect(u.flipChance).toBe(30);
+    });
+
+    test("Turn: rejects unknown modes and bad percentages", () => {
+        expect(() => parseGeneratorFile("Table: T\nTurn: sideways\nx\n")).toThrow(ParseError);
+        expect(() => parseGeneratorFile("Table: T\nTurn: quarter 120%\nx\n")).toThrow(ParseError);
+        expect(() => parseGeneratorFile("Turn: quarter\n")).toThrow(ParseError);
+    });
+
+    test("quarter-turn picks set {$facing} to one of four and {$turn} to 0–3", () => {
+        const source = [
+            "Table: Main",
+            "[!Cards]",
+            "",
+            "Table: Cards",
+            "Turn: quarter",
+            "{$facing}/{$turn}",
+        ].join("\n");
+        const file = parseGeneratorFile(source);
+        const seen = new Set<string>();
+        for (let seed = 0; seed < 60; seed++) {
+            seen.add(new Evaluator(file, [], { seed }).run());
+        }
+        expect(seen.has("upright/0")).toBe(false); // 100% turned
+        expect([...seen].sort()).toEqual(["left/3", "reversed/2", "right/1"]);
+    });
+});
+
 describe("[!deck:Name] folder-deck calls", () => {
     function fakeFolderHost(): FolderDeckHost & {
         drawCount: number;

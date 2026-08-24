@@ -13,6 +13,10 @@ import {
     drawAndReplace,
     drawTop,
     drawWeighted,
+    facingClass,
+    facingLabel,
+    facingTurns,
+    rollFacing,
     freshState,
     peekTop,
     reshuffle,
@@ -137,6 +141,51 @@ describe("draw semantics (folder decks)", () => {
         reshuffle(state, seq(0.5));
         expect(state.remaining).toHaveLength(3);
         expect(state.remaining).not.toContain(2);
+    });
+});
+
+describe("quarter turns", () => {
+    test("half mode: a turned card is always reversed", () => {
+        for (const r of [0, 0.34, 0.67, 0.99]) {
+            expect(rollFacing({ flip: 100, turn: "half" }, seq(0.1, r))).toBe("reversed");
+        }
+    });
+
+    test("quarter mode: a turned card lands uniformly on right / reversed / left", () => {
+        expect(rollFacing({ flip: 100, turn: "quarter" }, seq(0.1, 0.0))).toBe("right");
+        expect(rollFacing({ flip: 100, turn: "quarter" }, seq(0.1, 0.34))).toBe("reversed");
+        expect(rollFacing({ flip: 100, turn: "quarter" }, seq(0.1, 0.9))).toBe("left");
+        // the boundary value 1.0 (never produced by Math.random) still clamps
+        expect(rollFacing({ flip: 100, turn: "quarter" }, seq(0.1, 1.0))).toBe("left");
+    });
+
+    test("quarter mode still honours the turn chance", () => {
+        expect(rollFacing({ flip: 50, turn: "quarter" }, seq(0.9))).toBe("upright");
+        expect(rollFacing({ flip: 50, turn: "quarter" }, seq(0.2, 0.5))).toBe("reversed");
+    });
+
+    test("a bare number is half mode (legacy call shape)", () => {
+        expect(rollFacing(100, seq(0.5, 0.0))).toBe("reversed");
+    });
+
+    test("missing turn (old deck.json) means half", () => {
+        expect(rollFacing({ flip: 100 }, seq(0.5, 0.0))).toBe("reversed");
+    });
+
+    test("drawTop accepts a settings object", () => {
+        const state = freshState(3, seq(0));
+        const rec = drawTop(state, { flip: 100, turn: "quarter" }, seq(0.1, 0.0));
+        expect(rec?.facing).toBe("right");
+    });
+
+    test("facing helpers: turns, label, css class", () => {
+        expect(["upright", "right", "reversed", "left"].map((f) => facingTurns(f as never))).toEqual([0, 1, 2, 3]);
+        expect(facingLabel("upright")).toBe("");
+        expect(facingLabel("left")).toBe(" (left)");
+        expect(facingClass("upright")).toBe("");
+        expect(facingClass("reversed")).toBe("is-reversed");
+        expect(facingClass("right")).toBe("is-turned-right");
+        expect(facingClass("left")).toBe("is-turned-left");
     });
 });
 

@@ -14,6 +14,7 @@
  */
 
 import { GeneratorFile, Node, TableDecl, TableItem } from "./ast";
+import { facingTurns, rollFacing } from "../decks/deckModel";
 import { parseContent } from "./contentParser";
 import { DiceTraceEntry } from "./dice";
 import { ExprContext, evaluateExpression, Value } from "./expressions";
@@ -1001,9 +1002,12 @@ export class Evaluator {
             // Orientation: a Flip: table sets {$facing} per draw, so
             // the item's own content can branch on it.
             if (table.flipChance !== undefined) {
-                const reversed =
-                    this.rng.next() * 100 < table.flipChance;
-                this.setVar("facing", reversed ? "reversed" : "upright");
+                const facing = rollFacing(
+                    { flip: table.flipChance, turn: table.turnMode },
+                    () => this.rng.next()
+                );
+                this.setVar("facing", facing);
+                this.setVar("turn", String(facingTurns(facing)));
             }
             // Render with params
             const savedParams: { name: string; value?: Value }[] = [];

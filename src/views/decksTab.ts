@@ -14,6 +14,7 @@
 
 import { Notice, TFile } from "obsidian";
 import type { DrawResult, FolderDeck } from "../decks/deckService";
+import { applyFacingClass, facingLabel } from "../decks/deckModel";
 import { markdownLite, setSanitisedHtmlWithLinks } from "./sanitiser";
 import { overlayIconButton } from "../portrait/ui";
 import type RandomnessPlugin from "./main";
@@ -208,13 +209,38 @@ async function paintDeck(
         new Notice(`Shuffled "${deck.name}".`);
     });
 
-    // ── Flip setting ────────────────────────────────────────────────
+    // ── Orientation settings ────────────────────────────────────────
     const flipRow = el(box, "div", "randomness-deck-flip");
+    const turnLabel = activeDocument.createElement("label");
+    turnLabel.textContent = "Turns ";
+    turnLabel.title =
+        "How a turned card can land: half = upright or reversed " +
+        "(tarot); quarter = any of four orientations (square cards, " +
+        "map tiles). Card text can branch on {$facing} / {$turn}.";
+    const turnSelect = activeDocument.createElement("select");
+    turnSelect.className = "randomness-deck-turn-select";
+    for (const [value, label] of [
+        ["half", "half (reversed)"],
+        ["quarter", "quarter (4 ways)"],
+    ] as const) {
+        const opt = activeDocument.createElement("option");
+        opt.value = value;
+        opt.textContent = label;
+        turnSelect.appendChild(opt);
+    }
+    turnSelect.value = deck.settings.turn ?? "half";
+    turnSelect.addEventListener("change", () => {
+        const v = turnSelect.value === "quarter" ? "quarter" : "half";
+        void plugin.decks.updateSettings(deck.name, { turn: v });
+    });
+    turnLabel.appendChild(turnSelect);
+    flipRow.appendChild(turnLabel);
+
     const flipLabel = activeDocument.createElement("label");
-    flipLabel.textContent = "Reversed chance % ";
+    flipLabel.textContent = " Turn chance % ";
     flipLabel.title =
-        "Tarot-style orientation: percent chance a draw comes up " +
-        "reversed. 0 disables. Card text can branch on {$facing}.";
+        "Percent chance a draw comes up turned. 0 disables " +
+        "orientation entirely.";
     const flipInput = activeDocument.createElement("input");
     flipInput.type = "number";
     flipInput.min = "0";
@@ -240,8 +266,7 @@ async function paintDeck(
             const li = activeDocument.createElement("li");
             const card = deck.cards[rec.index];
             li.textContent =
-                (card?.name ?? `#${rec.index}`) +
-                (rec.facing === "reversed" ? " (reversed)" : "");
+                (card?.name ?? `#${rec.index}`) + facingLabel(rec.facing);
             list.appendChild(li);
         }
         details.appendChild(list);
@@ -328,8 +353,7 @@ export function paintCard(
         "Copy the card as text (name + meaning)",
         "bottom-left",
         () => {
-            const label =
-                card.name + (facing === "reversed" ? " (reversed)" : "");
+            const label = card.name + facingLabel(facing);
             const body =
                 text !== undefined && text.trim() !== ""
                     ? ` — ${text.trim()}`
@@ -356,15 +380,14 @@ export function paintCard(
         if (file instanceof TFile) {
             const img = activeDocument.createElement("img");
             img.className = "randomness-deck-card-img";
-            if (facing === "reversed") img.classList.add("is-reversed");
+            applyFacingClass(img, facing);
             img.src = plugin.app.vault.getResourcePath(file);
             img.alt = card.name;
             area.appendChild(img);
         }
     }
     const title = el(area, "div", "randomness-deck-card-name");
-    title.textContent =
-        card.name + (facing === "reversed" ? " (reversed)" : "");
+    title.textContent = card.name + facingLabel(facing);
     if (text !== undefined && text.trim() !== "") {
         const textEl = el(area, "div", "randomness-deck-card-text");
         setSanitisedHtmlWithLinks(

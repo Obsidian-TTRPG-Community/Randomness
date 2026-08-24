@@ -2,6 +2,23 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Added
+- **Quarter-turn decks.** A deck can now turn its cards any of
+  four ways, for square cards with a reading on each edge (Story
+  Engine) or random map tiles. In the Decks tab, **Turns** picks
+  `half` (upright/reversed, as before) or `quarter`, and the old
+  **Reversed chance %** field is now **Turn chance %** — the odds a
+  draw is turned at all; a quarter-turned card lands on `right`,
+  `reversed` or `left` with equal odds and its image rotates to
+  match. In `.rdm` files, `Turn: quarter` (optionally `Turn: quarter
+  25%`) does the same for in-generator decks and seeds a folder
+  deck's defaults; `Flip:` still works and means `Turn: half`.
+  Card text can branch on `{$facing}` (`upright` / `right` /
+  `reversed` / `left`) or the new `{$turn}` (0–3 quarter turns
+  clockwise). Existing `deck.json` files need no change.
+
 ## 1.20.1
 
 ### Fixed (review compliance)

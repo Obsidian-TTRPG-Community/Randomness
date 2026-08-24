@@ -44,6 +44,7 @@ import { PortraitService } from "../portrait/service";
 import { buildPortraitProcessor } from "../portrait/codeblock";
 import { buildPortraitInlineProcessor } from "../portrait/inline";
 import { DeckService } from "../decks/deckService";
+import { facingLabel } from "../decks/deckModel";
 import { buildDeckInlineProcessor } from "./deckInlineProcessor";
 import { FuzzySuggestModal } from "obsidian";
 
@@ -266,8 +267,7 @@ export default class RandomnessPlugin extends Plugin {
                             return;
                         }
                         new Notice(
-                            `${name}: ${r.card.name}` +
-                                (r.facing === "reversed" ? " (reversed)" : "")
+                            `${name}: ${r.card.name}` + facingLabel(r.facing)
                         );
                     }).open();
                 })();

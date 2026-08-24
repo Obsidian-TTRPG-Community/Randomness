@@ -28,7 +28,7 @@ export class ParseError extends Error {
 const COMMAND_KEYWORDS = [
     "use", "set", "define", "table", "type", "roll", "default",
     "shuffle", "prompt", "header", "footer", "maxreps", "formatting",
-    "title", "endtable", "with", "deck", "flip", "hidden"
+    "title", "endtable", "with", "deck", "flip", "turn", "hidden"
 ] as const;
 
 type CommandKeyword = typeof COMMAND_KEYWORDS[number];
@@ -44,7 +44,7 @@ type CommandKeyword = typeof COMMAND_KEYWORDS[number];
  * relying on undocumented (and inconsistent) IPP3 behaviour; we
  * follow the spec.
  */
-const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable|Deck|Flip|Hidden)\s*:/i;
+const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable|Deck|Flip|Turn|Hidden)\s*:/i;
 
 /** Split source into logical lines, applying line continuations (`&` at EOL). */
 function preprocessLines(source: string): { text: string; lineNum: number }[] {
@@ -410,6 +410,38 @@ export function parseGeneratorFile(source: string): GeneratorFile {
                     );
                 }
                 currentTable.flipChance = pct;
+                continue;
+            }
+
+            // Turn: half | quarter [N%] — how a turned card may land
+            // (half = upright/reversed, quarter = any of four
+            // orientations) and, optionally, the chance of being
+            // turned at all (defaults to 100% for quarter, 50% for half
+            // when no Flip: was given).
+            if (keyword === "turn") {
+                if (!currentTable) throw new ParseError("Turn: outside a Table", lineNum);
+                const m = rest.trim().match(
+                    /^(half|quarter)(?:\s+(\d+(?:\.\d+)?)\s*%?)?$/i
+                );
+                if (!m) {
+                    throw new ParseError(
+                        `Turn: expected 'half' or 'quarter' with an optional percentage, got '${rest.trim()}'`,
+                        lineNum
+                    );
+                }
+                const mode = m[1].toLowerCase() as "half" | "quarter";
+                const pct = m[2] !== undefined ? parseFloat(m[2]) : undefined;
+                if (pct !== undefined && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
+                    throw new ParseError(
+                        `Turn: expected a percentage 0–100, got '${m[2]}'`,
+                        lineNum
+                    );
+                }
+                currentTable.turnMode = mode;
+                if (pct !== undefined) currentTable.flipChance = pct;
+                else if (currentTable.flipChance === undefined) {
+                    currentTable.flipChance = mode === "quarter" ? 100 : 50;
+                }
                 continue;
             }
 

@@ -28,6 +28,8 @@ import {
     DEFAULT_DECK_SETTINGS,
     DrawnRecord,
     Facing,
+    facingLabel,
+    facingTurns,
     ImageEntry,
     TextEntry,
     buildCards,
@@ -207,6 +209,9 @@ export class DeckService {
         let texts: TextEntry[] = [];
         let rdmSource: string | undefined;
         let tableName: string | undefined;
+        // Orientation declared in the .rdm (Flip:/Turn:) seeds the
+        // deck's settings; deck.json (the Decks tab) overrides it.
+        let rdmSettings: Partial<DeckSettings> = {};
         if (rdmFile !== null) {
             try {
                 rdmSource = await this.plugin.app.vault.cachedRead(rdmFile);
@@ -214,6 +219,12 @@ export class DeckService {
                 const table = parsed.tables[0];
                 if (table) {
                     tableName = table.name;
+                    if (table.flipChance !== undefined) {
+                        rdmSettings.flip = table.flipChance;
+                    }
+                    if (table.turnMode !== undefined) {
+                        rdmSettings.turn = table.turnMode;
+                    }
                     if (table.type === "dictionary") {
                         texts = table.items
                             .filter((i) => i.dictKey !== undefined)
@@ -251,6 +262,7 @@ export class DeckService {
         }
         const settings: DeckSettings = {
             ...DEFAULT_DECK_SETTINGS,
+            ...rdmSettings,
             ...(json.settings ?? {}),
         };
         const { state, wasStale } = validateState(
@@ -289,7 +301,7 @@ export class DeckService {
     async draw(deckName: string): Promise<DrawResult | null> {
         const deck = await this.getDeck(deckName);
         if (!deck) return null;
-        const rec = drawTop(deck.state, deck.settings.flip, Math.random);
+        const rec = drawTop(deck.state, deck.settings, Math.random);
         if (!rec) return null;
         this.scheduleSave(deck);
         this.notify();
@@ -311,7 +323,7 @@ export class DeckService {
     async drawAndReplace(deckName: string): Promise<DrawResult | null> {
         const deck = await this.getDeck(deckName);
         if (!deck) return null;
-        const r = drawAndReplace(deck.state, deck.settings.flip, Math.random);
+        const r = drawAndReplace(deck.state, deck.settings, Math.random);
         if (!r) return null;
         this.scheduleSave(deck);
         this.notify();
@@ -378,7 +390,7 @@ export class DeckService {
         try {
             const parsed = parseGeneratorFile(deck.rdmSource);
             const evaluator = new Evaluator(parsed, [], {
-                presetVars: { facing },
+                presetVars: { facing, turn: String(facingTurns(facing)) },
             });
             if (card.textKey !== undefined) {
                 return evaluator.runByKey(deck.tableName, card.textKey);
@@ -588,7 +600,7 @@ export class DeckService {
                 const state = getFolderState(deck);
                 const rec = drawTop(
                     state,
-                    deck.settings.flip,
+                    deck.settings,
                     Math.random
                 );
                 if (!rec) return null;
@@ -622,7 +634,7 @@ export class DeckService {
     private formatCardInline(deck: FolderDeck, rec: DrawnRecord): string {
         const card = deck.cards[rec.index];
         let out = card.name;
-        if (rec.facing === "reversed") out += " (reversed)";
+        out += facingLabel(rec.facing);
         if (card.imagePath !== undefined) {
             out = `![[${card.imagePath}]]\n` + out;
         }

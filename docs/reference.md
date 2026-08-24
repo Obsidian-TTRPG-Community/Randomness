@@ -111,6 +111,14 @@ These belong to the table above them rather than to the file:
   picks are remembered beyond the current roll.
 - **Flip:** a percentage; on each deck pick it sets `{$facing}`
   to `reversed` that often and `upright` the rest of the time.
+- **Turn:** `half` or `quarter`, optionally followed by a
+  percentage. `half` is the tarot pair (same as **Flip:**);
+  `quarter` lets a turned card land on any of `right` (90°
+  clockwise), `reversed` or `left` with equal odds — for square
+  cards that carry a reading on each edge, or map tiles. The
+  percentage is the chance of being turned at all (defaults: 100%
+  for `quarter`, 50% for `half`). `{$turn}` holds the number of
+  quarter turns clockwise (0–3) alongside `{$facing}`.
 - **Hidden:** keep this table out of the browser pane's list — see
   **Browser pane**.
 - **EndTable:** close the table early. Lines after it start a new
@@ -1276,7 +1284,8 @@ the imported table what you want to roll instead.
 Folder decks live under `<Generator root>/Decks/<Name>/`, or plain
 `Decks/<Name>/` at the vault root when no Generator root is set —
 one image per card, an optional `.rdm` dictionary for card text
-(branch on `{$facing}` for tarot-style reversals), a `_back` image,
+(branch on `{$facing}` for tarot-style reversals, or on all four
+orientations with `Turn: quarter`), a `_back` image,
 and `deck.json` (per-deck settings + state, so a deck travels and
 syncs with its vault).
 
@@ -1299,9 +1308,13 @@ explicit 🎴 click advances the deck, so scrolling a note can't burn
 cards.
 
 The sidebar **Decks tab** manages every deck: **Draw**, **Peek**,
-**Draw & bury**, **Undo** and **Shuffle** buttons, a **Reversed
-chance %** field (0 disables orientation, which is the default),
-and history. Click a deck's title to collapse it. Hover a drawn
+**Draw & bury**, **Undo** and **Shuffle** buttons, orientation
+controls — **Turns** (`half` = upright/reversed, `quarter` = any of
+four ways, drawn with equal odds; the card image rotates to match)
+and **Turn chance %** (0 disables orientation, which is the
+default) — and history. A `Flip:` or `Turn:` line in the deck's
+`.rdm` sets the starting values; the tab's controls override them
+per vault in `deck.json`. Click a deck's title to collapse it. Hover a drawn
 card (tab or codeblock) for copy buttons: image embed,
 ready-to-paste deck block, card text, and the inline span. Example
 decks — playing cards, tarot, weather — download on demand from

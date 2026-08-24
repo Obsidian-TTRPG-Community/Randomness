@@ -48,6 +48,10 @@ export type TableDecl = {
     /** `Flip: N%` — deck picks set {$facing} to reversed N% of the
      * time, upright otherwise. Undefined = no orientation. */
     flipChance?: number;
+    /** `Turn: quarter` — turned deck picks land on any of right /
+     * reversed / left (square cards). `half` (default) = upright or
+     * reversed only. */
+    turnMode?: "half" | "quarter";
     /**
      * `Hidden:` — keep this table out of the generator browser's list.
      * A presentation flag only: the table still rolls, still

@@ -1152,6 +1152,12 @@
 .randomness-deck-card-img.is-reversed {
     transform: rotate(180deg);
 }
+.randomness-deck-card-img.is-turned-right {
+    transform: rotate(90deg);
+}
+.randomness-deck-card-img.is-turned-left {
+    transform: rotate(-90deg);
+}
 .randomness-deck-card-name {
     font-weight: 600;
 }
@@ -1218,6 +1224,15 @@
 }
 .randomness-deck-inline-img.is-reversed {
     transform: rotate(180deg);
+}
+.randomness-deck-inline-img.is-turned-right {
+    transform: rotate(90deg);
+}
+.randomness-deck-inline-img.is-turned-left {
+    transform: rotate(-90deg);
+}
+.randomness-deck-turn-select {
+    margin-right: 6px;
 }
 .randomness-deck-inline-name {
     font-weight: 600;
