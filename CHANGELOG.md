@@ -2,7 +2,7 @@
 
 All notable changes to the Randomness plugin.
 
-## Unreleased
+## 1.22.0
 
 ### Added
 - **Deal multiple cards, straight into the note** (issue #8, from
