@@ -46,6 +46,7 @@ import {
     TAG_FILE_CAP,
 } from "../resolver/mdContent";
 import {
+    resolveDiceCore,
     translateDiceExpression,
     stripDisplayFlags,
 } from "../compat/diceCompat";
@@ -1270,7 +1271,12 @@ async function renderRollIfEligible(
     try {
         if ((call.prefix ?? INLINE_PREFIX) === INLINE_PREFIX) return null;
         if (!plugin.settings.graphicalDice) return null;
-        const { flags } = translateDiceExpression(
+        // Alias-aware: `dice:ability|render` must animate the formula
+        // the alias stands for, and a `|render` saved inside the
+        // alias's own value counts too (issue #9). resolveDiceCore is
+        // the same strip-substitute-strip translation uses, so the
+        // core it returns is exactly what will be rolled.
+        const { core, flags } = resolveDiceCore(
             call.expr,
             plugin.settings.diceFormulas
         );
@@ -1278,15 +1284,12 @@ async function renderRollIfEligible(
         if (flags.some((f) => f.toLowerCase() === "norender")) return null;
         const { parsePureDiceFormula, rollPureDiceFormula, showDiceOverlay } =
             await import("../render3d/diceOverlay");
-        // Strip flags the same way translation does, then see if
-        // what's left is a plain dice sum.
-        const stripped = call.expr.replace(/\|[^|]*$/g, "").trim();
-        const terms = parsePureDiceFormula(stripped);
+        const terms = parsePureDiceFormula(core);
         if (terms === null) return null;
         const rolled = rollPureDiceFormula(terms);
         // The overlay's roll IS the result, so it is also the trace.
         traceOut?.push({
-            notation: stripped,
+            notation: core,
             total: rolled.total,
             dice: rolled.dice.map((d) => ({
                 value: d.value,

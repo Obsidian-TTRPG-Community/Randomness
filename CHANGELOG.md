@@ -4,6 +4,19 @@ All notable changes to the Randomness plugin.
 
 ## Unreleased
 
+### Fixed
+- **Graphical dice now roll for aliases** (issue #9, from TGSlasher).
+  `dice:ability|render` and an alias typed into the Dice Tray's
+  formula box skipped the 3D dice and fell back to a plain roll,
+  because the animation eligibility check looked at the raw text
+  ("ability") instead of the formula the alias stands for — only the
+  Saved buttons, which pass the formula directly, animated. Both
+  paths now resolve aliases first (a `|render` or `|norender` saved
+  inside the alias's own value is honoured too), and the roll
+  breakdown shows the real formula. Also fixes multi-flag spans like
+  `dice:2d6|form|render`, where only the last flag was stripped
+  before the eligibility check.
+
 ### Added
 - **Community generator: D&D spellbooks & scrolls (SRD 5.2)** by
   Brinx-git (issue #7) — weighted wizard/cleric/bard/druid spell

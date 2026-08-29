@@ -22,7 +22,10 @@
 import { Modal, Notice } from "obsidian";
 import type RandomnessPlugin from "./main";
 import { evaluateInlineExpression } from "./inlineProcessor";
-import { translateDiceExpression } from "../compat/diceCompat";
+import {
+    resolveDiceCore,
+    translateDiceExpression,
+} from "../compat/diceCompat";
 import { DiceTraceEntry, formatDiceBreakdown } from "../engine/dice";
 import {
     parsePureDiceFormula,
@@ -217,7 +220,18 @@ export function renderDiceTrayTab(
         let detail: string | undefined;
         try {
             if (plugin.settings.graphicalDice) {
-                const terms = parsePureDiceFormula(source);
+                // Resolve aliases before the pure-formula check, so a
+                // saved name typed here animates exactly like the
+                // formula it stands for (issue #9). An alias carrying
+                // |norender opts out.
+                const { core, flags } = resolveDiceCore(
+                    source,
+                    plugin.settings.diceFormulas
+                );
+                const noRender = flags.some(
+                    (f) => f.toLowerCase() === "norender"
+                );
+                const terms = noRender ? null : parsePureDiceFormula(core);
                 if (terms !== null) {
                     const rolled = rollPureDiceFormula(terms);
                     await showDiceOverlay(rolled.dice, rolled.total);
@@ -226,7 +240,7 @@ export function renderDiceTrayTab(
                         String(rolled.total),
                         formatDiceBreakdown([
                             {
-                                notation: source,
+                                notation: core,
                                 total: rolled.total,
                                 dice: rolled.dice.map((d) => ({
                                     value: d.value,

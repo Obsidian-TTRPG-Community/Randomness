@@ -138,10 +138,25 @@ export function braceBareFormula(expr: string): string | null {
  * prefix) into an rdm expression. Throws DiceCompatError with a
  * user-facing message for unsupported constructs.
  */
-export function translateDiceExpression(
+/**
+ * Resolve an expression to its bare rollable core: strip trailing
+ * display flags, substitute a whole-expression formula alias (one
+ * pass only — aliases don't reference other aliases), then strip
+ * and honour the alias's own flags too. Returns the core plus every
+ * stripped flag, alias flags first — the same order
+ * `translateDiceExpression` has always produced.
+ *
+ * This is the alias-aware front half of `translateDiceExpression`,
+ * factored out so the graphical-dice paths can share it: without
+ * it, `dice:ability|render` and an alias typed into the Dice Tray
+ * failed the pure-formula check on the raw text ("ability") and
+ * silently skipped the 3D roll that the very same formula played
+ * from a Saved button (issue #9).
+ */
+export function resolveDiceCore(
     raw: string,
     aliases?: Record<string, string>
-): DiceTranslation {
+): { core: string; flags: string[] } {
     let s = raw.trim();
     const flags: string[] = [];
     const stripFlags = () => {
@@ -169,6 +184,16 @@ export function translateDiceExpression(
             stripFlags();
         }
     }
+    return { core: s, flags };
+}
+
+export function translateDiceExpression(
+    raw: string,
+    aliases?: Record<string, string>
+): DiceTranslation {
+    const resolved = resolveDiceCore(raw, aliases);
+    let s = resolved.core;
+    const flags = resolved.flags;
 
     // Tag rolls, with the same optional repetition prefix the table
     // roller below accepts (`3#rumour`, `{1d4}#rumour|link`). `*` is

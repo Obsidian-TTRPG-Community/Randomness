@@ -12,6 +12,7 @@
  */
 
 import {
+    resolveDiceCore,
     translateDiceExpression,
     stripDisplayFlags,
     braceBareFormula,
@@ -381,5 +382,67 @@ describe("evalSourceOf: bare formulas roll under rdm:", () => {
         expect(evalSourceOf({ expr: "3d6>=10", prefix: "dice:" })).toBe(
             "{3d6cs>=10}"
         );
+    });
+});
+
+describe("resolveDiceCore: alias-aware graphical-dice core (issue #9)", () => {
+    const aliases = {
+        ability: "4d6dl1",
+        "attack ": "1d20+5|form",
+    };
+
+    test("plain formula: flags peel off, core is the bare roll", () => {
+        expect(resolveDiceCore("2d6+3|render")).toEqual({
+            core: "2d6+3",
+            flags: ["render"],
+        });
+        // EVERY trailing flag comes off, not just the last one.
+        expect(resolveDiceCore("2d6|form|render")).toEqual({
+            core: "2d6",
+            flags: ["form", "render"],
+        });
+    });
+
+    test("alias resolves to its formula — the issue-#9 case", () => {
+        expect(resolveDiceCore("ability|render", aliases)).toEqual({
+            core: "4d6dl1",
+            flags: ["render"],
+        });
+        // The Dice Tray types just the name, no flags.
+        expect(resolveDiceCore("ability", aliases)).toEqual({
+            core: "4d6dl1",
+            flags: [],
+        });
+    });
+
+    test("alias's own flags are honoured, alias flags first", () => {
+        expect(resolveDiceCore("attack|render", aliases)).toEqual({
+            core: "1d20+5",
+            flags: ["form", "render"],
+        });
+    });
+
+    test("alias match is case- and padding-insensitive", () => {
+        expect(resolveDiceCore("ABILITY", aliases).core).toBe("4d6dl1");
+        expect(resolveDiceCore("  Attack  ", aliases).core).toBe("1d20+5");
+    });
+
+    test("no alias, no flags: pass-through", () => {
+        expect(resolveDiceCore("longsword", aliases)).toEqual({
+            core: "longsword",
+            flags: [],
+        });
+        expect(resolveDiceCore("2d8", undefined)).toEqual({
+            core: "2d8",
+            flags: [],
+        });
+    });
+
+    test("matches what translateDiceExpression rolls", () => {
+        // The overlay must animate the same formula translation
+        // evaluates — pin the two paths together.
+        const { core } = resolveDiceCore("ability|render", aliases);
+        const { expr } = translateDiceExpression("ability|render", aliases);
+        expect(expr).toBe(`{${core}}`);
     });
 });
