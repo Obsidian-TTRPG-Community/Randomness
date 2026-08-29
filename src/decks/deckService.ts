@@ -308,6 +308,48 @@ export class DeckService {
         return this.resolveDraw(deck, rec.index, rec.facing);
     }
 
+    /**
+     * Deal up to `n` cards in one operation (issue #8 — poker hands,
+     * card-based initiative). Stops early when the deck runs out, so
+     * the result may be shorter than asked for; the caller decides
+     * whether a partial hand is worth mentioning. One save + one
+     * change notification for the whole deal, not one per card.
+     */
+    async drawMany(deckName: string, n: number): Promise<DrawResult[]> {
+        const deck = await this.getDeck(deckName);
+        if (!deck) return [];
+        const recs: { index: number; facing: Facing }[] = [];
+        for (let i = 0; i < n; i++) {
+            const rec = drawTop(deck.state, deck.settings, Math.random);
+            if (!rec) break;
+            recs.push(rec);
+        }
+        if (recs.length === 0) return [];
+        this.scheduleSave(deck);
+        this.notify();
+        const out: DrawResult[] = [];
+        for (const rec of recs) {
+            out.push(await this.resolveDraw(deck, rec.index, rec.facing));
+        }
+        return out;
+    }
+
+    /**
+     * The most recent `n` draws, oldest first — the "hand" a
+     * multi-card span shows. Shorter than `n` when fewer cards have
+     * been drawn since the last shuffle.
+     */
+    async lastDrawnMany(deckName: string, n: number): Promise<DrawResult[]> {
+        const deck = await this.getDeck(deckName);
+        if (!deck || n <= 0) return [];
+        const recs = deck.state.drawn.slice(-n);
+        const out: DrawResult[] = [];
+        for (const rec of recs) {
+            out.push(await this.resolveDraw(deck, rec.index, rec.facing));
+        }
+        return out;
+    }
+
     /** Peek at the next n cards without drawing. */
     async peek(deckName: string, n: number): Promise<DrawResult[]> {
         const deck = await this.getDeck(deckName);

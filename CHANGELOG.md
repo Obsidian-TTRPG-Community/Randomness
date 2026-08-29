@@ -2,6 +2,28 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Added
+- **Deal multiple cards, straight into the note** (issue #8, from
+  GilgameshofUT). Every deck call now takes an optional count and
+  embed width: `` `deck:Poker|5` `` shows a Deal button that draws
+  five at once (thumbnails inline, names for text-only cards) plus
+  a 📌 that replaces the span with the hand as ordinary markdown —
+  `![[card.png|200]]` embeds for cards with art (facing kept as
+  trailing text), `**Name (facing)** — meaning` for text cards.
+  `` `deck-mod:Poker|5|200` `` is the dice-mod of decks: the first
+  render deals once and bakes the hand in the same act, and the
+  deck only advances if the note rewrite succeeds. The codeblock
+  form takes the same count — `deck:Poker|5` deals five per click,
+  shows them as a row of cards, and its **📋 Copy hand** button
+  copies the hand as markdown for pasting in Live Preview. Deck
+  state tracking is unchanged throughout: one save and one change
+  notification per deal, partial deals notice when the deck runs
+  short, and rendering still never draws (the self-destructing
+  `deck-mod:` span being the one deliberate, dice-mod-matching
+  exception).
+
 ## 1.21.0
 
 ### Added

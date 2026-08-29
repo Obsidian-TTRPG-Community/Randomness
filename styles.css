@@ -1128,6 +1128,26 @@
 .randomness-deck-block .randomness-deck-card-img {
     height: 340px;
 }
+/* Multi-card deal (`deck:Name|5`): the hand as a wrapping row of
+   smaller cards, oldest-dealt first. */
+.randomness-deck-hand {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 8px;
+}
+.randomness-deck-hand .randomness-deck-card {
+    margin: 0;
+    flex: 0 1 auto;
+    max-width: 150px;
+}
+.randomness-deck-block .randomness-deck-hand .randomness-deck-card-img {
+    height: 170px;
+}
+.randomness-deck-block:has(.randomness-deck-hand) {
+    max-width: 680px;
+}
 .randomness-deck-block-controls {
     display: flex;
     align-items: center;

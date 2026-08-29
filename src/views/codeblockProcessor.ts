@@ -121,10 +121,10 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         // whose whole body is one `deck:Name` line renders the deck's
         // last-drawn card at full size with a Draw button, instead of
         // running the engine. Rendering never draws.
-        const deckName = parseDeckBlock(this.source);
-        if (deckName !== null && this.plugin.decks) {
+        const deckCall = parseDeckBlock(this.source);
+        if (deckCall !== null && this.plugin.decks) {
             clearElement(this.containerEl);
-            await renderDeckBlock(this.plugin, this.containerEl, deckName);
+            await renderDeckBlock(this.plugin, this.containerEl, deckCall);
             return;
         }
 

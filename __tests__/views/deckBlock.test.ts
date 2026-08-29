@@ -15,16 +15,22 @@ import {
 
 describe("parseDeckBlock", () => {
     test("a single deck line is a deck block", () => {
-        expect(parseDeckBlock("deck:Weather")).toBe("Weather");
-        expect(parseDeckBlock("  deck: Playing Cards  \n")).toBe(
-            "Playing Cards"
-        );
+        expect(parseDeckBlock("deck:Weather")).toEqual({
+            name: "Weather",
+            count: 1,
+            mod: false,
+        });
+        expect(parseDeckBlock("  deck: Playing Cards  \n")).toEqual({
+            name: "Playing Cards",
+            count: 1,
+            mod: false,
+        });
     });
 
     test("comments and blank lines are ignored", () => {
         expect(
             parseDeckBlock("// today's weather\n\ndeck:Weather\n")
-        ).toBe("Weather");
+        ).toEqual({ name: "Weather", count: 1, mod: false });
     });
 
     test("anything else falls through to the engine", () => {

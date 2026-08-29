@@ -1179,7 +1179,7 @@ function editorFor(
  * cursor is restored afterwards so a bake doesn't move the caret out
  * from under someone mid-sentence.
  */
-async function modifyNoteUndoable(
+export async function modifyNoteUndoable(
     plugin: RandomnessPlugin,
     notePath: string,
     transform: (source: string) => string

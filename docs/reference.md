@@ -1307,6 +1307,40 @@ a Draw button and remaining count. Rendering NEVER draws — only the
 explicit 🎴 click advances the deck, so scrolling a note can't burn
 cards.
 
+### Dealing several cards at once
+
+(Added in v1.22.0.) Every deck call takes an optional count — and,
+for cards baked into the note as image embeds, an optional width:
+
+```text
+`deck:Poker|5`         deal 5 per click (reading view)
+`deck:Poker|5|200`     …and bake images 200 px wide
+`deck-mod:Poker|5|200` deal 5 ONCE and replace the span with them
+```
+
+A counted `deck:` span shows a Deal button and the dealt hand
+(thumbnails, or names for text-only cards). Once something is
+drawn, a **📌** appears: it replaces the span with the hand as
+ordinary markdown — `![[card.png|200]]` embeds for cards with art
+(a reversed or turned card keeps its facing as a trailing
+`*(reversed)*`, since CSS rotation can't follow a plain embed), and
+`**Name (facing)** — meaning` lines for text cards.
+
+`deck-mod:` is the dice-mod of decks: the first render deals the
+hand and bakes it in one act, leaving no span behind — handy for
+templates that should stamp a poker hand or an initiative order
+straight into a note. It's the one deliberate exception to
+"rendering never draws", and it only advances the deck when the
+note rewrite succeeds. (Inline spans render in reading view;
+`deck-mod:` is inline-only.)
+
+The same count works in the codeblock form — the body line
+`deck:Poker|5` deals five per click and shows them as a row of
+cards — where a **📋 Copy hand** button copies the dealt cards as
+that same markdown, which is the way to paste a hand while writing
+in Live Preview. Partial deals are honest: when fewer cards remain
+than asked for, you get what's left and a notice says so.
+
 The sidebar **Decks tab** manages every deck: **Draw**, **Peek**,
 **Draw & bury**, **Undo** and **Shuffle** buttons, orientation
 controls — **Turns** (`half` = upright/reversed, `quarter` = any of
