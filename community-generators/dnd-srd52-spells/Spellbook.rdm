@@ -1,0 +1,773 @@
+// Spellbook.rdm — random D&D spellbooks & scrolls, SRD 5.2 only
+// =====================================================================
+// Contributed by Brinx-git (github.com/Obsidian-TTRPG-Community/
+// Randomness issue #7). Spell names are from Wizards of the Coast's
+// System Reference Document 5.2 (CC-BY-4.0) — see ATTRIBUTION.md.
+//
+// Entry tables (weighted toward the levels each book/scroll favours):
+//   [@Spellbook]        wizard spell, full level spread (1–9)
+//   [@Lowspellbook]     wizard spell, levels 1–5
+//   [@Highspellbook]    wizard spell, levels 5–9
+//   [@Clericscroll]  [@LowClericscroll]  [@HighClericscroll]
+//   [@Bardscroll]    [@LowBardscroll]    [@HighBardscroll]
+//   [@Druidscroll]   [@LowDruidscroll]   [@HighDruidscroll]
+//
+// Each result is prefixed with its level ("3 - Fireball",
+// "C5 - Flame Strike") so a rolled book reads at a glance.
+//
+// An 8-spell wizard spellbook, no duplicate spells, alphabetized:
+//   `rdm:[!8 Spellbook >> sort >> implode \n]`
+// One high-level druid scroll:
+//   `rdm:[@HighDruidscroll]`
+// =====================================================================
+
+Table: Spellbook
+1: [@Ninth]
+1: [@Eighth]
+2: [@Seventh]
+2: [@Sixth]
+3: [@Fifth]
+4: [@Fourth]
+4: [@Third]
+5: [@Second]
+5: [@First]
+
+Table: Lowspellbook
+2: [@Fifth]
+3: [@Fourth]
+4: [@Third]
+5: [@Second]
+5: [@First]
+
+Table: Highspellbook
+1: [@Ninth]
+2: [@Eighth]
+3: [@Seventh]
+4: [@Sixth]
+5: [@Fifth]
+
+Table: Clericscroll
+1: [@Cleric9]
+1: [@Cleric8]
+2: [@Cleric7]
+2: [@Cleric6]
+3: [@Cleric5]
+4: [@Cleric4]
+4: [@Cleric3]
+5: [@Cleric2]
+5: [@Cleric1]
+
+Table: LowClericscroll
+2: [@Cleric5]
+3: [@Cleric4]
+4: [@Cleric3]
+5: [@Cleric2]
+5: [@Cleric1]
+
+Table: HighClericscroll
+2: [@Cleric9]
+3: [@Cleric8]
+4: [@Cleric7]
+5: [@Cleric6]
+5: [@Cleric5]
+
+Table: Bardscroll
+1: [@Bard9]
+1: [@Bard8]
+2: [@Bard7]
+2: [@Bard6]
+3: [@Bard5]
+4: [@Bard4]
+4: [@Bard3]
+5: [@Bard2]
+5: [@Bard1]
+
+Table: LowBardscroll
+2: [@Bard5]
+3: [@Bard4]
+4: [@Bard3]
+5: [@Bard2]
+5: [@Bard1]
+
+Table: HighBardscroll
+2: [@Bard9]
+3: [@Bard8]
+4: [@Bard7]
+5: [@Bard6]
+5: [@Bard5]
+
+Table: Druidscroll
+1: [@Druid9]
+1: [@Druid8]
+2: [@Druid7]
+2: [@Druid6]
+3: [@Druid5]
+4: [@Druid4]
+4: [@Druid3]
+5: [@Druid2]
+5: [@Druid1]
+
+Table: LowDruidscroll
+2: [@Druid5]
+3: [@Druid4]
+4: [@Druid3]
+5: [@Druid2]
+5: [@Druid1]
+
+Table: HighDruidscroll
+2: [@Druid9]
+3: [@Druid8]
+4: [@Druid7]
+5: [@Druid6]
+5: [@Druid5]
+
+Table: First
+1 - Alarm
+1 - Burning Hands
+1 - Charm Person
+1 - Chromatic Orb
+1 - Color Spray
+1 - Comprehend Languages
+1 - Detect Magic
+1 - Disguise Self
+1 - Expeditious Retreat
+1 - False Life
+1 - Feather Fall
+1 - Find Familiar
+1 - Fog Cloud
+1 - Grease
+1 - Ice Knife
+1 - Identify
+1 - Illusory Script
+1 - Jump
+1 - Longstrider
+1 - Mage Armor
+1 - Magic Missile
+1 - Protection from Evil and Good
+1 - Ray of Sickness
+1 - Shield
+1 - Silent Image
+1 - Sleep
+1 - Tasha’s Hideous Laughter
+1 - Tenser’s Floating Disk
+1 - Thunderwave
+1 - Unseen Servant
+1 - Witch Bolt
+
+Table: Second
+2 - Alter Self
+2 - Arcane Lock
+2 - Arcane Vigor
+2 - Augury
+2 - Blindness/Deafness
+2 - Blur
+2 - Cloud of Daggers
+2 - Continual Flame
+2 - Crown of Madness
+2 - Darkness
+2 - Darkvision
+2 - Detect Thoughts
+2 - Dragon’s Breath
+2 - Enhance Ability
+2 - Enlarge/Reduce
+2 - Flaming Sphere
+2 - Gentle Repose
+2 - Gust of Wind
+2 - Hold Person
+2 - Invisibility
+2 - Knock
+2 - Levitate
+2 - Locate Object
+2 - Magic Mouth
+2 - Magic Weapon
+2 - Melf’s Acid Arrow
+2 - Mind Spike
+2 - Mirror Image
+2 - Misty Step
+2 - Nystul’s Magic Aura
+2 - Phantasmal Force
+2 - Ray of Enfeeblement
+2 - Rope Trick
+2 - Scorching Ray
+2 - See Invisibility
+2 - Shatter
+2 - Spider Climb
+2 - Suggestion
+2 - Web
+
+Table: Third
+3 - Animate Dead
+3 - Bestow Curse
+3 - Blink
+3 - Clairvoyance
+3 - Counterspell
+3 - Dispel Magic
+3 - Fear
+3 - Feign Death
+3 - Fireball
+3 - Fly
+3 - Gaseous Form
+3 - Glyph of Warding
+3 - Haste
+3 - Hypnotic Pattern
+3 - Leomund’s Tiny Hut
+3 - Lightning Bolt
+3 - Magic Circle
+3 - Major Image
+3 - Nondetection
+3 - Phantom Steed
+3 - Protection from Energy
+3 - Remove Curse
+3 - Sending
+3 - Sleet Storm
+3 - Slow
+3 - Speak with Dead
+3 - Stinking Cloud
+3 - Summon Fey
+3 - Summon Undead
+3 - Tongues
+3 - Vampiric Touch
+3 - Water Breathing
+
+Table: Fourth
+4 - Arcane Eye
+4 - Banishment
+4 - Blight
+4 - Charm Monster
+4 - Confusion
+4 - Conjure Minor Elementals
+4 - Control Water
+4 - Dimension Door
+4 - Divination
+4 - Evard’s Black Tentacles
+4 - Fabricate
+4 - Fire Shield
+4 - Greater Invisibility
+4 - Hallucinatory Terrain
+4 - Ice Storm
+4 - Leomund’s Secret Chest
+4 - Locate Creature
+4 - Mordenkainen’s Faithful Hound
+4 - Mordenkainen’s Private Sanctum
+4 - Otiluke’s Resilient Sphere
+4 - Phantasmal Killer
+4 - Polymorph
+4 - Stone Shape
+4 - Stoneskin
+4 - Summon Aberration
+4 - Summon Construct
+4 - Summon Elemental
+4 - Vitriolic Sphere
+4 - Wall of Fire
+
+Table: Fifth
+5 - Animate Objects
+5 - Bigby’s Hand
+5 - Circle of Power
+5 - Cloudkill
+5 - Cone of Cold
+5 - Conjure Elemental
+5 - Contact Other Plane
+5 - Creation
+5 - Dominate Person
+5 - Dream
+5 - Geas
+5 - Hold Monster
+5 - Jallarzi’s Storm of Radiance
+5 - Legend Lore
+5 - Mislead
+5 - Modify Memory
+5 - Passwall
+5 - Planar Binding
+5 - Rary’s Telepathic Bond
+5 - Scrying
+5 - Seeming
+5 - Steel Wind Strike
+5 - Summon Dragon
+5 - Synaptic Static
+5 - Telekinesis
+5 - Teleportation Circle
+5 - Wall of Force
+5 - Wall of Stone
+5 - Yolande’s Regal Presence
+
+Table: Sixth
+6 - Arcane Gate
+6 - Chain Lightning
+6 - Circle of Death
+6 - Contingency
+6 - Create Undead
+6 - Disintegrate
+6 - Drawmij’s Instant Summons
+6 - Eyebite
+6 - Flesh to Stone
+6 - Globe of Invulnerability
+6 - Guards and Wards
+6 - Magic Jar
+6 - Mass Suggestion
+6 - Move Earth
+6 - Otiluke’s Freezing Sphere
+6 - Otto’s Irresistible Dance
+6 - Programmed Illusion
+6 - Summon Fiend
+6 - Sunbeam
+6 - Tasha’s Bubbling Cauldron
+6 - True Seeing
+6 - Wall of Ice
+
+Table: Seventh
+7 - Delayed Blast Fireball
+7 - Etherealness
+7 - Finger of Death
+7 - Forcecage
+7 - Mirage Arcane
+7 - Mordenkainen’s Magnificent Mansion
+7 - Mordenkainen’s Sword
+7 - Plane Shift
+7 - Prismatic Spray
+7 - Project Image
+7 - Reverse Gravity
+7 - Sequester
+7 - Simulacrum
+7 - Symbol
+7 - Teleport
+
+Table: Eighth
+8 - Antimagic Field
+8 - Antipathy/Sympathy
+8 - Befuddlement
+8 - Clone
+8 - Control Weather
+8 - Demiplane
+8 - Dominate Monster
+8 - Incendiary Cloud
+8 - Maze
+8 - Mind Blank
+8 - Power Word Stun
+8 - Sunburst
+8 - Telepathy
+
+Table: Ninth
+9 - Astral Projection
+9 - Foresight
+9 - Gate
+9 - Imprisonment
+9 - Meteor Swarm
+9 - Power Word Kill
+9 - Prismatic Wall
+9 - Shapechange
+9 - Time Stop
+9 - True Polymorph
+9 - Weird
+9 - Wish
+
+Table: Cleric1
+C1 - Bane
+C1 - Bless
+C1 - Command
+C1 - Create or Destroy Water
+C1 - Cure Wounds
+C1 - Detect Evil and Good
+C1 - Detect Magic
+C1 - Detect Poison and Disease
+C1 - Guiding Bolt
+C1 - Healing Word
+C1 - Inflict Wounds
+C1 - Protection from Evil and Good
+C1 - Purify Food and Drink
+C1 - Sanctuary
+C1 - Shield of Faith
+
+Table: Cleric2
+C2 - Aid
+C2 - Augury
+C2 - Blindness/Deafness
+C2 - Calm Emotions
+C2 - Continual Flame
+C2 - Enhance Ability
+C2 - Find Traps
+C2 - Gentle Repose
+C2 - Hold Person
+C2 - Lesser Restoration
+C2 - Locate Object
+C2 - Prayer of Healing
+C2 - Protection from Poison
+C2 - Silence
+C2 - Spiritual Weapon
+C2 - Warding Bond
+C2 - Zone of Truth
+
+Table: Cleric3
+C3 - Animate Dead
+C3 - Aura of Vitality
+C3 - Beacon of Hope
+C3 - Bestow Curse
+C3 - Clairvoyance
+C3 - Create Food and Water
+C3 - Daylight
+C3 - Dispel Magic
+C3 - Feign Death
+C3 - Glyph of Warding
+C3 - Magic Circle
+C3 - Mass Healing Word
+C3 - Meld into Stone
+C3 - Protection from Energy
+C3 - Remove Curse
+C3 - Revivify
+C3 - Sending
+C3 - Speak with Dead
+C3 - Spirit Guardians
+C3 - Tongues
+C3 - Water Walk
+
+Table: Cleric4
+C4 - Aura of Life
+C4 - Aura of Purity
+C4 - Banishment
+C4 - Control Water
+C4 - Death Ward
+C4 - Divination
+C4 - Freedom of Movement
+C4 - Guardian of Faith
+C4 - Locate Creature
+C4 - Stone Shape
+
+Table: Cleric5
+C5 - Circle of Power
+C5 - Commune
+C5 - Contagion
+C5 - Dispel Evil and Good
+C5 - Flame Strike
+C5 - Geas
+C5 - Greater Restoration
+C5 - Hallow
+C5 - Insect Plague
+C5 - Legend Lore
+C5 - Mass Cure Wounds
+C5 - Planar Binding
+C5 - Raise Dead
+C5 - Scrying
+C5 - Summon Celestial
+
+Table: Cleric6
+C6 - Blade Barrier
+C6 - Create Undead
+C6 - Find the Path
+C6 - Forbiddance
+C6 - Harm
+C6 - Heal
+C6 - Heroes’ Feast
+C6 - Planar Ally
+C6 - Sunbeam
+C6 - True Seeing
+C6 - Word of Recall
+
+Table: Cleric7
+C7 - Conjure Celestial
+C7 - Divine Word
+C7 - Etherealness
+C7 - Fire Storm
+C7 - Plane Shift
+C7 - Power Word Fortify
+C7 - Regenerate
+C7 - Resurrection
+C7 - Symbol
+
+Table: Cleric8
+C8 - Antimagic Field
+C8 - Control Weather
+C8 - Earthquake
+C8 - Holy Aura
+C8 - Sunburst
+
+Table: Cleric9
+C9 - Astral Projection
+C9 - Gate
+C9 - Mass Heal
+C9 - Power Word Heal
+C9 - True Resurrection
+
+Table: Bard1
+B1 - Animal Friendship
+B1 - Bane
+B1 - Charm Person
+B1 - Color Spray
+B1 - Command
+B1 - Comprehend Languages
+B1 - Cure Wounds
+B1 - Detect Magic
+B1 - Disguise Self
+B1 - Dissonant Whispers
+B1 - Faerie Fire
+B1 - Feather Fall
+B1 - Healing Word
+B1 - Heroism
+B1 - Identify
+B1 - Illusory Script
+B1 - Longstrider
+B1 - Silent Image
+B1 - Sleep
+B1 - Speak with Animals
+B1 - Tasha’s Hideous Laughter
+B1 - Thunderwave
+B1 - Unseen Servant
+
+Table: Bard2
+B2 - Aid
+B2 - Animal Messenger
+B2 - Blindness/Deafness
+B2 - Calm Emotions
+B2 - Cloud of Daggers
+B2 - Crown of Madness
+B2 - Detect Thoughts
+B2 - Enhance Ability
+B2 - Enlarge/Reduce
+B2 - Enthrall
+B2 - Heat Metal
+B2 - Hold Person
+B2 - Invisibility
+B2 - Knock
+B2 - Lesser Restoration
+B2 - Locate Animals or Plants
+B2 - Locate Object
+B2 - Magic Mouth
+B2 - Mirror Image
+B2 - Phantasmal Force
+B2 - See Invisibility
+B2 - Shatter
+B2 - Silence
+B2 - Suggestion
+B2 - Zone of Truth
+
+Table: Bard3
+B3 - Bestow Curse
+B3 - Clairvoyance
+B3 - Dispel Magic
+B3 - Fear
+B3 - Feign Death
+B3 - Glyph of Warding
+B3 - Hypnotic Pattern
+B3 - Leomund’s Tiny Hut
+B3 - Major Image
+B3 - Mass Healing Word
+B3 - Nondetection
+B3 - Plant Growth
+B3 - Sending
+B3 - Slow
+B3 - Speak with Dead
+B3 - Speak with Plants
+B3 - Stinking Cloud
+B3 - Tongues
+
+Table: Bard4
+B4 - Charm Monster
+B4 - Compulsion
+B4 - Confusion
+B4 - Dimension Door
+B4 - Fount of Moonlight
+B4 - Freedom of Movement
+B4 - Greater Invisibility
+B4 - Hallucinatory Terrain
+B4 - Locate Creature
+B4 - Phantasmal Killer
+B4 - Polymorph
+
+Table: Bard5
+B5 - Animate Objects
+B5 - Awaken
+B5 - Dominate Person
+B5 - Dream
+B5 - Geas
+B5 - Greater Restoration
+B5 - Hold Monster
+B5 - Legend Lore
+B5 - Mass Cure Wounds
+B5 - Mislead
+B5 - Modify Memory
+B5 - Planar Binding
+B5 - Raise Dead
+B5 - Rary’s Telepathic Bond
+B5 - Scrying
+B5 - Seeming
+B5 - Synaptic Static
+B5 - Teleportation Circle
+B5 - Yolande’s Regal Presence
+
+Table: Bard6
+B6 - Eyebite
+B6 - Find the Path
+B6 - Guards and Wards
+B6 - Heroes’ Feast
+B6 - Mass Suggestion
+B6 - Otto’s Irresistible Dance
+B6 - Programmed Illusion
+B6 - True Seeing
+
+Table: Bard7
+B7 - Etherealness
+B7 - Forcecage
+B7 - Mirage Arcane
+B7 - Mordenkainen’s Magnificent Mansion
+B7 - Mordenkainen’s Sword
+B7 - Power Word Fortify
+B7 - Prismatic Spray
+B7 - Project Image
+B7 - Regenerate
+B7 - Resurrection
+B7 - Symbol
+B7 - Teleport
+
+Table: Bard8
+B8 - Antipathy/Sympathy
+B8 - Befuddlement
+B8 - Dominate Monster
+B8 - Glibness
+B8 - Mind Blank
+B8 - Power Word Stun
+
+Table: Bard9
+B9 - Foresight
+B9 - Power Word Heal
+B9 - Power Word Kill
+B9 - Prismatic Wall
+B9 - True Polymorph
+
+Table: Druid1
+D1 - Animal Friendship
+D1 - Charm Person
+D1 - Create or Destroy Water
+D1 - Cure Wounds
+D1 - Detect Magic
+D1 - Detect Poison and Disease
+D1 - Entangle
+D1 - Faerie Fire
+D1 - Fog Cloud
+D1 - Goodberry
+D1 - Healing Word
+D1 - Ice Knife
+D1 - Jump
+D1 - Longstrider
+D1 - Protection from Evil and Good
+D1 - Purify Food and Drink
+D1 - Speak with Animals
+D1 - Thunderwave
+
+Table: Druid2
+D2 - Aid
+D2 - Animal Messenger
+D2 - Augury
+D2 - Barkskin
+D2 - Beast Sense
+D2 - Continual Flame
+D2 - Darkvision
+D2 - Enhance Ability
+D2 - Enlarge/Reduce
+D2 - Find Traps
+D2 - Flame Blade
+D2 - Flaming Sphere
+D2 - Gust of Wind
+D2 - Heat Metal
+D2 - Hold Person
+D2 - Lesser Restoration
+D2 - Locate Animals or Plants
+D2 - Locate Object
+D2 - Moonbeam
+D2 - Pass without Trace
+D2 - Protection from Poison
+D2 - Spike Growth
+D2 - Summon Beast
+
+Table: Druid3
+D3 - Aura of Vitality
+D3 - Call Lightning
+D3 - Conjure Animals
+D3 - Daylight
+D3 - Dispel Magic
+D3 - Elemental Weapon
+D3 - Feign Death
+D3 - Meld into Stone
+D3 - Plant Growth
+D3 - Protection from Energy
+D3 - Revivify
+D3 - Sleet Storm
+D3 - Speak with Plants
+D3 - Summon Fey
+D3 - Water Breathing
+D3 - Water Walk
+D3 - Wind Wall
+
+Table: Druid4
+D4 - Blight
+D4 - Charm Monster
+D4 - Confusion
+D4 - Conjure Minor Elementals
+D4 - Conjure Woodland Beings
+D4 - Control Water
+D4 - Divination
+D4 - Dominate Beast
+D4 - Fire Shield
+D4 - Fount of Moonlight
+D4 - Freedom of Movement
+D4 - Giant Insect
+D4 - Grasping Vine
+D4 - Hallucinatory Terrain
+D4 - Ice Storm
+D4 - Locate Creature
+D4 - Polymorph
+D4 - Stone Shape
+D4 - Stoneskin
+D4 - Summon Elemental
+D4 - Wall of Fire
+
+Table: Druid5
+D5 - Antilife Shell
+D5 - Awaken
+D5 - Commune with Nature
+D5 - Cone of Cold
+D5 - Conjure Elemental
+D5 - Contagion
+D5 - Geas
+D5 - Greater Restoration
+D5 - Insect Plague
+D5 - Mass Cure Wounds
+D5 - Planar Binding
+D5 - Reincarnate
+D5 - Scrying
+D5 - Tree Stride
+D5 - Wall of Stone
+
+Table: Druid6
+D6 - Conjure Fey
+D6 - Find the Path
+D6 - Flesh to Stone
+D6 - Heal
+D6 - Heroes’ Feast
+D6 - Move Earth
+D6 - Sunbeam
+D6 - Transport via Plants
+D6 - Wall of Thorns
+D6 - Wind Walk
+
+Table: Druid7
+D7 - Fire Storm
+D7 - Mirage Arcane
+D7 - Plane Shift
+D7 - Regenerate
+D7 - Reverse Gravity
+D7 - Symbol
+
+Table: Druid8
+D8 - Animal Shapes
+D8 - Antipathy/Sympathy
+D8 - Befuddlement
+D8 - Control Weather
+D8 - Earthquake
+D8 - Incendiary Cloud
+D8 - Sunburst
+D8 - Tsunami
+
+Table: Druid9
+D9 - Foresight
+D9 - Shapechange
+D9 - Storm of Vengeance
+D9 - True Resurrection

@@ -2,6 +2,16 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Added
+- **Community generator: D&D spellbooks & scrolls (SRD 5.2)** by
+  Brinx-git (issue #7) — weighted wizard/cleric/bard/druid spell
+  tables in `community-generators/dnd-srd52-spells/`, with a CI
+  test guarding the file against parse-breaking edits. Alphabetized
+  books were already covered by the built-in `>> sort` filter:
+  `` `rdm:[@8 Spellbook >> sort >> implode \n]` ``.
+
 ## 1.22.0
 
 ### Added
