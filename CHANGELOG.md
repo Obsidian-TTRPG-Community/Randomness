@@ -2,7 +2,7 @@
 
 All notable changes to the Randomness plugin.
 
-## Unreleased
+## 1.22.1
 
 ### Fixed
 - **Graphical dice now roll for aliases** (issue #9, from TGSlasher).
