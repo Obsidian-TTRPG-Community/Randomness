@@ -23,7 +23,9 @@ left edge):
     ```
 
 Or open the sidebar (the 🎲 icon on the left) and use the
-**Portraits** and **Builder** tabs.
+**Portraits** and **Builder** tabs. Sizes, seeds, packs, inline
+faces mid-sentence, and locking a portrait forever all have their
+own chapter: [[10 - Portraits]].
 
 ## Fantasy Hub
 

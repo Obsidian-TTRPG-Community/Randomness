@@ -2,6 +2,20 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Added
+- **Guide chapter 10 — Portraits** (issue #12, from a contribution
+  by immortel32): the portrait feature's own guide chapter — setup,
+  blocks, inline spans, seeds, packs, a full parameter reference,
+  the recipe JSON shape, and troubleshooting with the real error
+  messages. Fact-checked against the code before adoption: the
+  contributed draft's per-card 🎲/📌 controls don't exist (blocks
+  have one grid-level ⟳ Reroll plus per-tile lock and PNG icons;
+  layer-by-layer tweaks are the Builder tab), and PNG *replaces*
+  the block with an `![[image]]` embed — the chapter now says so.
+  Chapter 09 and Start Here link to it.
+
 ## 1.22.1
 
 ### Fixed

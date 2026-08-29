@@ -55,5 +55,6 @@ tab — click **Dice** along the top to reach the tray.)
 - [[07 - Sharing Tables Between Notes]] — one table, many notes
 - [[08 - Coming From Dice Roller]] — everything still works
 - [[09 - Going Further]] — portraits, scripting, big content packs
+- [[10 - Portraits]] — faces and names for your NPCs, in depth
 
 Delete this folder whenever you like — it's just notes.
