@@ -1148,6 +1148,73 @@
 .randomness-deck-block:has(.randomness-deck-hand) {
     max-width: 680px;
 }
+/* Dungeon grids (`deck:Name|2x2`): W×H tiles, each turned its own
+   way; hover a tile for its reroll/rotate buttons. Quarter-turn
+   decks should use square card art — a 90°-turned rectangle
+   overflows its cell. */
+.randomness-deck-gridblock {
+    max-width: fit-content;
+}
+.randomness-deck-grid {
+    display: grid;
+    gap: 6px;
+    justify-content: center;
+    margin: 4px auto;
+}
+.randomness-deck-tile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.randomness-deck-tile-img {
+    width: 100%;
+    display: block;
+    border-radius: 4px;
+}
+.randomness-deck-tile-img.is-reversed {
+    transform: rotate(180deg);
+}
+.randomness-deck-tile-img.is-turned-right {
+    transform: rotate(90deg);
+}
+.randomness-deck-tile-img.is-turned-left {
+    transform: rotate(-90deg);
+}
+.randomness-deck-tile-text {
+    font-size: var(--font-ui-small);
+    text-align: center;
+    padding: 4px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    align-self: stretch;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60px;
+}
+.randomness-deck-tilebtns {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+.randomness-deck-tile:hover .randomness-deck-tilebtns,
+.randomness-deck-tilebtns:focus-within {
+    opacity: 0.95;
+}
+.randomness-deck-tilebtn {
+    font-size: var(--font-ui-smaller);
+    padding: 0 4px;
+    cursor: pointer;
+}
+.randomness-deck-grid-hint {
+    grid-column: 1 / -1;
+}
 .randomness-deck-block-controls {
     display: flex;
     align-items: center;

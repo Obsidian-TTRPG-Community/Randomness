@@ -41,12 +41,19 @@ export const MAX_DEAL = 99;
  * `![[card.png|200]]` — matching Obsidian's own `|200` sizing.
  * `mod` marks a `deck-mod:` call: dice-mod parity, the span deals
  * once on first render and replaces itself with the result.
+ *
+ * `grid` marks a dungeon-grid call — `deck:Dungeon|2x2` — where the
+ * first param is `WxH` instead of a count: the deal lays `count`
+ * (= W×H) tiles out as a W-wide grid, each tile turned its own way.
+ * Grid calls render in ```randomness codeblocks only; `size` then
+ * means tile width.
  */
 export interface DeckCall {
     name: string;
     count: number;
     size?: number;
     mod: boolean;
+    grid?: { w: number; h: number };
 }
 
 /** Parse the text of a `deck:`/`deck-mod:` code span. Null when it isn't one. */
@@ -66,12 +73,38 @@ export function parseDeckCall(text: string): DeckCall | null {
     const name = parts[0];
     // A bare `deck:` mention in prose is documentation, not a call.
     if (name === "") return null;
-    // Params must be plain positive integers: first is the count,
-    // second the embed width. Anything else means this isn't a call.
+    // Params: the first may be `WxH` (a dungeon grid); otherwise all
+    // must be plain positive integers — count, then embed width.
+    // Anything else means this isn't a call.
+    const params = parts.slice(1);
+    let grid: { w: number; h: number } | undefined;
     const nums: number[] = [];
-    for (const p of parts.slice(1)) {
+    for (let i = 0; i < params.length; i++) {
+        const p = params[i];
+        if (i === 0) {
+            const m = /^(\d+)\s*[x×]\s*(\d+)$/i.exec(p);
+            if (m) {
+                grid = { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
+                continue;
+            }
+        }
         if (!/^\d+$/.test(p)) return null;
         nums.push(parseInt(p, 10));
+    }
+    if (grid !== undefined) {
+        if (grid.w < 1 || grid.h < 1) return null;
+        const count = grid.w * grid.h;
+        if (count > MAX_DEAL) return null;
+        if (nums.length > 1) return null;
+        const size = nums.length === 1 ? nums[0] : undefined;
+        if (size !== undefined && size < 1) return null;
+        return {
+            name,
+            count,
+            ...(size !== undefined ? { size } : {}),
+            mod,
+            grid,
+        };
     }
     if (nums.length > 2) return null;
     const count = nums.length >= 1 ? nums[0] : 1;
@@ -154,6 +187,24 @@ export function formatDealtHand(
 }
 
 /**
+ * Format a dealt grid as markdown: each W-tile row through
+ * `formatDealtHand` (image embeds side by side), rows separated by
+ * newlines. CSS rotation cannot bake, so non-upright tiles keep
+ * their facing as trailing text — same rule as single cards.
+ */
+export function formatDealtGrid(
+    results: Pick<DrawResult, "card" | "facing" | "text">[],
+    width: number,
+    size?: number
+): string {
+    const rows: string[] = [];
+    for (let r = 0; r < results.length; r += width) {
+        rows.push(formatDealtHand(results.slice(r, r + width), size));
+    }
+    return rows.join("\n");
+}
+
+/**
  * Replace the Nth occurrence of the codespan `` `raw` `` in a note
  * source with `text` — how a dealt hand drops out of the plugin's
  * syntax and becomes ordinary note text. Unchanged source when the
@@ -221,6 +272,11 @@ export async function renderDeckBlock(
     if (!deck) {
         box.classList.add("randomness-error");
         box.textContent = `Unknown deck: ${deckName}`;
+        return;
+    }
+
+    if (call.grid !== undefined) {
+        renderDeckGrid(plugin, box, call, call.grid);
         return;
     }
 
@@ -351,6 +407,203 @@ export async function renderDeckBlock(
     await paint();
 }
 
+/**
+ * Dungeon-grid display for a `deck:Name|WxH` codeblock: the last
+ * W×H draws laid out as a W-wide grid of tiles, each shown in its
+ * rolled orientation. 🎲 Roll returns the current tiles to the deck
+ * (buried at random positions) and deals a fresh grid; hovering a
+ * tile offers a per-tile reroll and a manual rotate. Same rule as
+ * everywhere else: rendering NEVER draws — only clicks do.
+ */
+function renderDeckGrid(
+    plugin: RandomnessPlugin,
+    box: HTMLElement,
+    call: DeckCall,
+    grid: { w: number; h: number }
+): void {
+    const deckName = call.name;
+    const tileSize = call.size ?? 140;
+    box.classList.add("randomness-deck-gridblock");
+
+    const gridArea = activeDocument.createElement("div");
+    gridArea.className = "randomness-deck-grid";
+    gridArea.style.gridTemplateColumns = `repeat(${grid.w}, ${tileSize}px)`;
+    box.appendChild(gridArea);
+
+    const controls = activeDocument.createElement("div");
+    controls.className = "randomness-deck-block-controls";
+    box.appendChild(controls);
+
+    const rollBtn = activeDocument.createElement("button");
+    rollBtn.className = "randomness-deck-button";
+    rollBtn.type = "button";
+    rollBtn.textContent = `🎲 Roll ${grid.w}×${grid.h}`;
+    rollBtn.title =
+        `Roll a ${grid.w}×${grid.h} grid from ${deckName} — ` +
+        "returns the current tiles to the deck first";
+    rollBtn.setAttribute("aria-label", rollBtn.title);
+    controls.appendChild(rollBtn);
+
+    const count = activeDocument.createElement("span");
+    count.className = "randomness-deck-count";
+    count.title = "Cards remaining / total";
+    controls.appendChild(count);
+
+    const copyBtn = activeDocument.createElement("button");
+    copyBtn.className = "randomness-deck-button";
+    copyBtn.type = "button";
+    copyBtn.textContent = "📋 Copy grid";
+    copyBtn.title =
+        "Copy the grid as markdown (rows of image embeds / text)";
+    copyBtn.setAttribute("aria-label", copyBtn.title);
+    controls.appendChild(copyBtn);
+
+    const tileButton = (
+        parent: HTMLElement,
+        label: string,
+        title: string,
+        onClick: () => void
+    ): void => {
+        const btn = activeDocument.createElement("button");
+        btn.className = "randomness-deck-tilebtn";
+        btn.type = "button";
+        btn.textContent = label;
+        btn.title = title;
+        btn.setAttribute("aria-label", title);
+        makeEditorSafe(btn);
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onClick();
+        });
+        parent.appendChild(btn);
+    };
+
+    const paint = async (): Promise<void> => {
+        const fresh = await plugin.decks.getDeck(deckName);
+        if (!fresh) return;
+        count.textContent = `${fresh.state.remaining.length}/${fresh.cards.length}`;
+        const hand = await plugin.decks.lastDrawnMany(deckName, call.count);
+        while (gridArea.firstChild) gridArea.removeChild(gridArea.firstChild);
+        copyBtn.hidden = hand.length === 0;
+        if (hand.length === 0) {
+            const hint = activeDocument.createElement("div");
+            hint.className =
+                "randomness-deck-card-hint randomness-deck-grid-hint";
+            hint.textContent = `Not rolled yet — 🎲 deals a ${grid.w}×${grid.h} grid.`;
+            gridArea.appendChild(hint);
+            return;
+        }
+        // Absolute history position of the grid's first tile — what
+        // the per-tile reroll/rotate service calls address.
+        const base = fresh.state.drawn.length - hand.length;
+        const canTurn = fresh.settings.flip > 0;
+        hand.forEach((r, i) => {
+            const tile = activeDocument.createElement("div");
+            tile.className = "randomness-deck-tile";
+            gridArea.appendChild(tile);
+
+            const label = r.card.name + facingLabel(r.facing);
+            let painted = false;
+            if (r.card.imagePath !== undefined) {
+                const file = plugin.app.vault.getAbstractFileByPath(
+                    r.card.imagePath
+                );
+                if (file instanceof TFile) {
+                    const img = activeDocument.createElement("img");
+                    img.className = "randomness-deck-tile-img";
+                    applyFacingClass(img, r.facing);
+                    img.src = plugin.app.vault.getResourcePath(file);
+                    img.alt = label;
+                    img.title =
+                        label +
+                        (r.text !== undefined && r.text.trim() !== ""
+                            ? " — " + stripHtml(r.text)
+                            : "");
+                    tile.appendChild(img);
+                    painted = true;
+                }
+            }
+            if (!painted) {
+                const textEl = activeDocument.createElement("div");
+                textEl.className = "randomness-deck-tile-text";
+                textEl.textContent = label;
+                if (r.text !== undefined && r.text.trim() !== "") {
+                    textEl.title = stripHtml(r.text);
+                }
+                tile.appendChild(textEl);
+            }
+
+            const btns = activeDocument.createElement("div");
+            btns.className = "randomness-deck-tilebtns";
+            tile.appendChild(btns);
+            tileButton(
+                btns,
+                "🎲",
+                "Reroll this tile (buries it, draws a replacement)",
+                () => {
+                    void plugin.decks.rerollDrawn(deckName, base + i);
+                }
+            );
+            if (canTurn) {
+                tileButton(btns, "↻", "Turn this tile", () => {
+                    void plugin.decks.rotateDrawn(deckName, base + i);
+                });
+            }
+        });
+    };
+
+    makeEditorSafe(rollBtn);
+    rollBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        void (async () => {
+            const dealt = await plugin.decks.dealGrid(deckName, call.count);
+            if (dealt.length === 0) {
+                new Notice(
+                    `"${deckName}" is empty — shuffle to reset (Decks tab).`
+                );
+            } else if (dealt.length < call.count) {
+                new Notice(
+                    `"${deckName}" has only ${dealt.length} cards — ` +
+                        `the ${grid.w}×${grid.h} grid is partial.`
+                );
+            }
+            await paint();
+        })();
+    });
+
+    makeEditorSafe(copyBtn);
+    copyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        void (async () => {
+            const hand = await plugin.decks.lastDrawnMany(
+                deckName,
+                call.count
+            );
+            if (hand.length === 0) {
+                new Notice("Nothing rolled yet — Roll first.");
+                return;
+            }
+            await navigator.clipboard.writeText(
+                formatDealtGrid(hand, grid.w, call.size)
+            );
+            new Notice("Grid copied — paste it into a note.");
+        })();
+    });
+
+    const unsubscribe = plugin.decks.onChange(() => {
+        if (!box.isConnected) {
+            unsubscribe();
+            return;
+        }
+        void paint();
+    });
+
+    void paint();
+}
+
 export function buildDeckInlineProcessor(plugin: RandomnessPlugin) {
     return async function process(
         el: HTMLElement,
@@ -372,6 +625,9 @@ export function buildDeckInlineProcessor(plugin: RandomnessPlugin) {
             const raw = code.textContent ?? "";
             const call = parseDeckCall(raw);
             if (call === null) continue;
+            // Dungeon grids are a codeblock affair — a WxH layout has
+            // no sane inline rendering, so the span stays plain code.
+            if (call.grid !== undefined) continue;
             const idx = seen.get(raw) ?? 0;
             seen.set(raw, idx + 1);
             jobs.push({ code, call, raw, indexInBlock: idx });

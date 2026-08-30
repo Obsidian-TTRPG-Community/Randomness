@@ -113,6 +113,36 @@ export function rollFacing(opts: FacingRoll, rand: Rand): Facing {
     return turned[Math.min(2, Math.floor(rand() * 3))];
 }
 
+/**
+ * Uniform facing roll for grid deals (`deck:Name|2x2` dungeon
+ * grids). A map tile should land in each of its allowed orientations
+ * with EQUAL chance, so the deck's flip chance acts as an on/off
+ * switch here rather than a probability: 0 keeps every tile upright
+ * (rectangular cards that only read lengthways); anything above 0
+ * rolls uniformly over the turn mode's facings — `quarter`: all
+ * four, `half`: upright or reversed.
+ */
+export function rollGridFacing(opts: FacingRoll, rand: Rand): Facing {
+    const flip = typeof opts === "number" ? opts : opts.flip;
+    const turn = typeof opts === "number" ? "half" : (opts.turn ?? "half");
+    if (!(flip > 0)) return "upright";
+    if (turn === "quarter") {
+        return FACINGS[Math.min(3, Math.floor(rand() * 4))];
+    }
+    return rand() < 0.5 ? "upright" : "reversed";
+}
+
+/**
+ * The facing a manual rotate lands on next: quarter mode steps 90°
+ * clockwise; half mode toggles upright/reversed (a quarter facing —
+ * possible after the deck's turn mode was narrowed — normalises to
+ * upright first).
+ */
+export function nextFacing(f: Facing, turn: TurnMode): Facing {
+    if (turn === "quarter") return FACINGS[(facingTurns(f) + 1) % 4];
+    return f === "upright" ? "reversed" : "upright";
+}
+
 export interface DrawnRecord {
     /** Index into the deck's card list. */
     index: number;
@@ -291,13 +321,78 @@ export function drawTop(
     state: DeckState,
     flip: FacingRoll,
     rand: Rand,
-    now: () => number = Date.now
+    now: () => number = Date.now,
+    roll: (opts: FacingRoll, rand: Rand) => Facing = rollFacing
 ): DrawnRecord | null {
     const index = state.remaining.shift();
     if (index === undefined) return null;
-    const facing = rollFacing(flip, rand);
+    const facing = roll(flip, rand);
     const rec: DrawnRecord = { index, facing, ts: now() };
     state.drawn.push(rec);
+    return rec;
+}
+
+/**
+ * Return the last `n` draws to the deck, burying each at a random
+ * position — NOT back on top like `undoDraw`, because a grid reroll
+ * that stacked its tiles back on top would deal the same cards into
+ * the same cells again. Returns how many actually went back.
+ */
+export function returnLastDrawn(
+    state: DeckState,
+    n: number,
+    rand: Rand
+): number {
+    let returned = 0;
+    for (let i = 0; i < n; i++) {
+        const rec = state.drawn.pop();
+        if (!rec) break;
+        const pos = Math.floor(rand() * (state.remaining.length + 1));
+        state.remaining.splice(pos, 0, rec.index);
+        returned++;
+    }
+    return returned;
+}
+
+/**
+ * Reroll ONE draw in place (a single grid tile): the record at `pos`
+ * in the draw history goes back into the deck at a random position
+ * and the new top card takes over its history slot, so every other
+ * tile keeps its cell. On an otherwise-empty deck the buried card is
+ * immediately redrawn — the tile rerolls its orientation only.
+ */
+export function rerollDrawnAt(
+    state: DeckState,
+    pos: number,
+    facingOpts: FacingRoll,
+    rand: Rand,
+    now: () => number = Date.now
+): DrawnRecord | null {
+    if (pos < 0 || pos >= state.drawn.length) return null;
+    const [old] = state.drawn.splice(pos, 1);
+    const bury = Math.floor(rand() * (state.remaining.length + 1));
+    state.remaining.splice(bury, 0, old.index);
+    // Burial guarantees at least one card remains, so this draw
+    // cannot come up empty.
+    const index = state.remaining.shift() as number;
+    const rec: DrawnRecord = {
+        index,
+        facing: rollGridFacing(facingOpts, rand),
+        ts: now(),
+    };
+    state.drawn.splice(pos, 0, rec);
+    return rec;
+}
+
+/** Manually turn one drawn record to its next facing (grid ↻). */
+export function rotateDrawnAt(
+    state: DeckState,
+    pos: number,
+    turn: TurnMode
+): DrawnRecord | null {
+    const rec = state.drawn[pos];
+    if (!rec) return null;
+    rec.facing = nextFacing(rec.facing, turn);
     return rec;
 }
 

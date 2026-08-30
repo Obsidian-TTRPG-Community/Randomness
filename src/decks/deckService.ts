@@ -39,7 +39,11 @@ import {
     drawWeighted,
     freshState,
     peekTop,
+    rerollDrawnAt,
     reshuffle,
+    returnLastDrawn,
+    rollGridFacing,
+    rotateDrawnAt,
     undoDraw,
     validateState,
 } from "./deckModel";
@@ -332,6 +336,74 @@ export class DeckService {
             out.push(await this.resolveDraw(deck, rec.index, rec.facing));
         }
         return out;
+    }
+
+    /**
+     * Deal (or re-deal) a dungeon grid of `n` tiles: the last `n`
+     * draws first go back into the deck at random positions — so
+     * rerolling a grid never eats the deck, it only stays advanced
+     * by the grid you keep — then `n` fresh cards are dealt with
+     * uniform grid facings (`rollGridFacing`). May come up short
+     * when the deck holds fewer than `n` cards. One save + one
+     * change notification for the whole roll.
+     */
+    async dealGrid(deckName: string, n: number): Promise<DrawResult[]> {
+        const deck = await this.getDeck(deckName);
+        if (!deck) return [];
+        returnLastDrawn(deck.state, n, Math.random);
+        const recs: DrawnRecord[] = [];
+        for (let i = 0; i < n; i++) {
+            const rec = drawTop(
+                deck.state,
+                deck.settings,
+                Math.random,
+                Date.now,
+                rollGridFacing
+            );
+            if (!rec) break;
+            recs.push(rec);
+        }
+        this.scheduleSave(deck);
+        this.notify();
+        const out: DrawResult[] = [];
+        for (const rec of recs) {
+            out.push(await this.resolveDraw(deck, rec.index, rec.facing));
+        }
+        return out;
+    }
+
+    /**
+     * Reroll one tile of a dealt grid: the draw at `pos` (absolute
+     * index into the deck's draw history) is buried back into the
+     * deck and replaced, in its history slot, by a fresh card with a
+     * fresh grid facing.
+     */
+    async rerollDrawn(deckName: string, pos: number): Promise<DrawResult | null> {
+        const deck = await this.getDeck(deckName);
+        if (!deck) return null;
+        const rec = rerollDrawnAt(deck.state, pos, deck.settings, Math.random);
+        if (!rec) return null;
+        this.scheduleSave(deck);
+        this.notify();
+        return this.resolveDraw(deck, rec.index, rec.facing);
+    }
+
+    /**
+     * Manually turn one drawn card to its next facing (90° clockwise
+     * for quarter-turn decks, upright↔reversed otherwise).
+     */
+    async rotateDrawn(deckName: string, pos: number): Promise<DrawResult | null> {
+        const deck = await this.getDeck(deckName);
+        if (!deck) return null;
+        const rec = rotateDrawnAt(
+            deck.state,
+            pos,
+            deck.settings.turn ?? "half"
+        );
+        if (!rec) return null;
+        this.scheduleSave(deck);
+        this.notify();
+        return this.resolveDraw(deck, rec.index, rec.facing);
     }
 
     /**

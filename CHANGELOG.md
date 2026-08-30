@@ -5,6 +5,17 @@ All notable changes to the Randomness plugin.
 ## Unreleased
 
 ### Added
+- **Dungeon grids** — roll a whole map from a deck of dungeon
+  cards: `deck:Dungeon|2x2` (or `3x2|150` for 3×2 at 150 px tiles)
+  in a ```randomness codeblock deals W×H tiles laid out as a grid,
+  each turned its own way per the deck's Turn settings (`quarter`
+  decks land any of four directions with equal odds, `half` decks
+  upright/upside-down, Turn chance 0 keeps tiles upright — the
+  chance is an on/off switch for grids). **🎲 Roll** returns the
+  current tiles to the deck at random positions before dealing, so
+  rerolling never eats the deck; hovering a tile offers a per-tile
+  reroll (🎲) and a manual turn (↻); **📋 Copy grid** copies the
+  map as rows of image embeds.
 - **Guide chapter 10 — Portraits** (issue #12, from a contribution
   by immortel32): the portrait feature's own guide chapter — setup,
   blocks, inline spans, seeds, packs, a full parameter reference,

@@ -1341,6 +1341,46 @@ that same markdown, which is the way to paste a hand while writing
 in Live Preview. Partial deals are honest: when fewer cards remain
 than asked for, you get what's left and a notice says so.
 
+### Dungeon grids
+
+A deck of map tiles or dungeon cards can be rolled as a whole map:
+give the codeblock form a `WxH` grid instead of a count, with an
+optional tile width in pixels:
+
+````text
+```randomness
+deck:Dungeon|2x2
+```
+````
+
+```text
+deck:Dungeon|3x2|150   3 wide × 2 high, 150 px tiles
+```
+
+**🎲 Roll** deals W×H cards and lays them out as a grid, each tile
+turned its own way. How a tile may turn comes from the deck's
+orientation settings: with a **Turn chance** above 0, a
+`quarter`-turn deck lands each tile in any of the four directions
+with equal odds (square tiles — Story Engine style), a `half`-turn
+deck upright or upside-down (rectangular cards that only read
+lengthways), and with the chance at 0 every tile stays upright. The
+grid always rolls orientation uniformly — the chance % acts as an
+on/off switch here, unlike single draws.
+
+Rolling again returns the current tiles to the deck (buried at
+random positions) before dealing, so rerolling never eats the deck
+— it only stays advanced by the grid you keep, and no tile repeats
+within a grid. Hover a tile for two more controls: **🎲** rerolls
+just that cell (the tile goes back in, a replacement is drawn) and
+**↻** turns it by hand — for when the dungeon is almost right.
+**📋 Copy grid** copies the map as markdown, one line of
+`![[image|width]]` embeds per grid row (a turned tile keeps its
+facing as trailing text, since CSS rotation can't follow an embed).
+
+Grids are a codeblock affair: an inline `` `deck:Dungeon|2x2` ``
+span stays plain text, and quarter-turn decks want square card art
+— a 90°-turned rectangle overflows its cell.
+
 The sidebar **Decks tab** manages every deck: **Draw**, **Peek**,
 **Draw & bury**, **Undo** and **Shuffle** buttons, orientation
 controls — **Turns** (`half` = upright/reversed, `quarter` = any of
