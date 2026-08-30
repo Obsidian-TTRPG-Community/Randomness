@@ -2,7 +2,7 @@
 
 All notable changes to the Randomness plugin.
 
-## Unreleased
+## 1.23.0
 
 ### Added
 - **Dungeon grids** — roll a whole map from a deck of dungeon
