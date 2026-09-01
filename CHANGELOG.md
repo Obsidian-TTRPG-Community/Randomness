@@ -2,6 +2,21 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.24.0
+
+### Added
+- **Hover previews in the sidebar** (asked on Discord): links in
+  the sidebar's result panel and deck cards, and in the .ipt
+  reader, now open Obsidian's Page preview popover on hover, the
+  same as links in a note. Page preview only watches its own
+  Markdown views, so the plugin's views now raise the `hover-link`
+  event themselves and register as a source — a **Randomness**
+  toggle appears under Settings → Core plugins → Page preview,
+  where you can choose whether hovering needs Ctrl/Cmd (the
+  default, matching notes) or fires on its own. Links rendered
+  inside notes are untouched; the Markdown view already previews
+  those.
+
 ## 1.23.0
 
 ### Added
