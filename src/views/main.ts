@@ -35,6 +35,7 @@ import {
 } from "./lockingService";
 import { registerIptView } from "./iptView";
 import { registerBrowserView } from "./browserView";
+import { HOVER_LINK_SOURCE } from "./obsidianLinks";
 import { openReferenceView } from "./referenceView";
 import { isGeneratorPath } from "../generatorFormat";
 import { TableAutocomplete } from "./tableAutocomplete";
@@ -150,6 +151,14 @@ export default class RandomnessPlugin extends Plugin {
 
         // Register the right-sidebar generator browser pane.
         registerBrowserView(this);
+        // Page preview: links in our own views (sidebar, .ipt reader)
+        // raise `hover-link` themselves (see obsidianLinks.ts).
+        // Registering the source gives the user a "Randomness" toggle
+        // under Settings → Page preview, like any other view.
+        this.registerHoverLinkSource(HOVER_LINK_SOURCE, {
+            display: "Randomness",
+            defaultMod: true,
+        });
 
         // Register the inline rdm:[@/#/! table-name autocomplete.
         // Fires when the user is mid-keystroke inside a `rdm:`

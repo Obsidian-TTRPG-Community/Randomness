@@ -50,6 +50,15 @@ export class Plugin {
         return document.createElement("div");
     }
     registerEditorSuggest(_suggest: unknown): void {}
+    registerHoverLinkSource(
+        _id: string,
+        _info: { display: string; defaultMod: boolean }
+    ): void {}
+}
+
+/** Anything a hover popover can attach to. Views implement it. */
+export interface HoverParent {
+    hoverPopover: unknown | null;
 }
 
 /**
@@ -265,6 +274,8 @@ export class Workspace {
         _sourcePath: string,
         _newLeaf?: boolean
     ): void {}
+    /** Generic event bus; `hover-link` is the one we raise ourselves. */
+    trigger(_name: string, ..._data: unknown[]): void {}
 }
 
 export class WorkspaceLeaf {

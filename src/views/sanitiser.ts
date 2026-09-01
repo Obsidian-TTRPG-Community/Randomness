@@ -32,6 +32,7 @@
  */
 
 import { interpolateObsidianLinks } from "./obsidianLinks";
+import type { LinkHoverContext } from "./obsidianLinks";
 
 /**
  * Tags allowed in sanitised output. All lowercase; the sanitiser
@@ -177,17 +178,21 @@ export function setSanitisedHtml(target: HTMLElement, html: string): void {
  *
  * Caller provides `plugin` (for vault/workspace access) and
  * `sourcePath` (for relative-link resolution and as the `from`
- * argument to `openLinkText`).
+ * argument to `openLinkText`). Pass `hover` when the target lives
+ * in one of our own views (sidebar, .ipt reader) so links get
+ * Page-preview popovers; leave it out inside notes, where the
+ * Markdown view already provides them.
  */
 export function setSanitisedHtmlWithLinks(
     target: HTMLElement,
     html: string,
     plugin: import("./main").default,
-    sourcePath: string
+    sourcePath: string,
+    hover?: LinkHoverContext
 ): void {
     while (target.firstChild) target.removeChild(target.firstChild);
     const fragment = sanitiseHtmlToFragment(engineOutputToHtml(html));
-    interpolateObsidianLinks(fragment, plugin, sourcePath);
+    interpolateObsidianLinks(fragment, plugin, sourcePath, hover);
     target.appendChild(fragment);
 }
 

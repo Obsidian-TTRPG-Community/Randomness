@@ -16,15 +16,17 @@ import { Notice, TFile } from "obsidian";
 import type { DrawResult, FolderDeck } from "../decks/deckService";
 import { applyFacingClass, facingLabel } from "../decks/deckModel";
 import { markdownLite, setSanitisedHtmlWithLinks } from "./sanitiser";
+import type { LinkHoverContext } from "./obsidianLinks";
 import { overlayIconButton } from "../portrait/ui";
 import type RandomnessPlugin from "./main";
 
 export function renderDecksTab(
     plugin: RandomnessPlugin,
-    container: HTMLElement
+    container: HTMLElement,
+    hover?: LinkHoverContext
 ): void {
     const repaint = (): void => {
-        void paintAll(plugin, container);
+        void paintAll(plugin, container, hover);
     };
     const unsubscribe = plugin.decks.onChange(() => {
         if (!container.isConnected) {
@@ -38,7 +40,8 @@ export function renderDecksTab(
 
 async function paintAll(
     plugin: RandomnessPlugin,
-    container: HTMLElement
+    container: HTMLElement,
+    hover?: LinkHoverContext
 ): Promise<void> {
     const decks = await plugin.decks.listDecks();
 
@@ -86,12 +89,12 @@ async function paintAll(
         plugin.settings.collapsedDecks = allCollapsed
             ? []
             : decks.map((d) => d.name).sort();
-        void plugin.saveSettings().then(() => paintAll(plugin, container));
+        void plugin.saveSettings().then(() => paintAll(plugin, container, hover));
     });
     actions.appendChild(toggleAll);
 
     for (const deck of decks) {
-        await paintDeck(plugin, container, deck);
+        await paintDeck(plugin, container, deck, hover);
     }
 
     if (scroller !== null) {
@@ -119,7 +122,8 @@ function findScroller(fromEl: HTMLElement): HTMLElement | null {
 async function paintDeck(
     plugin: RandomnessPlugin,
     container: HTMLElement,
-    deck: FolderDeck
+    deck: FolderDeck,
+    hover?: LinkHoverContext
 ): Promise<void> {
     const collapsed = plugin.settings.collapsedDecks.includes(deck.name);
     const box = el(container, "div", "randomness-deck");
@@ -142,7 +146,7 @@ async function paintDeck(
         if (set.has(deck.name)) set.delete(deck.name);
         else set.add(deck.name);
         plugin.settings.collapsedDecks = [...set].sort();
-        void plugin.saveSettings().then(() => paintAll(plugin, container));
+        void plugin.saveSettings().then(() => paintAll(plugin, container, hover));
     });
 
     // Collapsed: just the title row — name and remaining count.
@@ -151,7 +155,7 @@ async function paintDeck(
     // ── Card display: last drawn ────────────────────────────────────
     const cardArea = el(box, "div", "randomness-deck-card");
     const last = await plugin.decks.lastDrawn(deck.name);
-    paintCard(plugin, cardArea, deck, last, last === null ? null : "drawn");
+    paintCard(plugin, cardArea, deck, last, last === null ? null : "drawn", hover);
 
     // ── Controls ────────────────────────────────────────────────────
     const controls = el(box, "div", "randomness-deck-controls");
@@ -186,7 +190,7 @@ async function paintDeck(
             new Notice(`"${deck.name}" is empty.`);
             return;
         }
-        paintCard(plugin, cardArea, deck, peeked[0], "peek");
+        paintCard(plugin, cardArea, deck, peeked[0], "peek", hover);
     });
     button(
         "Draw & bury",
@@ -197,7 +201,7 @@ async function paintDeck(
                 new Notice(`"${deck.name}" is empty.`);
                 return;
             }
-            paintCard(plugin, cardArea, deck, r, "buried");
+            paintCard(plugin, cardArea, deck, r, "buried", hover);
         }
     );
     button("Undo", "Put the last drawn card back on top", async () => {
@@ -286,7 +290,8 @@ export function paintCard(
     area: HTMLElement,
     deck: FolderDeck,
     result: DrawResult | null,
-    mode: "drawn" | "peek" | "buried" | null
+    mode: "drawn" | "peek" | "buried" | null,
+    hover?: LinkHoverContext
 ): void {
     while (area.firstChild) area.removeChild(area.firstChild);
 
@@ -394,7 +399,8 @@ export function paintCard(
             textEl,
             markdownLite(text),
             plugin,
-            deck.rdmPath ?? deck.folderPath
+            deck.rdmPath ?? deck.folderPath,
+            hover
         );
     }
 }

@@ -36,6 +36,7 @@ import {
     WorkspaceLeaf,
     TFile,
 } from "obsidian";
+import type { HoverParent, HoverPopover } from "obsidian";
 import { Evaluator } from "../engine/evaluator";
 import { resolveBundle } from "../resolver/fileResolver";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
@@ -46,8 +47,10 @@ import type RandomnessPlugin from "./main";
 
 export const VIEW_TYPE_IPT = "randomness-ipt-view";
 
-export class IptView extends TextFileView {
+export class IptView extends TextFileView implements HoverParent {
     private plugin: RandomnessPlugin;
+    /** Page preview attaches its popover here on link hover. */
+    hoverPopover: HoverPopover | null = null;
     /** Prompt values for the current file. Reset when a new file loads. */
     private promptValues: Record<string, string> = {};
     /**
@@ -157,7 +160,8 @@ export class IptView extends TextFileView {
                 outputDiv,
                 output,
                 this.plugin,
-                this.file?.path ?? ""
+                this.file?.path ?? "",
+                { hoverParent: this }
             );
             target.appendChild(outputDiv);
         } catch (err) {

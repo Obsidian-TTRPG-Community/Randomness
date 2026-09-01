@@ -47,8 +47,31 @@
  * with the link text, matching Obsidian's "unresolved" affordance.
  */
 
-import type { TFile } from "obsidian";
+import type { HoverParent, TFile } from "obsidian";
 import type RandomnessPlugin from "./main";
+
+/**
+ * Identifier we pass as `source` on `hover-link` events, and
+ * register via `Plugin.registerHoverLinkSource` in main.ts. One id
+ * for every Randomness view, so Page preview shows a single
+ * "Randomness" toggle rather than one per pane.
+ */
+export const HOVER_LINK_SOURCE = "randomness";
+
+/**
+ * Where a rendered link lives, for Page preview purposes. Obsidian's
+ * core Page preview plugin only watches its own Markdown views; a
+ * link inside a custom `ItemView` (the sidebar, the .ipt reader) has
+ * to raise the `hover-link` workspace event itself, and that event
+ * needs a `hoverParent` — the view — to anchor the popover to.
+ *
+ * Omit it for links rendered inside a note (post-processors,
+ * codeblocks): the Markdown view already handles hover there, and
+ * firing our own event on top would open the preview twice.
+ */
+export interface LinkHoverContext {
+    hoverParent: HoverParent;
+}
 
 /**
  * File extensions we'll render as `<img>`. Anything else with the
@@ -167,7 +190,8 @@ const WIKI_LINK_RE = /(!?)\[\[([^\]]*)\]\]/g;
 export function interpolateObsidianLinks(
     root: DocumentFragment | HTMLElement,
     plugin: RandomnessPlugin,
-    sourcePath: string
+    sourcePath: string,
+    hover?: LinkHoverContext
 ): void {
     // Gather text nodes up-front. Walking and mutating
     // simultaneously is fragile — split operations invalidate the
@@ -175,7 +199,7 @@ export function interpolateObsidianLinks(
     const textNodes: Text[] = [];
     collectTextNodes(root, textNodes);
     for (const node of textNodes) {
-        processTextNode(node, plugin, sourcePath);
+        processTextNode(node, plugin, sourcePath, hover);
     }
 }
 
@@ -225,7 +249,8 @@ function collectTextNodes(node: Node, out: Text[]): void {
 function processTextNode(
     node: Text,
     plugin: RandomnessPlugin,
-    sourcePath: string
+    sourcePath: string,
+    hover?: LinkHoverContext
 ): void {
     const text = node.textContent ?? "";
     if (!text.includes("[[")) return; // fast path: no wiki-syntax
@@ -246,7 +271,7 @@ function processTextNode(
         const body = m[2];
         const parsed = parseWikiLinkBody(body, isEmbed);
         if (parsed === null) continue; // malformed, leave as literal
-        const replacement = buildWikiElement(parsed, plugin, sourcePath);
+        const replacement = buildWikiElement(parsed, plugin, sourcePath, hover);
         matches.push({
             start: m.index,
             end: m.index + m[0].length,
@@ -295,12 +320,13 @@ function processTextNode(
 function buildWikiElement(
     parsed: ParsedWikiLink,
     plugin: RandomnessPlugin,
-    sourcePath: string
+    sourcePath: string,
+    hover?: LinkHoverContext
 ): Node | null {
     if (isImageEmbed(parsed)) {
         return buildImageElement(parsed, plugin, sourcePath);
     }
-    return buildLinkElement(parsed, plugin, sourcePath);
+    return buildLinkElement(parsed, plugin, sourcePath, hover);
 }
 
 /**
@@ -353,7 +379,8 @@ function buildImageElement(
 function buildLinkElement(
     parsed: ParsedWikiLink,
     plugin: RandomnessPlugin,
-    sourcePath: string
+    sourcePath: string,
+    hover?: LinkHoverContext
 ): Node {
     const target = parsed.heading
         ? parsed.linkpath + "#" + parsed.heading
@@ -378,6 +405,21 @@ function buildLinkElement(
         const newLeaf = e.ctrlKey || e.metaKey;
         void plugin.app.workspace.openLinkText(target, sourcePath, newLeaf);
     });
+    if (hover !== undefined) {
+        // Page preview (the core hover-popover plugin) doesn't watch
+        // custom views, so raise the event it listens for ourselves.
+        // Payload shape is Obsidian's documented `hover-link` event.
+        a.addEventListener("mouseover", (event) => {
+            plugin.app.workspace.trigger("hover-link", {
+                event,
+                source: HOVER_LINK_SOURCE,
+                hoverParent: hover.hoverParent,
+                targetEl: a,
+                linktext: target,
+                sourcePath,
+            });
+        });
+    }
     return a;
 }
 

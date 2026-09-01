@@ -26,6 +26,7 @@ import {
     TFolder,
     Notice,
 } from "obsidian";
+import type { HoverParent, HoverPopover } from "obsidian";
 import { parseGeneratorFile } from "../engine/fileParser";
 import { Evaluator } from "../engine/evaluator";
 import { resolveBundle } from "../resolver/fileResolver";
@@ -89,8 +90,13 @@ type DiscoveryResult =
     | { ok: true; gen: DiscoveredGenerator }
     | { ok: false; path: string; error: string };
 
-export class BrowserView extends ItemView {
+export class BrowserView extends ItemView implements HoverParent {
     private plugin: RandomnessPlugin;
+    /**
+     * Page preview attaches its popover here when the user hovers a
+     * link in the result panel or a deck card (see obsidianLinks.ts).
+     */
+    hoverPopover: HoverPopover | null = null;
     private root: HTMLElement | null = null;
     /** Cached discovery results. Refreshed on Reload button click or
      * when the view first opens. */
@@ -206,7 +212,7 @@ export class BrowserView extends ItemView {
         }
         if (id === "decks" && !this.lazyTabsRendered.decks) {
             this.lazyTabsRendered.decks = true;
-            renderDecksTab(this.plugin, panels.decks);
+            renderDecksTab(this.plugin, panels.decks, { hoverParent: this });
         }
         if (id === "portraits" && !this.lazyTabsRendered.portraits) {
             this.lazyTabsRendered.portraits = true;
@@ -805,7 +811,8 @@ export class BrowserView extends ItemView {
             body,
             this.lastRoll.result,
             this.plugin,
-            this.lastRoll.sourcePath
+            this.lastRoll.sourcePath,
+            { hoverParent: this }
         );
         // Also make clicking the body itself copy — common UX expectation
         // for "click to copy" panels. Cursor styling lives in

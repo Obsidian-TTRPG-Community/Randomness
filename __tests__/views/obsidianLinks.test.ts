@@ -24,6 +24,7 @@ import {
     isImageEmbed,
     interpolateObsidianLinks,
     IMAGE_EXTENSIONS,
+    HOVER_LINK_SOURCE,
 } from "../../src/views/obsidianLinks";
 import { TFile } from "obsidian";
 
@@ -169,6 +170,7 @@ describe("isImageEmbed", () => {
 function fakePlugin(opts: {
     resolved?: Record<string, string>; // linkpath → TFile path
     openLinkSpy?: jest.Mock;
+    triggerSpy?: jest.Mock;
 } = {}) {
     const resolvedMap = new Map<string, InstanceType<typeof TFile>>();
     for (const [linkpath, tfilePath] of Object.entries(opts.resolved ?? {})) {
@@ -191,6 +193,11 @@ function fakePlugin(opts: {
             workspace: {
                 openLinkText:
                     opts.openLinkSpy ??
+                    (() => {
+                        /* default no-op */
+                    }),
+                trigger:
+                    opts.triggerSpy ??
                     (() => {
                         /* default no-op */
                     }),
@@ -376,6 +383,46 @@ describe("interpolateObsidianLinks: links", () => {
             "current.md",
             true /* newLeaf */
         );
+    });
+});
+
+describe("interpolateObsidianLinks: hover previews", () => {
+    test("with a hover context, mouseover raises hover-link for Page preview", () => {
+        const triggerSpy = jest.fn();
+        const p = fakePlugin({ resolved: { Note: "Note.md" }, triggerSpy });
+        const container = containerWithText("[[Note#Section|see]]");
+        const hoverParent = { hoverPopover: null };
+        interpolateObsidianLinks(container, p as any, "gen/a.rdm", {
+            hoverParent,
+        });
+
+        const a = container.querySelector("a") as HTMLAnchorElement;
+        const event = new MouseEvent("mouseover", { bubbles: true });
+        a.dispatchEvent(event);
+
+        expect(triggerSpy).toHaveBeenCalledTimes(1);
+        expect(triggerSpy.mock.calls[0][0]).toBe("hover-link");
+        expect(triggerSpy.mock.calls[0][1]).toEqual({
+            event,
+            source: HOVER_LINK_SOURCE,
+            hoverParent,
+            targetEl: a,
+            linktext: "Note#Section",
+            sourcePath: "gen/a.rdm",
+        });
+    });
+
+    test("without a hover context (links inside notes), mouseover is silent", () => {
+        // The Markdown view already handles hover there; a second
+        // event would open the preview twice.
+        const triggerSpy = jest.fn();
+        const p = fakePlugin({ resolved: { Note: "Note.md" }, triggerSpy });
+        const container = containerWithText("[[Note]]");
+        interpolateObsidianLinks(container, p as any, "current.md");
+
+        const a = container.querySelector("a") as HTMLAnchorElement;
+        a.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+        expect(triggerSpy).not.toHaveBeenCalled();
     });
 });
 
