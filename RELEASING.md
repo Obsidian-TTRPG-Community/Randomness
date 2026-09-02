@@ -23,7 +23,7 @@ When a tag matching `[0-9]+.[0-9]+.[0-9]+` is pushed, GitHub Actions:
    `manifest.json` still reads `1.0.10` — BRAT and Obsidian would both
    trip on it.
 4. **Runs the full test suite** (`npm test -- --ci`). A tagged build
-   with failing tests must not publish. Currently 1,680 tests across
+   with failing tests must not publish. Currently 1,686 tests across
    75 suites.
 5. **Builds** the plugin (`npm run build`) and verifies `main.js`,
    `manifest.json`, and `styles.css` all exist.
