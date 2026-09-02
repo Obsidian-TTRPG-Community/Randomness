@@ -366,12 +366,102 @@ export class BrowserView extends ItemView implements HoverParent {
         const list = el(this.root, "div", "randomness-browser-list");
         list.dataset.role = "list";
 
-        // Last-roll display at the bottom.
+        // Last-roll display at the bottom, with a drag grip above it
+        // so the panel's height is the user's call (Discord request
+        // after 1.25.0: "increase the results window size").
+        const grip = el(this.root, "div", "randomness-browser-result-grip");
+        grip.dataset.role = "result-grip";
+        grip.title = "Drag to resize the result panel; double-click to reset";
         const resultArea = el(this.root, "div", "randomness-browser-result");
         resultArea.dataset.role = "result";
+        this.applyResultHeight(resultArea, this.plugin.settings.browserResultHeight);
+        this.wireResultGrip(grip, resultArea);
 
         this.renderList();
         this.renderResult();
+    }
+
+    /** Smallest useful result panel, px. */
+    private static readonly RESULT_MIN_PX = 48;
+    /** Room the tree keeps above the panel however far it's dragged, px. */
+    private static readonly RESULT_LIST_RESERVE_PX = 120;
+
+    /**
+     * Size the result panel: an explicit pixel height from the
+     * setting, or the stylesheet default (40% cap) when unset.
+     */
+    private applyResultHeight(area: HTMLElement, px: number | undefined): void {
+        if (typeof px === "number" && Number.isFinite(px) && px > 0) {
+            area.classList.add("is-sized");
+            area.style.height = `${Math.round(px)}px`;
+        } else {
+            area.classList.remove("is-sized");
+            area.style.removeProperty("height");
+        }
+    }
+
+    /**
+     * Clamp a requested panel height so it can't vanish or swallow
+     * the whole tree. Uses the pane's live height; when that's 0
+     * (not laid out yet, jsdom) only the lower bound applies.
+     */
+    private clampResultHeight(px: number): number {
+        const root = this.root;
+        const total = root?.clientHeight ?? 0;
+        const max =
+            total > 0
+                ? Math.max(
+                      BrowserView.RESULT_MIN_PX,
+                      total - BrowserView.RESULT_LIST_RESERVE_PX
+                  )
+                : Number.POSITIVE_INFINITY;
+        return Math.min(max, Math.max(BrowserView.RESULT_MIN_PX, px));
+    }
+
+    /**
+     * Drag-to-resize on the grip. Pointer capture keeps the drag
+     * alive when the cursor leaves the grip; the setting is written
+     * once, on release. Double-click clears it back to the default.
+     */
+    private wireResultGrip(grip: HTMLElement, area: HTMLElement): void {
+        let startY = 0;
+        let startH = 0;
+        let dragging = false;
+        const onMove = (ev: PointerEvent): void => {
+            if (!dragging) return;
+            // Grip sits above the panel: dragging UP makes it taller.
+            const h = this.clampResultHeight(startH + (startY - ev.clientY));
+            this.applyResultHeight(area, h);
+            ev.preventDefault();
+        };
+        const finish = (): void => {
+            if (!dragging) return;
+            dragging = false;
+            grip.classList.remove("is-dragging");
+            const h = parseFloat(area.style.height);
+            if (Number.isFinite(h)) {
+                this.plugin.settings.browserResultHeight = Math.round(h);
+                void this.plugin.saveSettings();
+            }
+        };
+        grip.addEventListener("pointerdown", (ev: PointerEvent) => {
+            if (ev.button !== 0) return;
+            dragging = true;
+            startY = ev.clientY;
+            startH = area.getBoundingClientRect().height;
+            grip.classList.add("is-dragging");
+            // jsdom has no pointer capture; the real app does.
+            grip.setPointerCapture?.(ev.pointerId);
+            ev.preventDefault();
+        });
+        grip.addEventListener("pointermove", onMove);
+        grip.addEventListener("pointerup", finish);
+        grip.addEventListener("pointercancel", finish);
+        grip.addEventListener("dblclick", () => {
+            delete this.plugin.settings.browserResultHeight;
+            this.applyResultHeight(area, undefined);
+            void this.plugin.saveSettings();
+        });
     }
 
     /**

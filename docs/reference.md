@@ -1592,6 +1592,12 @@ its output in the result panel; click 📋 to copy the inline
 to the Favourites section at the top of the tree (it becomes 📌 —
 click again to unpin).
 
+The result panel at the bottom takes up to 40% of the pane by
+default. Drag the grip on its top edge to make it as tall (or
+short) as you like — the tree keeps some room above it — and the
+size sticks across reloads. Double-click the grip to go back to
+the default.
+
 The pane has five tabs: **Generators**, **Decks**, **Portraits**,
 **Builder**, and **Dice**. The dice ribbon icon opens the pane on
 its **Generators** tab; the rest are one click along the top.

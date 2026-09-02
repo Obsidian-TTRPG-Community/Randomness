@@ -166,6 +166,13 @@ export interface RandomnessSettings {
      * for the session without changing this list.
      */
     hiddenBrowserTabs: string[];
+    /**
+     * Height in pixels of the sidebar's result panel, set by dragging
+     * the grip above it. Absent/undefined means the default (a cap at
+     * 40% of the pane, growing with content). Double-clicking the
+     * grip clears it. Asked for on Discord after 1.25.0.
+     */
+    browserResultHeight?: number;
 }
 
 export const DEFAULT_SETTINGS: RandomnessSettings = {

@@ -3,7 +3,8 @@
  */
 
 /**
- * Hideable sidebar tabs (issue #14): the roster helper, and the
+ * Hideable sidebar tabs (issue #14) and the resizable result panel: the
+ * roster helper, and the
  * browser view honouring it — hidden tabs get no button, the first
  * visible tab opens by default, settings changes apply live, and a
  * command deep-linking into a hidden tab reveals it for the session.
@@ -220,5 +221,85 @@ describe("BrowserView with hidden tabs", () => {
         p.settings.hiddenBrowserTabs = ["builder", "dice"];
         view.applyTabVisibility();
         expect(tabLabels(view)).not.toContain("Dice");
+    });
+});
+
+// ────────── Resizable result panel ──────────
+
+describe("BrowserView result panel grip", () => {
+    function parts(view: any) {
+        const root = view.containerEl.children[1] as HTMLElement;
+        return {
+            grip: root.querySelector(
+                ".randomness-browser-result-grip"
+            ) as HTMLElement,
+            area: root.querySelector(".randomness-browser-result") as HTMLElement,
+        };
+    }
+    const pointer = (type: string, y: number) =>
+        new MouseEvent(type, { clientY: y, button: 0, bubbles: true });
+
+    test("default: no explicit height, stylesheet cap applies", async () => {
+        const { view } = await buildView({});
+        const { grip, area } = parts(view);
+        expect(grip).toBeTruthy();
+        expect(area.classList.contains("is-sized")).toBe(false);
+        expect(area.style.height).toBe("");
+    });
+
+    test("a saved height is applied on open", async () => {
+        const { view } = await buildView({ browserResultHeight: 260 });
+        const { area } = parts(view);
+        expect(area.classList.contains("is-sized")).toBe(true);
+        expect(area.style.height).toBe("260px");
+    });
+
+    test("dragging the grip up makes the panel taller and persists once", async () => {
+        const { view, p } = await buildView({ browserResultHeight: 200 });
+        const { grip, area } = parts(view);
+        // jsdom has no layout, so getBoundingClientRect is 0 — the
+        // drag is measured from that; the clamp's floor still holds.
+        const saves: number[] = [];
+        p.saveSettings = async () => {
+            saves.push(p.settings.browserResultHeight as number);
+        };
+        grip.dispatchEvent(pointer("pointerdown", 500));
+        grip.dispatchEvent(pointer("pointermove", 400));
+        expect(area.style.height).toBe("100px");
+        grip.dispatchEvent(pointer("pointermove", 200));
+        expect(area.style.height).toBe("300px");
+        expect(saves).toEqual([]);
+        grip.dispatchEvent(pointer("pointerup", 200));
+        expect(saves).toEqual([300]);
+        expect(p.settings.browserResultHeight).toBe(300);
+        // Moves after release do nothing.
+        grip.dispatchEvent(pointer("pointermove", 0));
+        expect(area.style.height).toBe("300px");
+    });
+
+    test("dragging down clamps at the minimum", async () => {
+        const { view } = await buildView({});
+        const { grip, area } = parts(view);
+        grip.dispatchEvent(pointer("pointerdown", 100));
+        grip.dispatchEvent(pointer("pointermove", 900));
+        expect(area.style.height).toBe("48px");
+        grip.dispatchEvent(pointer("pointerup", 900));
+    });
+
+    test("double-click resets to the default and clears the setting", async () => {
+        const { view, p } = await buildView({ browserResultHeight: 260 });
+        const { grip, area } = parts(view);
+        grip.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+        expect(area.classList.contains("is-sized")).toBe(false);
+        expect(area.style.height).toBe("");
+        expect("browserResultHeight" in p.settings).toBe(false);
+    });
+
+    test("the grip survives a re-render of the result", async () => {
+        const { view } = await buildView({ browserResultHeight: 120 });
+        (view as any).renderResult();
+        const { grip, area } = parts(view);
+        expect(grip).toBeTruthy();
+        expect(area.style.height).toBe("120px");
     });
 });

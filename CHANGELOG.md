@@ -2,6 +2,16 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.26.0
+
+### Added
+- **Resizable result panel** (asked on Discord): the sidebar's
+  Generators tab now has a drag grip on the top edge of the
+  "Last roll" panel. Drag it to give long results more room (or
+  shrink the panel out of the way); the height is remembered
+  across reloads. Double-click the grip to return to the default
+  40% cap. The tree always keeps some space above the panel.
+
 ## 1.25.0
 
 ### Added
