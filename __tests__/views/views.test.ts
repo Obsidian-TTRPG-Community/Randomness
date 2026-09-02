@@ -155,6 +155,7 @@ describe("settings: defaults", () => {
             showDiceBreakdown: false,
             showDiceFormula: false,
             collapsedDecks: [],
+            hiddenBrowserTabs: [],
         });
     });
 });
@@ -185,6 +186,7 @@ describe("settings: load merge", () => {
             showDiceBreakdown: false,
             showDiceFormula: false,
             collapsedDecks: [],
+            hiddenBrowserTabs: ["builder"],
         };
         await p.saveSettings();
         await p.loadSettings();
@@ -202,6 +204,7 @@ describe("settings: load merge", () => {
             showDiceBreakdown: false,
             showDiceFormula: false,
             collapsedDecks: [],
+            hiddenBrowserTabs: ["builder"],
         });
     });
 

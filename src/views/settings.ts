@@ -21,6 +21,7 @@ import {
 import type RandomnessPlugin from "./main";
 import { EXAMPLE_FILES, EXAMPLES_README, EXAMPLES_SUBFOLDER } from "../examples";
 import { GUIDE_FILES, GUIDE_FOLDER } from "./guideContent";
+import { BROWSER_TABS, BROWSER_TAB_LABELS } from "./browserTabs";
 
 /**
  * Extract a readable message from a caught value. `catch` clauses
@@ -155,6 +156,16 @@ export interface RandomnessSettings {
      * Toggled by clicking a deck's title; persists across reloads.
      */
     collapsedDecks: string[];
+    /**
+     * Sidebar tabs the user has switched off (issue #14) — ids from
+     * BROWSER_TABS. Someone who only rolls tables has no use for
+     * Portraits or Builder; hiding them keeps the tab bar to what
+     * they actually click. Hiding every tab is not honoured: the
+     * Generators tab comes back so the view is never empty. A
+     * command that opens a hidden tab ("Open dice tray") reveals it
+     * for the session without changing this list.
+     */
+    hiddenBrowserTabs: string[];
 }
 
 export const DEFAULT_SETTINGS: RandomnessSettings = {
@@ -170,6 +181,7 @@ export const DEFAULT_SETTINGS: RandomnessSettings = {
     showDiceBreakdown: false,
     showDiceFormula: false,
     collapsedDecks: [],
+    hiddenBrowserTabs: [],
 };
 
 /**
@@ -745,6 +757,42 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     })
             );
 
+        // ─── Sidebar tabs ───────────────────────────────────────
+
+        new Setting(containerEl)
+            .setName("Sidebar tabs")
+            .setDesc(
+                "Choose which tabs the Randomness sidebar shows. Switch " +
+                    "off what you don't use — open sidebars update " +
+                    "straight away. At least one tab always stays; " +
+                    "commands that open a hidden tab still work and " +
+                    "reveal it until the sidebar is closed."
+            );
+        for (const id of BROWSER_TABS) {
+            new Setting(containerEl)
+                .setName(`Show ${BROWSER_TAB_LABELS[id]} tab`)
+                .setClass("randomness-setting-indent")
+                .addToggle((toggle) =>
+                    toggle
+                        .setValue(
+                            !(this.plugin.settings.hiddenBrowserTabs ?? []).includes(
+                                id
+                            )
+                        )
+                        .onChange(async (shown) => {
+                            const hidden = new Set(
+                                this.plugin.settings.hiddenBrowserTabs ?? []
+                            );
+                            if (shown) hidden.delete(id);
+                            else hidden.add(id);
+                            this.plugin.settings.hiddenBrowserTabs =
+                                BROWSER_TABS.filter((t) => hidden.has(t));
+                            await this.plugin.saveSettings();
+                            this.refreshBrowserTabs();
+                        })
+                );
+        }
+
         // ─── Behaviour ──────────────────────────────────────────
 
         new Setting(containerEl)
@@ -916,6 +964,25 @@ export class RandomnessSettingsTab extends PluginSettingTab {
                     });
                 text.inputEl.rows = 4;
             });
+    }
+
+    /**
+     * Push the hidden-tabs setting to every open sidebar so a toggle
+     * takes effect without reopening the view. Duck-typed rather
+     * than `instanceof BrowserView` so this module doesn't import
+     * the view (see the lazy import above for why).
+     */
+    private refreshBrowserTabs(): void {
+        const leaves =
+            this.plugin.app.workspace?.getLeavesOfType?.(
+                "randomness-browser-view"
+            ) ?? [];
+        for (const leaf of leaves) {
+            const view = leaf.view as unknown as {
+                applyTabVisibility?: () => void;
+            };
+            view?.applyTabVisibility?.();
+        }
     }
 
     /**

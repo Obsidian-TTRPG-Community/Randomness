@@ -1596,6 +1596,16 @@ The pane has five tabs: **Generators**, **Decks**, **Portraits**,
 **Builder**, and **Dice**. The dice ribbon icon opens the pane on
 its **Generators** tab; the rest are one click along the top.
 
+Don't use some of them? Switch them off under **Settings →
+Randomness → Sidebar tabs** — one **Show … tab** toggle per tab.
+Hidden tabs disappear from open panes straight away, a lone
+remaining tab drops the tab bar altogether, and the pane never
+ends up empty (hide all five and Generators stays). Commands that
+open a specific tab — **Open dice tray**, **Open portrait
+roller** and the like — still work with that tab hidden: the tab
+comes back for as long as the pane stays open, without changing
+the setting.
+
 ### Hiding helper tables
 
 A generator's entry table often calls others that exist only to
@@ -2029,6 +2039,15 @@ reference** row, **Install the guide** the button on
   This is the same store the dice tray's ★ button writes to and
   that `api.rollFormula()` reads, so a formula saved anywhere rolls
   everywhere. Dice Roller's saved formulas paste straight in.
+
+### Sidebar tabs
+
+- **Show Generators tab**, **Show Decks tab**, **Show Portraits
+  tab**, **Show Builder tab**, **Show Dice tab** [all on] — which
+  tabs the sidebar pane shows. Open panes update as you toggle. At
+  least one tab always stays (Generators, if you hide everything),
+  and a command that opens a hidden tab reveals it until the pane
+  is closed. See "Browser pane".
 
 ### Actions
 

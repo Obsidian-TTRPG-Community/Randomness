@@ -478,6 +478,10 @@ export class Setting {
     setDesc(_desc: string): this {
         return this;
     }
+    setClass(cls: string): this {
+        this.settingEl.classList?.add(cls);
+        return this;
+    }
     addText(cb: (text: TextComponent) => void): this {
         cb(new TextComponent());
         return this;

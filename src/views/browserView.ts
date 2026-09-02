@@ -53,15 +53,12 @@ import { renderRollerTab, renderBuilderTab } from "../portrait/panel";
 import { renderDiceTrayTab } from "./diceTrayView";
 import { renderDecksTab } from "./decksTab";
 
-/** Sidebar tabs, in display order. */
-const BROWSER_TABS = [
-    "generators",
-    "decks",
-    "portraits",
-    "builder",
-    "dice",
-] as const;
-type BrowserTab = (typeof BROWSER_TABS)[number];
+import {
+    BROWSER_TABS,
+    BROWSER_TAB_LABELS,
+    visibleBrowserTabs,
+    type BrowserTab,
+} from "./browserTabs";
 
 export const VIEW_TYPE_BROWSER = "randomness-browser-view";
 
@@ -145,6 +142,7 @@ export class BrowserView extends ItemView implements HoverParent {
         const tabBar = activeDocument.createElement("div");
         tabBar.className = "randomness-panel-tabs";
         target.appendChild(tabBar);
+        this.tabBar = tabBar;
 
         const wrap = activeDocument.createElement("div");
         wrap.className = "randomness-browser";
@@ -167,23 +165,9 @@ export class BrowserView extends ItemView implements HoverParent {
             builder: builderEl,
             dice: diceEl,
         };
-        this.tabButtons = {};
-        const defs: [BrowserTab, string][] = [
-            ["generators", "Generators"],
-            ["decks", "Decks"],
-            ["portraits", "Portraits"],
-            ["builder", "Builder"],
-            ["dice", "Dice"],
-        ];
-        for (const [id, label] of defs) {
-            const btn = activeDocument.createElement("button");
-            btn.className = "randomness-panel-tab";
-            btn.textContent = label;
-            btn.addEventListener("click", () => this.showTab(id));
-            tabBar.appendChild(btn);
-            this.tabButtons[id] = btn;
-        }
-        this.showTab("generators");
+        this.lastHidden = new Set(this.plugin.settings.hiddenBrowserTabs ?? []);
+        this.buildTabBar();
+        this.showTab(this.visibleTabs()[0]);
 
         // Run initial discovery in the background; the UI shows a
         // "scanning..." placeholder until it completes.
@@ -192,7 +176,79 @@ export class BrowserView extends ItemView implements HoverParent {
 
     /** Tab content panels (generators is this.root). */
     private tabPanels: Record<BrowserTab, HTMLElement> | null = null;
+    private tabBar: HTMLElement | null = null;
     private tabButtons: Partial<Record<string, HTMLElement>> = {};
+    /** The tab currently showing; null until onOpen has run. */
+    private activeTab: BrowserTab | null = null;
+    /**
+     * Hidden tabs a command deep-linked into this session ("Open dice
+     * tray" with Dice hidden). The user asked for that tab by name,
+     * so it gets a button until the view closes — the setting itself
+     * is untouched.
+     */
+    private revealedTabs = new Set<BrowserTab>();
+    /** The hidden list as last applied — lets applyTabVisibility tell
+     * a tab the user just hid apart from one that was already hidden
+     * (and since revealed by a command). */
+    private lastHidden = new Set<string>();
+
+    /**
+     * Tabs to render, in order: the user's visible set (issue #14)
+     * plus anything a command revealed this session.
+     */
+    private visibleTabs(): BrowserTab[] {
+        const shown = new Set<BrowserTab>(
+            visibleBrowserTabs(this.plugin.settings.hiddenBrowserTabs)
+        );
+        for (const t of this.revealedTabs) shown.add(t);
+        return BROWSER_TABS.filter((t) => shown.has(t));
+    }
+
+    /**
+     * (Re)build the tab buttons from the current visibility. A lone
+     * tab needs no bar at all — the panel simply is the view.
+     */
+    private buildTabBar(): void {
+        const bar = this.tabBar;
+        if (!bar) return;
+        clearElement(bar);
+        this.tabButtons = {};
+        const tabs = this.visibleTabs();
+        for (const id of tabs) {
+            const btn = activeDocument.createElement("button");
+            btn.className = "randomness-panel-tab";
+            btn.textContent = BROWSER_TAB_LABELS[id];
+            btn.addEventListener("click", () => this.showTab(id));
+            bar.appendChild(btn);
+            this.tabButtons[id] = btn;
+        }
+        bar.style.display = tabs.length > 1 ? "" : "none";
+    }
+
+    /**
+     * Re-apply the hidden-tabs setting to an open view. Called by
+     * the settings tab whenever a toggle changes, so the sidebar
+     * follows the setting live. If the tab the user is looking at
+     * just got hidden, fall back to the first visible one.
+     */
+    applyTabVisibility(): void {
+        if (!this.tabPanels) return;
+        // A tab the user has JUST hidden is no longer "revealed" —
+        // they told us they don't want it. One that was already
+        // hidden and revealed by a command stays until the view
+        // closes; toggling some other tab shouldn't yank it away.
+        const hide = new Set(this.plugin.settings.hiddenBrowserTabs ?? []);
+        for (const t of Array.from(this.revealedTabs)) {
+            if (hide.has(t) && !this.lastHidden.has(t)) {
+                this.revealedTabs.delete(t);
+            }
+        }
+        this.lastHidden = hide;
+        this.buildTabBar();
+        const tabs = this.visibleTabs();
+        const current = this.activeTab;
+        this.showTab(current && tabs.includes(current) ? current : tabs[0]);
+    }
     /** Lazy tabs render on first activation only. */
     private lazyTabsRendered = {
         decks: false,
@@ -205,6 +261,12 @@ export class BrowserView extends ItemView implements HoverParent {
     showTab(id: BrowserTab): void {
         const panels = this.tabPanels;
         if (!panels) return;
+        if (!this.tabButtons[id]) {
+            // Deep-link into a hidden tab: reveal it for this session.
+            this.revealedTabs.add(id);
+            this.buildTabBar();
+        }
+        this.activeTab = id;
         for (const key of BROWSER_TABS) {
             panels[key].style.display = key === id ? "" : "none";
             const btn = this.tabButtons[key];

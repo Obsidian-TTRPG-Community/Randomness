@@ -76,7 +76,7 @@ Tonight you drink at `rdm:[@taverns]⟹The Drunken Goblin`.
   your vault: roll, copy an inline call, pin favourites. Tabs
   for **Portraits** (layered character faces with rolled names,
   via a one-click art pack), a portrait **Builder**, and the
-  **Dice** tray.
+  **Dice** tray — hide any you don't use from settings.
 - **Scripting API** — roll tables from Templater/DataviewJS,
   seeded and prompt-controlled, plus portrait generation. See
   [API.md](API.md).

@@ -693,6 +693,8 @@
   background: var(--background-modifier-hover); color: var(--text-normal);
   font-weight: 600;
 }
+/* settings: the per-tab "Show … tab" toggles sit under one heading row */
+.randomness-setting-indent { padding-left: 1.5em; }
 
 /* overlay icon buttons (PNG top-left, lock/copy top-right) */
 .randomness-portrait-iconbtn {

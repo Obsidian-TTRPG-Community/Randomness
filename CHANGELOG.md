@@ -2,6 +2,20 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.25.0
+
+### Added
+- **Hideable sidebar tabs** ([#14](https://github.com/Obsidian-TTRPG-Community/Randomness/issues/14)):
+  Settings → Randomness → **Sidebar tabs** has a **Show … tab**
+  toggle for each of Generators, Decks, Portraits, Builder and
+  Dice, so a table-only user can trim the pane to what they click.
+  Open panes update as you toggle; a lone remaining tab drops the
+  tab bar; hiding all five keeps Generators so the pane is never
+  empty. Commands that open a specific tab (**Open dice tray**,
+  **Open portrait roller**, **Open portrait builder**) still work
+  with that tab hidden — it reappears until the pane is closed,
+  leaving the setting alone.
+
 ## 1.24.0
 
 ### Added
