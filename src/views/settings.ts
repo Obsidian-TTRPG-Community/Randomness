@@ -22,6 +22,7 @@ import type RandomnessPlugin from "./main";
 import { EXAMPLE_FILES, EXAMPLES_README, EXAMPLES_SUBFOLDER } from "../examples";
 import { GUIDE_FILES, GUIDE_FOLDER } from "./guideContent";
 import { BROWSER_TABS, BROWSER_TAB_LABELS } from "./browserTabs";
+import type { FavouritesSort } from "./pinnedTables";
 
 /**
  * Extract a readable message from a caught value. `catch` clauses
@@ -93,6 +94,16 @@ export interface RandomnessSettings {
      * as `browserExpandedPaths`.
      */
     pinnedTables: string[];
+    /**
+     * How the Favourites section orders its rows (issue #15).
+     * `pinned` = the persisted pin order above (user-arrangeable
+     * with the ▲▼ buttons); `name` = table name A→Z; `file` = file
+     * title, then table name. Cycled by the ⇅ button on the section
+     * header. Sorting is a view over `pinnedTables` — it never
+     * rewrites the stored order, so switching back to `pinned`
+     * restores the user's arrangement.
+     */
+    favouritesSort: FavouritesSort;
     /**
      * Vault-relative folder holding a portrait pack (manifest.json +
      * layer images). Portrait features gate on a valid pack existing
@@ -181,6 +192,7 @@ export const DEFAULT_SETTINGS: RandomnessSettings = {
     stableCodeblockSeeds: false,
     browserExpandedPaths: [],
     pinnedTables: [],
+    favouritesSort: "pinned",
     portraitPackPath: "fantasy_ink_parts_pack",
     portraitPackUrl: "",
     diceFormulas: {},

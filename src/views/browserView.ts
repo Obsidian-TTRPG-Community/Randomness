@@ -45,8 +45,14 @@ import {
     isPinned,
     togglePin,
     resolvePins,
+    sortPins,
+    swapPins,
+    makePinId,
+    nextFavouritesSort,
     FAVOURITES_PATH,
     FAVOURITES_NAME,
+    FAVOURITES_SORT_LABELS,
+    type ResolvedPin,
 } from "./pinnedTables";
 import type RandomnessPlugin from "./main";
 import { renderRollerTab, renderBuilderTab } from "../portrait/panel";
@@ -554,11 +560,17 @@ export class BrowserView extends ItemView implements HoverParent {
             fileInfos
         );
         const filterNeedle = this.filter.trim().toLowerCase();
-        const visiblePins = filterActive
+        const matchingPins = filterActive
             ? allPins.filter((p) =>
                   this.pinMatchesFilter(p, filterNeedle)
               )
             : allPins;
+        // Sort is a view over the stored order (issue #15) — the
+        // persisted list is only rewritten by pin/unpin and ▲▼.
+        const visiblePins = sortPins(
+            matchingPins,
+            this.plugin.settings.favouritesSort
+        );
         if (visiblePins.length > 0) {
             this.renderFavourites(
                 list,
@@ -640,21 +652,84 @@ export class BrowserView extends ItemView implements HoverParent {
         const count = el(header, "span", "randomness-browser-folder-count");
         count.textContent = String(pins.length);
 
+        // Sort toggle (issue #15). Cycles Pin order → Name → File.
+        // Lives on the header so it's discoverable next to the
+        // thing it sorts, but stops propagation so clicking it
+        // doesn't also collapse the section.
+        const sortMode = this.plugin.settings.favouritesSort;
+        const sortBtn = activeDocument.createElement("button");
+        sortBtn.className =
+            "randomness-browser-fav-sort-btn" +
+            (sortMode !== "pinned"
+                ? " randomness-browser-fav-sort-btn-active"
+                : "");
+        sortBtn.textContent = "⇅";
+        sortBtn.title =
+            `Sort: ${FAVOURITES_SORT_LABELS[sortMode]} ` +
+            `(click to switch to ${FAVOURITES_SORT_LABELS[nextFavouritesSort(sortMode)]})`;
+        sortBtn.setAttribute(
+            "aria-label",
+            `Favourites sort: ${FAVOURITES_SORT_LABELS[sortMode]}`
+        );
+        sortBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            void this.cycleFavouritesSort();
+        });
+        header.appendChild(sortBtn);
+
         if (expanded) {
             const inner = el(
                 wrap,
                 "div",
                 "randomness-browser-folder-children"
             );
-            for (const pin of pins) {
+            // Manual ▲▼ only make sense when the rows are shown in
+            // stored order — in a derived sort they'd swap the
+            // stored list without visibly moving anything.
+            const manual = sortMode === "pinned" && !filterActive;
+            pins.forEach((pin, i) => {
                 this.renderTableRow(
                     inner,
                     pin.file,
                     pin.tableName,
-                    /* isPinnedSection */ true
+                    /* isPinnedSection */ true,
+                    manual
+                        ? {
+                              up: i > 0 ? pins[i - 1] : null,
+                              down: i < pins.length - 1 ? pins[i + 1] : null,
+                          }
+                        : undefined
                 );
-            }
+            });
         }
+    }
+
+    /** Advance the Favourites sort mode one step and re-render. */
+    private async cycleFavouritesSort(): Promise<void> {
+        this.plugin.settings.favouritesSort = nextFavouritesSort(
+            this.plugin.settings.favouritesSort
+        );
+        await this.plugin.saveSettings();
+        this.renderList();
+    }
+
+    /**
+     * Swap a favourite with its visible neighbour in the stored
+     * pin order. Neighbour is passed by identity (not index) so
+     * unresolvable pins hiding in the stored list can't make a
+     * click look like a no-op — see `swapPins`.
+     */
+    private async moveFavourite(
+        pin: ResolvedPin,
+        neighbour: ResolvedPin
+    ): Promise<void> {
+        this.plugin.settings.pinnedTables = swapPins(
+            this.plugin.settings.pinnedTables,
+            makePinId(pin.file.path, pin.tableName),
+            makePinId(neighbour.file.path, neighbour.tableName)
+        );
+        await this.plugin.saveSettings();
+        this.renderList();
     }
 
     /**
@@ -775,16 +850,46 @@ export class BrowserView extends ItemView implements HoverParent {
      * underneath the table name there, so when a user pins
      * similarly-named tables from different files they can still
      * tell them apart at a glance.
+     *
+     * `move`, when given, adds ▲▼ buttons that swap this row with
+     * the named neighbour in the stored pin order (issue #15). A
+     * null side renders the button disabled so the row layout
+     * doesn't shift at the ends of the list.
      */
     private renderTableRow(
         parent: HTMLElement,
         file: GenFileInfo,
         tableName: string,
-        isPinnedSection: boolean
+        isPinnedSection: boolean,
+        move?: { up: ResolvedPin | null; down: ResolvedPin | null }
     ): void {
         const row = el(parent, "div", "randomness-browser-table-row");
         const tableInfo = file.tables.find((t) => t.name === tableName);
         const isMain = tableInfo?.isMain ?? false;
+
+        if (move) {
+            const self: ResolvedPin = { file, tableName };
+            const moveWrap = el(row, "span", "randomness-browser-move");
+            const mk = (
+                glyph: string,
+                label: string,
+                target: ResolvedPin | null
+            ) => {
+                const b = activeDocument.createElement("button");
+                b.className = "randomness-browser-move-btn";
+                b.textContent = glyph;
+                b.title = `${label} ${tableName} in Favourites`;
+                b.setAttribute("aria-label", `${label} ${tableName}`);
+                b.disabled = target === null;
+                b.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    if (target) void this.moveFavourite(self, target);
+                });
+                moveWrap.appendChild(b);
+            };
+            mk("▲", "Move up", move.up);
+            mk("▼", "Move down", move.down);
+        }
 
         // Roll button — evaluates the table and shows the
         // result in the bottom panel.

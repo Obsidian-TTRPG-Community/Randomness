@@ -2,6 +2,18 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.27.0
+
+### Added
+- **Sortable Favourites** ([#15](https://github.com/Obsidian-TTRPG-Community/Randomness/issues/15)):
+  the Favourites section in the Generators tab gains a ⇅ button on
+  its header that cycles the view between **Pin order**, **Name
+  A→Z** and **File A→Z**, and ▲▼ buttons on each row for putting
+  favourites exactly where you want them. Sorting is a view over
+  your pin list, not a rewrite of it — switch back to Pin order and
+  the arrangement is as you left it. The chosen sort persists
+  across reloads.
+
 ## 1.26.0
 
 ### Added

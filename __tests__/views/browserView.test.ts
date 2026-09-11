@@ -1603,6 +1603,168 @@ describe("BrowserView Copy-inline button", () => {
         );
     });
 
+    // ────────── Favourites sorting (issue #15) ──────────
+
+    const favNames = (root: HTMLElement): string[] =>
+        Array.from(
+            (root.querySelector(
+                ".randomness-browser-favourites"
+            ) as HTMLElement).querySelectorAll(
+                ".randomness-browser-table-name"
+            )
+        ).map((el) => el.textContent ?? "");
+
+    test("sort button cycles pin order → name → file and persists", async () => {
+        const p = viewPlugin({
+            files: {
+                "a.ipt": "Title: Zed\nTable: Beta\nX",
+                "b.ipt": "Title: Alpha\nTable: Gamma\nX",
+                "c.ipt": "Title: Mid\nTable: Alpha\nX",
+            },
+            settings: {
+                browserExpandedPaths: ["__favourites"],
+                pinnedTables: ["a.ipt::Beta", "b.ipt::Gamma", "c.ipt::Alpha"],
+            },
+        });
+        const view = await buildView(p);
+        const root = view.containerEl.children[1] as HTMLElement;
+        expect(favNames(root)).toEqual(["★ Beta", "★ Gamma", "★ Alpha"]);
+
+        const click = async () => {
+            (root.querySelector(
+                ".randomness-browser-fav-sort-btn"
+            ) as HTMLElement).click();
+            await new Promise((r) => setTimeout(r, 20));
+        };
+        await click();
+        expect(p.settings.favouritesSort).toBe("name");
+        expect(favNames(root)).toEqual(["★ Alpha", "★ Beta", "★ Gamma"]);
+        await click();
+        expect(p.settings.favouritesSort).toBe("file");
+        // File titles: Alpha(b) < Mid(c) < Zed(a).
+        expect(favNames(root)).toEqual(["★ Gamma", "★ Alpha", "★ Beta"]);
+        await click();
+        expect(p.settings.favouritesSort).toBe("pinned");
+        expect(favNames(root)).toEqual(["★ Beta", "★ Gamma", "★ Alpha"]);
+        // Sorting never rewrote the stored order.
+        expect(p.settings.pinnedTables).toEqual([
+            "a.ipt::Beta",
+            "b.ipt::Gamma",
+            "c.ipt::Alpha",
+        ]);
+    });
+
+    test("clicking the sort button does not collapse the section", async () => {
+        const p = viewPlugin({
+            files: { "g.ipt": "Title: G\nTable: T\nX" },
+            settings: {
+                browserExpandedPaths: ["__favourites"],
+                pinnedTables: ["g.ipt::T"],
+            },
+        });
+        const view = await buildView(p);
+        const root = view.containerEl.children[1] as HTMLElement;
+        (root.querySelector(
+            ".randomness-browser-fav-sort-btn"
+        ) as HTMLElement).click();
+        await new Promise((r) => setTimeout(r, 20));
+        expect(p.settings.browserExpandedPaths).toContain("__favourites");
+        expect(favNames(root)).toEqual(["★ T"]);
+    });
+
+    test("▲▼ buttons reorder the stored pin list", async () => {
+        const p = viewPlugin({
+            files: {
+                "a.ipt": "Title: A\nTable: TA\nX",
+                "b.ipt": "Title: B\nTable: TB\nX",
+                "c.ipt": "Title: C\nTable: TC\nX",
+            },
+            settings: {
+                browserExpandedPaths: ["__favourites"],
+                pinnedTables: ["a.ipt::TA", "b.ipt::TB", "c.ipt::TC"],
+            },
+        });
+        const view = await buildView(p);
+        const root = view.containerEl.children[1] as HTMLElement;
+        const btns = () =>
+            Array.from(
+                root.querySelectorAll(".randomness-browser-move-btn")
+            ) as HTMLButtonElement[];
+        // Two per row: [up, down] × 3 rows. First row's ▲ and last
+        // row's ▼ are disabled.
+        expect(btns()).toHaveLength(6);
+        expect(btns()[0].disabled).toBe(true);
+        expect(btns()[5].disabled).toBe(true);
+        expect(btns()[1].disabled).toBe(false);
+
+        // Move TB (row 2) up.
+        btns()[2].click();
+        await new Promise((r) => setTimeout(r, 20));
+        expect(p.settings.pinnedTables).toEqual([
+            "b.ipt::TB",
+            "a.ipt::TA",
+            "c.ipt::TC",
+        ]);
+        expect(favNames(root)).toEqual(["★ TB", "★ TA", "★ TC"]);
+
+        // Move TA (now row 2) down.
+        btns()[3].click();
+        await new Promise((r) => setTimeout(r, 20));
+        expect(p.settings.pinnedTables).toEqual([
+            "b.ipt::TB",
+            "c.ipt::TC",
+            "a.ipt::TA",
+        ]);
+    });
+
+    test("▲▼ swap around an unresolvable pin hidden in the stored list", async () => {
+        // A missing-file pin sits between two visible ones. Moving
+        // the lower visible row up must visibly reorder (swap by
+        // id), not silently swap with the hidden entry.
+        const p = viewPlugin({
+            files: {
+                "a.ipt": "Title: A\nTable: TA\nX",
+                "b.ipt": "Title: B\nTable: TB\nX",
+            },
+            settings: {
+                browserExpandedPaths: ["__favourites"],
+                pinnedTables: ["a.ipt::TA", "gone.ipt::X", "b.ipt::TB"],
+            },
+        });
+        const view = await buildView(p);
+        const root = view.containerEl.children[1] as HTMLElement;
+        const btns = Array.from(
+            root.querySelectorAll(".randomness-browser-move-btn")
+        ) as HTMLButtonElement[];
+        btns[2].click(); // TB ▲
+        await new Promise((r) => setTimeout(r, 20));
+        expect(p.settings.pinnedTables).toEqual([
+            "b.ipt::TB",
+            "gone.ipt::X",
+            "a.ipt::TA",
+        ]);
+        expect(favNames(root)).toEqual(["★ TB", "★ TA"]);
+    });
+
+    test("▲▼ buttons are hidden in derived sort modes", async () => {
+        const p = viewPlugin({
+            files: {
+                "a.ipt": "Title: A\nTable: TA\nX",
+                "b.ipt": "Title: B\nTable: TB\nX",
+            },
+            settings: {
+                browserExpandedPaths: ["__favourites"],
+                pinnedTables: ["a.ipt::TA", "b.ipt::TB"],
+                favouritesSort: "name",
+            },
+        });
+        const view = await buildView(p);
+        const root = view.containerEl.children[1] as HTMLElement;
+        expect(
+            root.querySelectorAll(".randomness-browser-move-btn")
+        ).toHaveLength(0);
+    });
+
     // ────────── Wiki-link interpolation (images + links) ──────────
 
     test("result panel renders `![[image.png]]` as an <img>", async () => {

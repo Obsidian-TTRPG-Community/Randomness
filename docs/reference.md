@@ -1592,6 +1592,12 @@ its output in the result panel; click 📋 to copy the inline
 to the Favourites section at the top of the tree (it becomes 📌 —
 click again to unpin).
 
+Favourites list in the order you pinned them. Use the ▲▼ buttons
+on each row to rearrange that order, or click ⇅ on the Favourites
+header to switch to an alphabetical view — by table name, then by
+file, then back to pin order. Sorting is only a view: switch back
+to pin order and your arrangement is exactly as you left it.
+
 The result panel at the bottom takes up to 40% of the pane by
 default. Drag the grip on its top edge to make it as tall (or
 short) as you like — the tree keeps some room above it — and the

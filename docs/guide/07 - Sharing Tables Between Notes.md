@@ -61,6 +61,8 @@ sorted into folders. Next to each table are three buttons:
 - **Roll** — try the table right there.
 - 📋 — copy the ready-made roll, so you can paste it straight
   into a note.
-- 📍 — pin a favourite so it sits at the top of the list.
+- 📍 — pin a favourite so it sits at the top of the list. Use the
+  ▲▼ buttons to rearrange your favourites, or ⇅ on the Favourites
+  header to sort them by name or by file.
 
 Next: [[08 - Coming From Dice Roller]]

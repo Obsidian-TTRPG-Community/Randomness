@@ -21,6 +21,11 @@
  * later, and re-sorting on every pin (newest-first, alphabetical,
  * etc.) creates a moving-target UX. Stable insertion order keeps
  * "the one I pinned yesterday is where I left it".
+ *
+ * Issue #15 layered two things on top without touching that
+ * contract: `movePin` lets the user rearrange the stored order
+ * explicitly, and `sortPins` gives alternative *views* (A→Z by
+ * table, by file) that never rewrite the array.
  */
 
 import type { GenFileInfo } from "./browserTree";
@@ -133,5 +138,86 @@ export function resolvePins(
         if (!found) continue;
         out.push({ file, tableName: parsed.tableName });
     }
+    return out;
+}
+
+/** A resolved pin, as returned by `resolvePins`. */
+export type ResolvedPin = { file: GenFileInfo; tableName: string };
+
+/**
+ * Favourites ordering modes (issue #15). `pinned` is the stored
+ * order; the others are derived views. Cycle order for the header
+ * button: pinned → name → file → pinned.
+ */
+export type FavouritesSort = "pinned" | "name" | "file";
+
+export const FAVOURITES_SORT_CYCLE: readonly FavouritesSort[] = [
+    "pinned",
+    "name",
+    "file",
+];
+
+/** Short labels for the sort button + its tooltip. */
+export const FAVOURITES_SORT_LABELS: Record<FavouritesSort, string> = {
+    pinned: "Pin order",
+    name: "Name A→Z",
+    file: "File A→Z",
+};
+
+/** The mode after `current` in the cycle. Unknown values reset to `pinned`. */
+export function nextFavouritesSort(current: string): FavouritesSort {
+    const idx = FAVOURITES_SORT_CYCLE.indexOf(current as FavouritesSort);
+    if (idx === -1) return "pinned";
+    return FAVOURITES_SORT_CYCLE[(idx + 1) % FAVOURITES_SORT_CYCLE.length];
+}
+
+/**
+ * Return the pins ordered for display. Never mutates the input and
+ * never touches the persisted id list — `pinned` returns the array
+ * as-is, the other modes return a sorted copy. Ties in `file` mode
+ * (several tables from one file) fall through to table name, and
+ * ties in `name` mode fall through to file title, so the result is
+ * deterministic regardless of pin history. Case-insensitive,
+ * locale-aware compare so "dwarf" and "Dwarf" sit together.
+ */
+export function sortPins(
+    pins: ResolvedPin[],
+    mode: FavouritesSort
+): ResolvedPin[] {
+    if (mode === "pinned") return pins;
+    const cmp = (a: string, b: string) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" });
+    const byName = (a: ResolvedPin, b: ResolvedPin) =>
+        cmp(a.tableName, b.tableName) || cmp(a.file.title, b.file.title);
+    const byFile = (a: ResolvedPin, b: ResolvedPin) =>
+        cmp(a.file.title, b.file.title) ||
+        cmp(a.file.path, b.file.path) ||
+        cmp(a.tableName, b.tableName);
+    return [...pins].sort(mode === "name" ? byName : byFile);
+}
+
+/**
+ * Swap the positions of two pin ids in the persisted list. Returns
+ * a NEW array; the input isn't mutated. A no-op copy when either
+ * id is absent — callers can assign the result unconditionally.
+ *
+ * The ▲▼ buttons swap a row with its *visible* neighbour rather
+ * than stepping an index, because the stored list can hold ids
+ * that don't currently resolve (file missing / not loaded). Those
+ * are invisible in the UI; stepping past one would look like the
+ * click did nothing. Swapping by id sidesteps that, and the hidden
+ * entry keeps its slot for when its file comes back.
+ */
+export function swapPins(
+    pinnedIds: string[],
+    idA: string,
+    idB: string
+): string[] {
+    const a = pinnedIds.indexOf(idA);
+    const b = pinnedIds.indexOf(idB);
+    const out = [...pinnedIds];
+    if (a === -1 || b === -1 || a === b) return out;
+    out[a] = pinnedIds[b];
+    out[b] = pinnedIds[a];
     return out;
 }

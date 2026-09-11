@@ -11,8 +11,12 @@ import {
     isPinned,
     togglePin,
     resolvePins,
+    sortPins,
+    swapPins,
+    nextFavouritesSort,
     FAVOURITES_PATH,
     FAVOURITES_NAME,
+    type ResolvedPin,
 } from "../../src/views/pinnedTables";
 import type { GenFileInfo } from "../../src/views/browserTree";
 
@@ -190,5 +194,73 @@ describe("pinnedTables: resolvePins", () => {
 
     test("empty pin list yields empty result", () => {
         expect(resolvePins([], [fileA, fileB])).toEqual([]);
+    });
+});
+
+describe("pinnedTables: sortPins (issue #15)", () => {
+    const mk = (path: string, title: string, table: string): ResolvedPin => ({
+        file: { path, title, tables: [{ name: table, isMain: true }] },
+        tableName: table,
+    });
+    const pins = [
+        mk("z.ipt", "Zed", "beta"),
+        mk("a.ipt", "Alpha", "Gamma"),
+        mk("m.ipt", "Mid", "alpha"),
+        mk("a.ipt", "Alpha", "Delta"),
+    ];
+
+    test("'pinned' returns the input untouched", () => {
+        expect(sortPins(pins, "pinned")).toBe(pins);
+    });
+
+    test("'name' sorts by table name, case-insensitively", () => {
+        expect(sortPins(pins, "name").map((p) => p.tableName)).toEqual([
+            "alpha",
+            "beta",
+            "Delta",
+            "Gamma",
+        ]);
+    });
+
+    test("'file' sorts by file title then table name", () => {
+        expect(
+            sortPins(pins, "file").map((p) => `${p.file.title}/${p.tableName}`)
+        ).toEqual(["Alpha/Delta", "Alpha/Gamma", "Mid/alpha", "Zed/beta"]);
+    });
+
+    test("derived sorts return a copy and don't mutate", () => {
+        const before = pins.map((p) => p.tableName);
+        const out = sortPins(pins, "name");
+        expect(out).not.toBe(pins);
+        expect(pins.map((p) => p.tableName)).toEqual(before);
+    });
+
+    test("nextFavouritesSort cycles and recovers from junk", () => {
+        expect(nextFavouritesSort("pinned")).toBe("name");
+        expect(nextFavouritesSort("name")).toBe("file");
+        expect(nextFavouritesSort("file")).toBe("pinned");
+        expect(nextFavouritesSort("bogus")).toBe("pinned");
+    });
+});
+
+describe("pinnedTables: swapPins (issue #15)", () => {
+    test("swaps two ids in place, returning a new array", () => {
+        const input = ["a", "b", "c"];
+        const out = swapPins(input, "a", "c");
+        expect(out).toEqual(["c", "b", "a"]);
+        expect(input).toEqual(["a", "b", "c"]);
+    });
+
+    test("swaps across a hidden entry between them", () => {
+        expect(swapPins(["a", "hidden", "b"], "b", "a")).toEqual([
+            "b",
+            "hidden",
+            "a",
+        ]);
+    });
+
+    test("no-op copy when an id is missing or ids are equal", () => {
+        expect(swapPins(["a", "b"], "a", "zzz")).toEqual(["a", "b"]);
+        expect(swapPins(["a", "b"], "a", "a")).toEqual(["a", "b"]);
     });
 });
