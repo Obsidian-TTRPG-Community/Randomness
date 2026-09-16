@@ -246,8 +246,18 @@ function translateTableRoller(
     inner: string,
     suffix: string
 ): string {
-    const link = inner.match(
-        /^([^#|^]+?)\s*(?:#[^|^]*)?(?:\^([A-Za-z0-9-]+))?$/
+    // The column pick may sit INSIDE the brackets (`[[Note^id|xy]]`,
+    // the spelling `rdm:` uses and the one Obsidian's own link syntax
+    // trains people to write) or OUTSIDE them (`[[Note^id]]|xy`, Dice
+    // Roller's canonical form). Accept both: the file and block-id
+    // parts can't contain a pipe, so the first one always opens the
+    // column. An outside pick wins if somebody writes both.
+    const pipeAt = inner.indexOf("|");
+    const head = pipeAt >= 0 ? inner.slice(0, pipeAt) : inner;
+    const innerColumn = pipeAt >= 0 ? inner.slice(pipeAt + 1).trim() : "";
+
+    const link = head.match(
+        /^([^#|^]+?)\s*(?:#[^|^]*)?(?:\^([A-Za-z0-9-]+)(?:\.([^|^]+))?)?$/
     );
     const file = link?.[1]?.trim();
     const blockId = link?.[2];
@@ -255,7 +265,9 @@ function translateTableRoller(
         throw new DiceCompatError(`Unrecognised wikilink: '[[${inner}]]'`);
     }
 
-    let column = "";
+    // `^id.column` mirrors the in-note engine call (`[@npcs.xy]`); a
+    // dot can't be part of an Obsidian block id, so it's unambiguous.
+    let column = innerColumn !== "" ? innerColumn : (link?.[3]?.trim() ?? "");
     // `|sep:…` is peeled off by translateDiceExpression before the
     // wikilink is matched (the glue may contain brackets, which the
     // roller pattern forbids here), so `suffix` is the column pick

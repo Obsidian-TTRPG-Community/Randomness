@@ -224,7 +224,7 @@ class InlineRollWidget extends WidgetType {
      */
     private async evaluate(view: EditorView, explicit = false): Promise<void> {
         const key = this.key();
-        const pendingKey = `${key.sourcePath} ${key.occurrence} ${key.expr}`;
+        const pendingKey = `${key.sourcePath}\0${key.occurrence}\0${key.expr}`;
         const pending = pendingEvaluations(this.plugin);
         if (!explicit && pending.has(pendingKey)) return;
         pending.add(pendingKey);
@@ -306,7 +306,7 @@ export function inlineRollLivePreview(plugin: RandomnessPlugin): Extension {
         const cache = displayCache(plugin);
         return Decoration.set(
             ranges.map((r) => {
-                const key = `${sourcePath} ${r.occurrence} ${callKey(r.call)}`;
+                const key = `${sourcePath}\0${r.occurrence}\0${callKey(r.call)}`;
                 // A locked call carries its own answer in the note —
                 // no evaluation, no waiting, exactly like Reading view.
                 const cached =

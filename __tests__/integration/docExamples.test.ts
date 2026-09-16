@@ -25,6 +25,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseGeneratorFile } from "../../src/engine/fileParser";
 import { Evaluator } from "../../src/engine/evaluator";
+import { inMemorySource } from "../../src/resolver/fileResolver";
+import { buildInlineBundle } from "../../src/resolver/scope";
 
 const DOCS = path.join(__dirname, "..", "..", "docs");
 const REFERENCE = path.join(DOCS, "reference.md");
@@ -241,4 +243,59 @@ describe("documentation: every directive in an example is real", () => {
         );
         expect(suspicious.map((u) => `${u.where} → ${u.name}:`)).toEqual([]);
     });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Live examples in the installed guide
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * The guide is INSTALLED into the reader's vault as notes, so its
+ * inline spans are live rolls, not exhibits — a chapter that points at
+ * a table which doesn't exist shows the reader an error on the page
+ * that was supposed to teach them the feature. Fenced blocks are
+ * covered above; this runs the cross-note spans that sit in prose and
+ * in table cells, against the real chapter files.
+ */
+describe("the guide's cross-note spans resolve against the guide itself", () => {
+    const vault: Record<string, string> = {};
+    for (const f of guideFiles) {
+        vault[`Randomness Guide/${path.basename(f)}`] = readDoc(f);
+    }
+
+    /** Every `rdm:[[Some Note^table…]]` span written anywhere in the guide. */
+    const spans: Array<{ where: string; expr: string }> = [];
+    for (const f of guideFiles) {
+        readDoc(f)
+            .split("\n")
+            .forEach((line, i) => {
+                for (const m of line.matchAll(
+                    /`rdm:((?:\d+|\{[^{}]+\})?\s*\[\[[^[\]]+\^[^[\]]+\]\])`/g
+                )) {
+                    spans.push({
+                        where: `${shortName(f)}:${i + 1}`,
+                        expr: m[1],
+                    });
+                }
+            });
+    }
+
+    test("the guide actually contains some", () => {
+        expect(spans.length).toBeGreaterThan(0);
+    });
+
+    test.each(spans.map((s) => [s.where, s.expr]))(
+        "%s → %s",
+        (_where, expr) => {
+            const bundle = buildInlineBundle(expr, {
+                notePath: "Randomness Guide/Start Here.md",
+                noteSource: "",
+                source: inMemorySource(vault),
+            });
+            const out = new Evaluator(bundle.main, bundle.extras, {
+                seed: 11,
+            }).run();
+            expect(out).not.toBe("");
+        }
+    );
 });

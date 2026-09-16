@@ -937,6 +937,37 @@ Then roll it four ways:
 
 Without a block id a table isn't rollable — the id is its name.
 
+### Cells that roll on another note
+
+A cell may also hold a whole roller span naming a different note —
+`` `rdm:[[Bestiary^monsters]]` `` or the `dice:` spelling of the
+same thing — and it rolls as part of the result, pulling the note
+it names into scope on its own. No `Use:` line, no copy of the
+table:
+
+```text
+| Encounter |
+| --------- |
+| You meet `rdm:[[Bestiary^monsters]]` |
+
+^encounter
+```
+
+Repetitions, column picks and `|sep:` glue all work inside a cell
+the same as they do in a note.
+
+The note you name is the note that answers: the call is resolved
+against *that* note's tables, so a table of the same name in the
+rolling note (or anywhere else in scope) can't stand in for it.
+Notes are matched by name, as Obsidian's own links are, so two
+notes with the same filename in different folders are one name
+here.
+
+Two notes whose cells roll on each other are fine — that's a
+sheet, not an import loop. A cell naming a note that isn't in the
+vault fails only when that row comes up, and says which note and
+which table it wanted; the other rows keep rolling.
+
 A `[[Note^id]]` roll has to be the *whole* inline expression:
 `` `rdm:You find [[Note^loot]].` `` prints itself rather than
 rolling. To wrap prose around a roll, bring the note into scope
@@ -965,7 +996,25 @@ holds the table — that gives three names:
   in "any x, any y")
 
 Inline, the column pick is `` `rdm:[[Note^npcs|Trait]]` `` and the
-random cell is `` `rdm:[[Note^npcs|xy]]` ``.
+random cell is `` `rdm:[[Note^npcs|xy]]` ``. **That works from any
+note**, not just the one holding the table — which is the point of a
+wide table: park a 5 x 20 grid of names in one note and let every NPC
+note pull single cells out of it with a one-line span, no `Use:` and
+no copy of the table.
+
+The dot spelling works inline too, if that's the one you remember
+from `[@npcs.xy]`: `` `rdm:[[Note^npcs.xy]]` `` and
+`` `rdm:[[Note^npcs.Trait]]` `` mean exactly the same thing. (Obsidian
+block ids can't contain a dot, so there's nothing to confuse.)
+
+Under the `dice:` prefix all four spellings work as well, with or
+without the `#` Obsidian inserts before a block id, and with the
+column pick inside or outside the brackets:
+
+```text
+`dice:[[Note#^npcs|xy]]`   `dice:[[Note#^npcs]]|xy`
+`dice:[[Note#^npcs.xy]]`   `dice:[[Note^npcs|xy]]`
+```
 
 ### One row, several columns
 

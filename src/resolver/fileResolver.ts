@@ -29,10 +29,12 @@ import { extractRandomnessCodeblocks } from "./mdExtractor";
 import {
     BLOCKS_PREFIX,
     LINES_PREFIX,
+    extractCellNoteRefs,
     extractMarkdownContentTables,
     extractNoteBlocks,
     extractNoteLines,
     noteBaseName,
+    qualifiedTableName,
     wikilinkToPath,
 } from "./mdContent";
 
@@ -299,26 +301,35 @@ export function parseFileSource(absPath: string, source: string): GeneratorFile 
         // markdown tables and lists in the note become rollable tables
         // named by their id (see mdContent.ts). Codeblock-defined tables
         // win on name collision, so notes can always override.
+        const base = noteBaseName(absPath);
         const taken = new Set(file.tables.map((t) => t.name.toLowerCase()));
-        for (const t of extractMarkdownContentTables(
-            source,
-            noteBaseName(absPath)
-        )) {
+        for (const t of extractMarkdownContentTables(source, base)) {
             if (taken.has(t.name.toLowerCase())) continue;
             taken.add(t.name.toLowerCase());
             file.tables.push(t);
+            // Second, qualified name: `__note:<basename>^<table>`. A
+            // cell in another note that explicitly said [[This Note^t]]
+            // calls THAT, so a table of the same name somewhere else in
+            // scope can't answer for it. Shares the items array — decls
+            // are read-only to the engine (deck state lives on the
+            // Evaluator, keyed by name, which is what we want here: the
+            // two names are two call sites).
+            file.tables.push({ ...t, name: qualifiedTableName(base, t.name) });
         }
+        // Notes this one's cells roll from. Tolerant: see softUses.
+        const cellRefs = extractCellNoteRefs(source, base);
+        if (cellRefs.length > 0) file.softUses = cellRefs;
         // Whole-note line/block tables (merge Phase 4): power the
         // `[[Note|line]]` / `[[Note|block]]` rolls and tag rolls. The
         // `__`-prefixed names can't collide with author tables.
-        const base = noteBaseName(absPath).toLowerCase();
+        const lowerBase = base.toLowerCase();
         const noteLines = extractNoteLines(source);
         if (noteLines.length > 0) {
-            file.tables.push(hiddenTable(LINES_PREFIX + base, noteLines));
+            file.tables.push(hiddenTable(LINES_PREFIX + lowerBase, noteLines));
         }
         const noteBlocks = extractNoteBlocks(source);
         if (noteBlocks.length > 0) {
-            file.tables.push(hiddenTable(BLOCKS_PREFIX + base, noteBlocks));
+            file.tables.push(hiddenTable(BLOCKS_PREFIX + lowerBase, noteBlocks));
         }
         return file;
     }
@@ -413,6 +424,32 @@ export function resolveBundle(
                         resolved
                     );
                 }
+                const parsed = parseFileSource(resolved, sub);
+                loaded.add(resolved);
+                loadedPaths.push(resolved);
+                extras.push(parsed);
+                visit(parsed, resolved);
+            }
+            // Tolerant imports: notes named by roller spans inside this
+            // note's table cells. Three ways these differ from `Use:`.
+            // A missing one is skipped, not fatal — a broken link in one
+            // row must not take down every other roll in the note. A
+            // cycle just dedupes: two notes whose tables roll on each
+            // other is an ordinary sheet, not an import loop, and both
+            // files are already loaded by the time we'd see it. And
+            // they're walked last, so a name a `Use:` already brought in
+            // keeps its meaning.
+            for (const rawRef of file.softUses ?? []) {
+                const resolved = resolveUsePath(rawRef, {
+                    ...opts,
+                    callerDir: dirname(fromPath),
+                });
+                if (resolved === null) continue;
+                if (resolved === fromPath) continue;
+                if (stack.includes(resolved)) continue;
+                if (loaded.has(resolved)) continue;
+                const sub = opts.source.read(resolved);
+                if (sub === null) continue;
                 const parsed = parseFileSource(resolved, sub);
                 loaded.add(resolved);
                 loadedPaths.push(resolved);

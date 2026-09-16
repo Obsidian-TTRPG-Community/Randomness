@@ -2,6 +2,62 @@
 
 All notable changes to the Randomness plugin.
 
+## 1.28.0
+
+### Added
+- **Single cells from a table in another note** (asked on Discord):
+  `` `rdm:[[Names^npcs|xy]]` `` pulls one random cell out of a
+  multi-column table living in a different note, and
+  `` `rdm:[[Names^npcs|Trait]]` `` pulls one from a named column.
+  Both halves already worked separately; this pins them working
+  together and documents it. The point of a wide table is that a
+  5 x 20 grid costs far less screen than a hundred-row column —
+  now every NPC note can reach into one without carrying a copy.
+- **The `.column` spelling works inline**: `` `rdm:[[Names^npcs.xy]]` ``
+  and `` `rdm:[[Names^npcs.Trait]]` `` now mean the same as the
+  `|column` forms, matching the `[@npcs.xy]` call you already write
+  inside a note. Obsidian block ids can't contain a dot, so there is
+  nothing ambiguous about it.
+
+- **Tables can roll on tables in other notes.** A table cell may hold
+  a whole roller span — `` `rdm:[[Bestiary^monsters]]` `` or the
+  `dice:` spelling — and it rolls as part of the result, pulling the
+  note it names into scope by itself. No `Use:` line, no second copy
+  of the table: build one Bestiary and let every encounter table in
+  the vault borrow from it. Repetitions, column picks and `|sep:`
+  glue all work inside a cell. Two notes whose cells roll on each
+  other are fine — that's a sheet, not an import loop — and a cell
+  naming a note that isn't in the vault fails only on the row that
+  uses it, naming the note and table it wanted.
+
+  The note you name is the note that answers: the call resolves
+  against *that* note's tables, so a same-named table in the rolling
+  note can't stand in for it. (Notes are matched by name, as
+  Obsidian's own links are, so two notes with the same filename in
+  different folders are one name here.)
+
+  Dice Roller did this by re-rendering results as markdown. We don't
+  revive spans in results — it breaks lock targeting — so the span is
+  translated when the table is read instead.
+
+### Fixed
+- **`dice:` accepts the column pick inside the brackets.** Dice
+  Roller wrote the pick after the link (`` `dice:[[Note#^npcs]]|xy` ``)
+  while `rdm:` — and Obsidian's own link syntax — put it inside
+  (`` `dice:[[Note#^npcs|xy]]` ``). The second spelling raised
+  *Unrecognised wikilink*. Both are accepted now, under both
+  prefixes, with or without the `#` before the block id.
+- **Guide chapter 02 pointed at notes that don't exist.** Two of its
+  live example rolls named a `Loot` and a `Names` note, so a reader
+  who installed the guide met an error on the page teaching them
+  cross-note rolls. They point at the guide's own tables now, and a
+  test runs every cross-note span in the guide against the guide.
+- **Six raw NUL bytes in the source tree.** Three view files used a
+  literal NUL as a cache-key separator instead of the `\0` escape,
+  which made git treat them as binary — no diffs in review, and they
+  tripped the release NUL sweep every time. Same bytes at runtime,
+  text files again.
+
 ## 1.27.0
 
 ### Added

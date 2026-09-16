@@ -12,6 +12,7 @@
 
 export type GeneratorFile = {
     uses: string[];                       // Use: paths in declaration order
+    softUses?: string[];                  // Tolerant imports (roller spans in markdown cells): missing ones are skipped and a cycle just dedupes
     topLevelSets: Assignment[];           // Set:/Define: declared outside any Table
     prompts: PromptDecl[];                // Prompt: declarations in order
     header?: string;                      // Header: raw text

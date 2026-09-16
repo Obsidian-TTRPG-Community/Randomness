@@ -26,7 +26,11 @@ import {
     normalisePath,
     FileSource,
 } from "./fileResolver";
-import { wikilinkToPath } from "./mdContent";
+import {
+    extractCellNoteRefs,
+    noteBaseName,
+    wikilinkToPath,
+} from "./mdContent";
 
 export interface AsyncFileSource {
     /** Return file contents, or null if not found. */
@@ -129,7 +133,14 @@ export async function prefetchUseGraph(
             // pathologically deep (but valid) chain.
             continue;
         }
-        const uses = extractUseLines(fromSource);
+        // `Use:` lines, plus — for a note — the other notes its table
+        // cells roll from. The synchronous resolver imports both (see
+        // parseFileSource / softUses), so the snapshot has to carry
+        // both or the sync pass reports tables it can't reach. THIS IS
+        // THE SEAM that broke cross-note wikilink rolls in Phase 2:
+        // jest repros pass with a full inMemorySource, so only a live
+        // vault shows the gap. Keep the two lists in step.
+        const uses = [...extractUseLines(fromSource), ...cellRefs(fromPath, fromSource)];
         const fromDir = dirname(fromPath);
         for (const rawRef of uses) {
             const resolved = await resolveAsync(
@@ -178,6 +189,11 @@ export async function prefetchUseGraph(
  * Edge: avoids matching `Use:` that appears inside an item line. The
  * grammar puts `Use:` at column 1 (optionally preceded by whitespace).
  */
+function cellRefs(path: string, source: string): string[] {
+    if (!path.toLowerCase().endsWith(".md")) return [];
+    return extractCellNoteRefs(source, noteBaseName(path));
+}
+
 function extractUseLines(source: string): string[] {
     const out: string[] = [];
     for (const rawLine of source.split(/\r?\n/)) {

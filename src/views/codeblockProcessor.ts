@@ -273,7 +273,7 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         // reroll changes the seed.
         const seed = settings.stableCodeblockSeeds
             ? stableSeedFor(
-                  this.source + " reroll:" + this.rerollCounter,
+                  this.source + "\0reroll:" + this.rerollCounter,
                   sectionInfo?.lineStart ?? 0
               )
             : undefined;

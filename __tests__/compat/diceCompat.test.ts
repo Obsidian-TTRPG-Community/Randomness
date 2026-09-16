@@ -121,6 +121,31 @@ describe("translateDiceExpression: table rollers", () => {
         expect(t("[[Note^npcs]]|xy")).toBe("[[Note^npcs|xy]]");
     });
 
+    // Dice Roller puts the column pick after the brackets; `rdm:` puts
+    // it inside, and so does Obsidian's own link syntax. Somebody who
+    // learned one spelling used to get "Unrecognised wikilink" from the
+    // other. Both are accepted now, under both prefixes.
+    test("column pick is accepted inside the brackets too", () => {
+        expect(t("[[Note#^npcs|xy]]")).toBe("[[Note^npcs|xy]]");
+        expect(t("[[Note^npcs|Header 2]]")).toBe("[[Note^npcs|Header 2]]");
+        expect(t("2[[Note#^npcs|xy]]")).toBe("2[[Note^npcs|xy]]");
+        expect(t("[[Note#^npcs|xy]]|sep:&&")).toBe("[[Note^npcs|xy]]|sep:&&");
+    });
+
+    // `^id.column` mirrors the in-note engine call `[@npcs.xy]` — the
+    // spelling people reach for once they know that form. A dot can't
+    // be part of an Obsidian block id, so it's never ambiguous.
+    test("dotted column pick mirrors the [@npcs.xy] engine call", () => {
+        expect(t("[[Note#^npcs.xy]]")).toBe("[[Note^npcs|xy]]");
+        expect(t("[[Note#^npcs.Header 2]]")).toBe("[[Note^npcs|Header 2]]");
+        expect(t("3[[Note^npcs.xy]]")).toBe("3[[Note^npcs|xy]]");
+    });
+
+    test("an in-bracket |line still means the whole-note roll", () => {
+        expect(t("[[Note|line]]")).toBe("[[Note|line]]");
+        expect(t("[[Note|block]]")).toBe("[[Note|block]]");
+    });
+
     test("flags on table rollers are stripped", () => {
         expect(t("3[[Note^loot]]|nodice")).toBe("3[[Note^loot]]");
     });
@@ -144,6 +169,22 @@ describe("parseDirectWikilinkCall with repetitions", () => {
         );
         expect(parseDirectWikilinkCall("[[N^t]]")?.tableCall).toBe("[@t]");
         expect(parseDirectWikilinkCall("1[[N^t]]")?.tableCall).toBe("[@t]");
+    });
+
+    test("dotted column pick resolves like the piped one", () => {
+        expect(parseDirectWikilinkCall("[[N^t.xy]]")?.tableCall).toBe(
+            "[@t.xy]"
+        );
+        expect(parseDirectWikilinkCall("[[N^t.Header 2]]")?.tableCall).toBe(
+            "[@t.Header 2]"
+        );
+        expect(parseDirectWikilinkCall("3[[N^t.xy]]")?.tableCall).toBe(
+            "[@3 t.xy >> implode]"
+        );
+        // A pipe alongside a dot wins — one spelling, no guessing.
+        expect(parseDirectWikilinkCall("[[N^t.xy|Header 2]]")?.tableCall).toBe(
+            "[@t.Header 2]"
+        );
     });
 });
 

@@ -158,6 +158,58 @@ export function implodeSuffix(sep: string | undefined): string {
 const WIKILINK_SEP_RE = /\|sep:([\s\S]*)$/i;
 
 /**
+ * Hidden second name every markdown-content table carries, so one note
+ * can name another note's table without a same-named local table
+ * shadowing it. `__`-prefixed like LINES_PREFIX / BLOCKS_PREFIX, for
+ * the same reason: it can't collide with an author's table and it
+ * doesn't belong in autocomplete.
+ *
+ * Two notes with the same basename in different folders share one
+ * qualified name — the same shortest-path ambiguity Obsidian's own
+ * wikilinks have, and the same one `__lines:` / `__blocks:` already
+ * carry.
+ */
+export const NOTE_TABLE_PREFIX = "__note:";
+
+/** `__note:<note basename>^<table name>` — see NOTE_TABLE_PREFIX. */
+export function qualifiedTableName(noteBase: string, table: string): string {
+    return `${NOTE_TABLE_PREFIX}${noteBase.toLowerCase()}^${table}`;
+}
+
+/**
+ * Put a qualified name back into words for an error message:
+ * `Unknown table: __note:monsters^mon` reads as
+ * `Unknown table: mon (in [[monsters]])`. The internal spelling is an
+ * implementation detail; a user who wrote `` `dice:[[Monsters^mon]]` ``
+ * in a cell should be told about Monsters and mon, which are the two
+ * things they can actually go and fix.
+ */
+export function humaniseQualifiedTables(message: string): string {
+    return message.replace(
+        new RegExp(`${NOTE_TABLE_PREFIX}([^^\\]]+?)\\^(\\S+)`, "g"),
+        (_whole, note: string, table: string) => `${table} (in [[${note}]])`
+    );
+}
+
+/**
+ * Build the `[@…]` call for a direct wikilink roll. Shared by
+ * parseDirectWikilinkCall and the cross-note cell rewrite below so the
+ * two can't drift on how repetitions and `|sep:` glue are spelled.
+ */
+function buildTableCall(
+    reps: string,
+    tableName: string,
+    sep: string | undefined
+): string {
+    // Multi-rep inline rolls join with ", " unless `|sep:` says
+    // otherwise — see implodeSuffix. Authors composing display
+    // themselves can always write the [@N table >> …] form directly.
+    const repsPart = reps === "" || reps === "1" ? "" : `${reps} `;
+    const joiner = repsPart === "" ? "" : implodeSuffix(sep);
+    return `[@${repsPart}${tableName}${joiner}]`;
+}
+
+/**
  * Detect a "direct call" expression: an inline `rdm:` whose entire
  * body is a wikilink *with a block-id*, optionally with a `|column`
  * pick — `[[Note^loot]]`, `[[Note^loot|Header 2]]`, `[[Note^loot|xy]]`.
@@ -194,40 +246,39 @@ export function parseDirectWikilinkCall(
         const tableName =
             (kind === "line" ? LINES_PREFIX : BLOCKS_PREFIX) +
             noteBaseName(file).toLowerCase();
-        const repsPart = reps === "" || reps === "1" ? "" : `${reps} `;
-        const joiner = repsPart === "" ? "" : implodeSuffix(sep);
         return {
             fileRef: `[[${file}]]`,
             tableName,
             reps,
             sep,
-            tableCall: `[@${repsPart}${tableName}${joiner}]`,
+            tableCall: buildTableCall(reps, tableName, sep),
         };
     }
     // Optional repetition prefix (a count or a braced dice expression)
     // before the wikilink: `3[[Note^id]]`, `{1d4+1}[[Note^id]]`. Added
     // for Dice Roller compat (`dice: 3[[Note^id]]`), and available to
     // `rdm:` for free.
+    // The column pick has two spellings. `|column` is the wikilink
+    // form (`[[Note^npcs|xy]]`); `.column` mirrors the in-note engine
+    // call (`[@npcs.xy]`), which is what people reach for once they
+    // know that syntax. Obsidian block ids are `[A-Za-z0-9-]` only, so
+    // a dot after the id can never be part of the id itself — the
+    // dotted form is unambiguous. `|` wins if somebody writes both.
     const m = body.match(
-        /^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\^([A-Za-z0-9-]+)(?:\|([^[\]]+))?\]\]$/
+        /^(\d+|\{[^{}]+\})?\s*\[\[([^[\]#|^]+)(?:#[^[\]|^]*)?\^([A-Za-z0-9-]+)(?:\.([^[\]|]+))?(?:\|([^[\]]+))?\]\]$/
     );
     if (!m) return null;
     const reps = m[1] ?? "";
     const file = m[2].trim();
     const blockId = m[3];
-    const column = m[4]?.trim();
+    const column = (m[5] ?? m[4])?.trim();
     const tableName = column ? `${blockId}.${column}` : blockId;
-    const repsPart = reps === "" || reps === "1" ? "" : `${reps} `;
-    // Multi-rep inline rolls join with ", " unless `|sep:` says
-    // otherwise — see implodeSuffix. Authors composing display
-    // themselves can always write the [@N table >> …] form directly.
-    const joiner = repsPart === "" ? "" : implodeSuffix(sep);
     return {
         fileRef: `[[${file}]]`,
         tableName,
         reps,
         sep,
-        tableCall: `[@${repsPart}${tableName}${joiner}]`,
+        tableCall: buildTableCall(reps, tableName, sep),
     };
 }
 
@@ -257,6 +308,12 @@ const LIST_ITEM_RE = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/;
 interface ExtractCacheEntry {
     selfBase: string;
     result: TableDecl[];
+    /**
+     * Notes named by roller spans inside this note's cells. Collected
+     * by the same pass that builds `result`, so the table rewrite and
+     * the import list can't disagree about what a cell points at.
+     */
+    refs: string[];
 }
 const EXTRACT_CACHE = new Map<string, ExtractCacheEntry>();
 const EXTRACT_CACHE_MAX = 8;
@@ -276,6 +333,24 @@ export function extractMarkdownContentTables(
     md: string,
     selfBase?: string
 ): TableDecl[] {
+    return extractCached(md, selfBase).result;
+}
+
+/**
+ * The notes this note's cells point at, as wikilinks (`[[Monsters]]`).
+ * Both resolution seams import these — see `parseFileSource` for the
+ * synchronous walk and `prefetchUseGraph` for the async one. Shares
+ * the extraction cache with extractMarkdownContentTables, so asking
+ * for the refs after the tables costs nothing.
+ */
+export function extractCellNoteRefs(
+    md: string,
+    selfBase?: string
+): string[] {
+    return extractCached(md, selfBase).refs;
+}
+
+function extractCached(md: string, selfBase?: string): ExtractCacheEntry {
     const sb = selfBase ?? "";
     const cached = EXTRACT_CACHE.get(md);
     if (cached !== undefined && cached.selfBase === sb) {
@@ -283,22 +358,23 @@ export function extractMarkdownContentTables(
         // slot in Map's insertion order.
         EXTRACT_CACHE.delete(md);
         EXTRACT_CACHE.set(md, cached);
-        return cached.result;
+        return cached;
     }
-    const result = extractMarkdownContentTablesUncached(md, selfBase);
-    EXTRACT_CACHE.set(md, { selfBase: sb, result });
+    const { decls, refs } = extractMarkdownContentTablesUncached(md, selfBase);
+    const entry: ExtractCacheEntry = { selfBase: sb, result: decls, refs };
+    EXTRACT_CACHE.set(md, entry);
     if (EXTRACT_CACHE.size > EXTRACT_CACHE_MAX) {
         // Evict the oldest entry (first key in insertion order).
         const oldest = EXTRACT_CACHE.keys().next().value;
         if (oldest !== undefined) EXTRACT_CACHE.delete(oldest);
     }
-    return result;
+    return entry;
 }
 
 function extractMarkdownContentTablesUncached(
     md: string,
     selfBase?: string
-): TableDecl[] {
+): { decls: TableDecl[]; refs: string[] } {
     const lines = md.split(/\r?\n/);
     const out: TableDecl[] = [];
     let i = 0;
@@ -358,17 +434,20 @@ function extractMarkdownContentTablesUncached(
         }
         i++;
     }
-    // Embedded `dice: …` spans in cell text roll as part of the
-    // result (see rewriteEmbeddedDiceSpans).
+    // Embedded roller spans in cell text roll as part of the result,
+    // and any note they point at has to come into scope with us (see
+    // rewriteEmbeddedDiceSpans).
+    const refs = new Set<string>();
     for (const decl of out) {
         for (const item of decl.items) {
             item.rawContent = rewriteEmbeddedDiceSpans(
                 item.rawContent,
-                selfBase
+                selfBase,
+                refs
             );
         }
     }
-    return out;
+    return { decls: out, refs: [...refs] };
 }
 
 /**
@@ -450,48 +529,118 @@ function isParagraphLine(line: string): boolean {
 }
 
 /**
- * Rewrite `dice: …` code spans EMBEDDED IN CELL TEXT into engine dice
- * expressions so they roll as part of the result. Dice Roller
- * rendered results through MarkdownRenderer, which revived such spans
- * as live rollers — the 1E Inns corpus relies on it ("Bustling
- * `dice:1d8+5` x # Inn Rooms"). We deliberately don't revive spans in
- * rendered results (recursion + lock targeting), so the translation
- * happens here, at extraction time. Only pure formulas are rewritten;
- * table/tag rollers and untranslatable spans keep their literal text.
+ * A roller span found inside a table cell that points at a table in
+ * ANOTHER note: the engine call to put in the cell's place, and the
+ * wikilink naming the note that has to be imported for it to resolve.
+ */
+interface CrossNoteCellCall {
+    call: string;
+    fileRef: string;
+}
+
+/**
+ * Classify one roller span's body as a cross-note table call.
+ *
+ * Returns null for a span that points back at the note it already
+ * lives in (the caller substitutes the plain `[@id]` for those — the
+ * table is already in scope and needs no import) and for anything that
+ * isn't a direct wikilink roll.
+ *
+ * The call it returns is QUALIFIED — `[@__note:monsters^mon]`, not
+ * `[@mon]` — so a table called `mon` in the calling note, or in some
+ * other note that happens to be in scope, can't answer a cell that
+ * explicitly named Monsters. See NOTE_TABLE_PREFIX.
+ */
+function classifyCrossNoteCell(
+    expr: string,
+    selfBase: string | undefined
+): CrossNoteCellCall | null {
+    const direct = parseDirectWikilinkCall(expr);
+    if (direct === null) return null;
+    const target = wikilinkToPath(direct.fileRef);
+    if (target === null) return null;
+    const base = noteBaseName(target).toLowerCase();
+    // Same note — not a cross-note call. Case-insensitive: Obsidian
+    // links are, and corpus files really do write [[encounter Tables]].
+    if (selfBase !== undefined && base === selfBase.toLowerCase()) return null;
+    return {
+        call: buildTableCall(
+            direct.reps,
+            qualifiedTableName(base, direct.tableName),
+            direct.sep
+        ),
+        fileRef: direct.fileRef,
+    };
+}
+
+/** Roller code spans inside cell text: `dice:…` and `rdm:…`. */
+const CELL_SPAN_RE = /`(dice|rdm):([^`]*)`/gi;
+
+/**
+ * Rewrite roller code spans EMBEDDED IN CELL TEXT into engine calls so
+ * they roll as part of the result. Dice Roller rendered results
+ * through MarkdownRenderer, which revived such spans as live rollers —
+ * the 1E Inns corpus relies on it ("Bustling `dice:1d8+5` x # Inn
+ * Rooms"), and so does every sheet whose table rows point at other
+ * tables. We deliberately don't revive spans in rendered results
+ * (recursion + lock targeting), so the translation happens here, at
+ * extraction time.
+ *
+ * Three shapes are rewritten:
+ *   - a pure formula (`dice:` only) → engine dice;
+ *   - a roller naming a table in THIS note → `[@id]`;
+ *   - a roller naming a table in ANOTHER note → the qualified
+ *     `[@__note:other^id]`, with the note collected into `refs` so the
+ *     resolver knows to import it.
+ *
+ * Anything else keeps its literal text. A `dice:` span keeps it
+ * WITHOUT the backticks (long-standing behaviour — the engine's
+ * content parser would otherwise choke on the span and error the whole
+ * cell); an `rdm:` span is left exactly as found.
  */
 function rewriteEmbeddedDiceSpans(
     cell: string,
-    selfBase?: string
+    selfBase?: string,
+    refs?: Set<string>
 ): string {
-    return cell.replace(/`dice:([^`]*)`/gi, (whole, inner: string) => {
-        try {
-            const { expr } = translateDiceExpression(inner.trim());
-            // Pure formula → engine dice.
-            if (expr.startsWith("{") && expr.endsWith("}")) return expr;
-            // Table roller pointing back at THIS note → a direct
-            // engine call ([@id], reps and column picks included).
-            // Case-insensitive: Obsidian links are, and corpus files
-            // really do write [[encounter Tables]].
-            const direct = parseDirectWikilinkCall(expr);
-            if (direct !== null && selfBase !== undefined) {
-                const target = wikilinkToPath(direct.fileRef);
-                if (
-                    target !== null &&
-                    noteBaseName(target).toLowerCase() ===
-                        selfBase.toLowerCase()
-                ) {
-                    return direct.tableCall;
+    return cell.replace(
+        CELL_SPAN_RE,
+        (whole, prefix: string, inner: string) => {
+            const isDice = prefix.toLowerCase() === "dice";
+            try {
+                // `rdm:` bodies are already engine syntax; `dice:`
+                // bodies need translating first.
+                let expr = inner.trim();
+                if (isDice) {
+                    expr = translateDiceExpression(expr).expr;
+                    // Pure formula → engine dice.
+                    if (expr.startsWith("{") && expr.endsWith("}")) return expr;
                 }
+                const cross = classifyCrossNoteCell(expr, selfBase);
+                if (cross !== null) {
+                    refs?.add(cross.fileRef);
+                    return cross.call;
+                }
+                // Points back at this note: the table is already in
+                // scope, so the plain call is both correct and the
+                // cheaper thing to register.
+                const direct = parseDirectWikilinkCall(expr);
+                if (direct !== null && selfBase !== undefined) {
+                    const target = wikilinkToPath(direct.fileRef);
+                    if (
+                        target !== null &&
+                        noteBaseName(target).toLowerCase() ===
+                            selfBase.toLowerCase()
+                    ) {
+                        return direct.tableCall;
+                    }
+                }
+            } catch {
+                // fall through to the literal forms below
             }
-        } catch {
-            // fall through to the backtick strip below
+            return isDice ? "dice:" + inner : whole;
         }
-        // Untranslatable (cross-note rollers, unsupported syntax):
-        // drop the backticks so the engine's content parser doesn't
-        // choke on them — the span text shows literally instead of
-        // erroring the whole cell.
-        return "dice:" + inner;
-    });
+    );
 }
 
 /**

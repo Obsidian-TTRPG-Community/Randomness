@@ -164,7 +164,7 @@ describe("extractMarkdownContentTables", () => {
             "| -------- | ------- |",
             "| **1**    | Empty |",
             "| **2-3**  | Bustling `dice:1d8+5` x # Inn Rooms |",
-            "| **4**    | Left as-is: `dice: [[Other^tbl]]` |",
+            "| **4**    | Now rolls: `dice: [[Other^tbl]]` |",
             "",
             "^patron",
         ].join("\n");
@@ -172,11 +172,9 @@ describe("extractMarkdownContentTables", () => {
         expect(decls).toHaveLength(1);
         const items = decls[0].items;
         expect(items[1].rawContent).toBe("Bustling {1d8+5} x # Inn Rooms");
-        // Untranslatable cross-note rollers keep their literal text but
-        // lose the backticks so the engine's parser doesn't choke.
-        expect(items[2].rawContent).toBe(
-            "Left as-is: dice: [[Other^tbl]]"
-        );
+        // A roller naming another note becomes the QUALIFIED call, so
+        // a table called `tbl` elsewhere in scope can't answer for it.
+        expect(items[2].rawContent).toBe("Now rolls: [@__note:other^tbl]");
     });
 
     test("backticked lookup header strips code wrapping before roll expr", () => {
@@ -264,7 +262,7 @@ describe("extractMarkdownContentTables", () => {
         expect(items[0].rawContent).toBe("See [@sub]");
     });
 
-    test("cross-note embedded roller keeps literal text, backticks stripped", () => {
+    test("cross-note embedded roller becomes the qualified call", () => {
         const md = [
             "| dice:1d6 | Result |",
             "| -------- | ------ |",
@@ -276,7 +274,21 @@ describe("extractMarkdownContentTables", () => {
             md,
             "Encounter Tables"
         )[0].items;
-        expect(items[0].rawContent).toBe("See dice:[[Other Note#^sub]]");
+        expect(items[0].rawContent).toBe("See [@__note:other note^sub]");
+    });
+
+    test("an untranslatable dice: span still keeps its literal text", () => {
+        // The backtick strip is what stops the engine's content parser
+        // choking on a span it can't do anything with.
+        const md = [
+            "| dice:1d6 | Result |",
+            "| -------- | ------ |",
+            "| **1** | Nope: `dice:[[^orphan]]` |",
+            "",
+            "^main",
+        ].join("\n");
+        const items = extractMarkdownContentTables(md, "Note")[0].items;
+        expect(items[0].rawContent).toBe("Nope: dice:[[^orphan]]");
     });
 
     test("extraction memo honours selfBase (same md, different note)", () => {
@@ -294,11 +306,11 @@ describe("extractMarkdownContentTables", () => {
         expect(
             extractMarkdownContentTables(md, "Foo")[0].items[0].rawContent
         ).toBe("See [@sub]");
-        // Same md, different note: cross-note, backticks stripped —
+        // Same md, different note: cross-note, so the qualified call —
         // must NOT return the cached "Foo" translation.
         expect(
             extractMarkdownContentTables(md, "Bar")[0].items[0].rawContent
-        ).toBe("See dice:[[Foo#^sub]]");
+        ).toBe("See [@__note:foo^sub]");
     });
 
     test("bare dice header without dice: prefix also triggers lookup", () => {
@@ -528,6 +540,49 @@ describe("resolver integration", () => {
         });
         const ev = new Evaluator(bundle.main, bundle.extras, { seed: 3 });
         expect(ev.run()).toBe("brave");
+    });
+
+    // A multi-column table is a screen-real-estate win (5 x 20 beats
+    // one d100 column), and a note that isn't the one holding the
+    // table should still be able to pull a single CELL out of it —
+    // the cross-note equivalent of the in-note `[@npcs.xy]`. Both
+    // halves existed; this pins them working together, in all four
+    // spellings a reader might reach for.
+    describe("cross-note single-cell picks", () => {
+        const source = () =>
+            inMemorySource({ "Vault/Tables.md": TABLES_NOTE });
+
+        function rollFrom(expr: string, seed: number): string {
+            const bundle = buildInlineBundle(expr, {
+                notePath: "Vault/NPC.md",
+                noteSource: "",
+                source: source(),
+            });
+            return new Evaluator(bundle.main, bundle.extras, { seed }).run();
+        }
+
+        test("|xy picks a cell, not a row", () => {
+            const seen = new Set<string>();
+            for (let seed = 1; seed <= 40; seed++) {
+                seen.add(rollFrom("[[Tables^npcs|xy]]", seed));
+            }
+            // The whole-row roll would give "Alia, brave"; the cell
+            // roll gives one or the other and, over 40 seeds, both.
+            expect(seen).toEqual(new Set(["Alia", "brave"]));
+        });
+
+        test("the dotted spelling reaches the same table", () => {
+            for (let seed = 1; seed <= 20; seed++) {
+                expect(rollFrom("[[Tables^npcs.xy]]", seed)).toBe(
+                    rollFrom("[[Tables^npcs|xy]]", seed)
+                );
+                expect(rollFrom("[[Tables^npcs.Trait]]", seed)).toBe("brave");
+            }
+        });
+
+        test("the row roll is still the row roll", () => {
+            expect(rollFrom("[[Tables^npcs]]", 3)).toBe("Alia, brave");
+        });
     });
 
     test("direct call keeps in-note codeblock tables in scope", () => {

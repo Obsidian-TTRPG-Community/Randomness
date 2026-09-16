@@ -37,6 +37,7 @@ Afterwards they roll exactly as they used to.
 `dice-: 1d20`             accepted too
 `dice: [[Loot^gems]]`     roll on a table in another note
 `dice: 3[[Loot^gems]]`    three of them
+`dice: [[Loot^gems|xy]]`  one cell of a multi-column table
 `dice: #rumour`           a random note tagged #rumour
 `dice: #rumour|link`      a link to one instead
 ```

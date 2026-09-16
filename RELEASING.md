@@ -23,8 +23,8 @@ When a tag matching `[0-9]+.[0-9]+.[0-9]+` is pushed, GitHub Actions:
    `manifest.json` still reads `1.0.10` — BRAT and Obsidian would both
    trip on it.
 4. **Runs the full test suite** (`npm test -- --ci`). A tagged build
-   with failing tests must not publish. Currently 1,699 tests across
-   75 suites.
+   with failing tests must not publish. Currently 1,731 tests across
+   76 suites.
 5. **Builds** the plugin (`npm run build`) and verifies `main.js`,
    `manifest.json`, and `styles.css` all exist.
 6. **Attests build provenance** so installers can verify the artefacts
@@ -60,20 +60,35 @@ A one-liner that does all three (run from the repo root, replace
 `1.0.12`):
 
 ```sh
-VERSION=1.0.12
+VERSION=1.28.0
+PREV=1.27.0
 node -e "
-  for (const f of ['manifest.json','package.json']) {
-    const j = require('./'+f);
-    j.version = '$VERSION';
-    require('fs').writeFileSync(f, JSON.stringify(j,null,'\t')+'\n');
+  const fs = require('fs');
+  // Surgical string edits, NOT a JSON round-trip: these files are
+  // 2-space indented and versions.json is in historical order, so
+  // JSON.stringify would rewrite every line of all three and bury the
+  // real change in a 200-line diff.
+  for (const f of ['manifest.json', 'package.json']) {
+    const s = fs.readFileSync(f, 'utf8');
+    const out = s.replace(/("version":\s*")$PREV(")/, '\$1$VERSION\$2');
+    if (out === s) throw new Error('no version line changed in ' + f);
+    fs.writeFileSync(f, out);
   }
-  const v = require('./versions.json');
-  v['$VERSION'] = v[Object.keys(v)[0]];  // copy minAppVersion from latest
-  require('fs').writeFileSync('versions.json', JSON.stringify(v,null,'\t')+'\n');
+  const vf = 'versions.json';
+  const s = fs.readFileSync(vf, 'utf8');
+  const anchor = '  "$PREV": ';
+  const i = s.indexOf(anchor);
+  if (i < 0) throw new Error('previous version not found in ' + vf);
+  const min = s.slice(i + anchor.length).match(/"([^"]+)"/)[1];
+  fs.writeFileSync(vf, s.replace(
+    new RegExp('(  "$PREV": "' + min + '")'),
+    '\$1,\n  "$VERSION": "' + min + '"'
+  ));
 "
+git diff --stat manifest.json package.json versions.json   # expect ~4 lines
 ```
 
-(Eyeball `versions.json` afterwards — the auto-copy assumes the
+(Eyeball `versions.json` afterwards — the copy assumes the
 `minAppVersion` is unchanged. If you actually bumped the floor, fix
 the new entry by hand.)
 

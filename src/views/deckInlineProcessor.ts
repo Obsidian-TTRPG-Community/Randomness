@@ -739,7 +739,7 @@ async function autoBakeDeckMod(
         codeEl.replaceWith(span);
         return;
     }
-    const key = ctx.sourcePath + " " + raw;
+    const key = ctx.sourcePath + "\0" + raw;
     if (modBakesInFlight.has(key)) return;
     modBakesInFlight.add(key);
     try {

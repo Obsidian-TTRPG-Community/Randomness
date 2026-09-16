@@ -105,6 +105,28 @@ To reach a table living in a *different* note, name that note too
 `rdm:[[02 - Random Tables In Your Notes^taverns]]`
 ```
 
-Numbers work here as well: `rdm:3[[Loot^loot]]` gives you three.
+Numbers work here as well — this one gives you three names from
+the table further up the page:
+`rdm:3[[02 - Random Tables In Your Notes^npcs.Name]]`
+
+### One cell from a table in another note
+
+Everything from the columns section above works across notes too —
+just add the column after the table name:
+
+- A whole row: `rdm:[[02 - Random Tables In Your Notes^npcs]]`
+- One column: `rdm:[[02 - Random Tables In Your Notes^npcs|Name]]`
+- Any single box: `rdm:[[02 - Random Tables In Your Notes^npcs|xy]]`
+
+This is the tidy way to keep one big table in one place. A wide
+table — five columns of twenty names, say — takes up far less
+screen than a single column of a hundred, and every NPC note in
+your vault can reach into it with one span instead of carrying its
+own copy.
+
+If you'd rather write it the way you write `[@npcs.xy]`, a dot does
+the same job: `rdm:[[02 - Random Tables In Your Notes^npcs.xy]]`.
+Inside a markdown table you have to use the dot — a `|` would end
+the cell.
 
 Next: [[03 - Lock It In]]

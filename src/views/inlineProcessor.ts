@@ -41,6 +41,7 @@ import {
     vaultFileSource,
 } from "./vaultFileSource";
 import {
+    humaniseQualifiedTables,
     parseDirectTagCall,
     parseDirectWikilinkCall,
     TAG_FILE_CAP,
@@ -888,7 +889,9 @@ export function renderInlineError(
     span.className = "randomness-inline randomness-inline-error";
     span.textContent =
         "[error: " +
-        (err instanceof Error ? err.message : String(err)) +
+        humaniseQualifiedTables(
+            err instanceof Error ? err.message : String(err)
+        ) +
         "]";
     codeEl.replaceWith(span);
 }
