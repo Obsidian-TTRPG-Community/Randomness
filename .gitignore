@@ -14,3 +14,8 @@ node_modules/
 
 # Doc-example harness build artefact (see docs-tools/docroll.ts)
 docs-tools/docroll.cjs
+
+# Fallback folder used when a tool can't delete files directly — it is
+# scratch, never part of the plugin. 675 stale git temp objects reached
+# GitHub through it once already.
+_to_delete/
