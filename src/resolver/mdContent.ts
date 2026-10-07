@@ -1047,10 +1047,6 @@ export function renderPropTemplate(
 ): string {
     const noExt = path.replace(/\.md$/i, "");
     const base = noteBaseName(path);
-    const byKey = new Map<string, unknown>();
-    for (const k of Object.keys(fm ?? {})) {
-        byKey.set(k.toLowerCase(), (fm as Record<string, unknown>)[k]);
-    }
     return template.replace(PROP_PLACEHOLDER_RE, (_all, rawKey: string) => {
         const key = rawKey.trim().toLowerCase();
         switch (key) {
@@ -1064,10 +1060,26 @@ export function renderPropTemplate(
                 return base;
             default:
                 return escapeForEngine(
-                    formatFrontmatterValue(byKey.get(key))
+                    formatFrontmatterValue(frontmatterProperty(fm, key))
                 );
         }
     });
+}
+
+/** Literal keys take precedence over dotted paths, including at nested levels. */
+function frontmatterProperty(
+    object: unknown,
+    key: string
+): unknown {
+    if (object === null || typeof object !== "object" || Array.isArray(object)) return undefined;
+    const ownKey = Object.keys(object).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    if (ownKey !== undefined) {
+        return Object.getOwnPropertyDescriptor(object, ownKey)?.value;
+    }
+    const dot = key.indexOf(".");
+    if (dot <= 0 || dot === key.length - 1) return undefined;
+    const parent = frontmatterProperty(object, key.slice(0, dot));
+    return frontmatterProperty(parent, key.slice(dot + 1));
 }
 
 /**
@@ -1346,10 +1358,8 @@ export function matchesTagRollFilter(
     }
     if (filter.props.length === 0) return true;
     if (!fm) return false;
-    const byKey = new Map<string, unknown>();
-    for (const k of Object.keys(fm)) byKey.set(k.toLowerCase(), fm[k]);
     for (const p of filter.props) {
-        const raw = byKey.get(p.key.toLowerCase());
+        const raw = frontmatterProperty(fm, p.key);
         const list = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
         const forms = new Set<string>();
         for (const v of list) {

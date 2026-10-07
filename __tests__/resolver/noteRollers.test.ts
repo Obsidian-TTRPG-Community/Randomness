@@ -501,6 +501,54 @@ describe("dice: compat for sections, lines, and tags", () => {
 // ─── Property output (`prop:` templates) ───
 
 describe("parseDirectTagCall: prop: templates", () => {
+    test("prop: {{parent.child}} traverses nested YAML in matching and rendering", () => {
+        const fm = { Parent: { Child: "nested", "-child": ["one", "two"] } };
+        for (const expression of ["#npc|prop: {{parent.child}}", "#npc|prop: {{Parent.-child}}"]) {
+            const bundle = buildInlineBundle(expression, {
+                notePath: "Note.md",
+                noteSource: "",
+                source: inMemorySource({}),
+                tagFiles: (filter) => matchesTagRollFilter(new Set(["npc"]), fm, filter, "NPC.md")
+                    ? ["NPC.md"] : [],
+                tagFrontmatter: () => fm,
+            });
+            expect(new Evaluator(bundle.main, bundle.extras).run())
+                .toBe(expression.includes("-child") ? "one, two" : "nested");
+            expect(translateDiceExpression(expression).expr).toBe(expression);
+        }
+    });
+
+    test("literal dotted keys retain precedence over nested paths", () => {
+        const fm = { "parent.child": "literal", parent: { child: "nested" } };
+        expect(renderPropTemplate("{{parent.child}}", "NPC.md", fm)).toBe("literal");
+        expect(matchesTagRollFilter(new Set(), fm, {
+            tagGroups: [], props: [{ key: "parent.child", values: ["literal"] }],
+        })).toBe(true);
+    });
+
+    test.each([
+        undefined,
+        {},
+        { parent: null },
+        { parent: "scalar" },
+        { parent: [] },
+        { parent: { child: null } },
+        { parent: { child: "" } },
+    ])("missing nested values do not satisfy required-property filters: %j", (fm) => {
+        const query = parseDirectTagCall("#npc|prop: {{parent.child}}");
+        if (!query) throw new Error("Nested template did not parse");
+        expect(matchesTagRollFilter(new Set(["npc"]), fm, query.filter, "NPC.md")).toBe(false);
+        expect(renderPropTemplate("{{parent.child}}", "NPC.md", fm)).toBe("");
+    });
+
+    test("nested lookup ignores inherited properties and preserves escaping", () => {
+        const inherited: Record<string, unknown> = Object.create({ child: "inherited" });
+        expect(renderPropTemplate("{{parent.child}}", "NPC.md", { parent: inherited })).toBe("");
+        expect(renderPropTemplate("{{parent.child}}", "NPC.md", {
+            parent: { child: "[@Missing] {1d6}" },
+        })).toBe("\\[@Missing] \\{1d6}");
+    });
+
     test("bare key shorthand expands to a placeholder", () => {
         const c = parseDirectTagCall("#npc|prop:cr");
         expect(c?.mode).toBe("prop");

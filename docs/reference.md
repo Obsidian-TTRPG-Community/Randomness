@@ -1282,6 +1282,13 @@ you wrote.
 included, so `{{...}}` placeholders can sit inside wikilinks
 (`prop:[[{{path}}|{{name}}]]`). The bare form `prop:cr` is shorthand
 for `prop:{{cr}}`.
+Nested properties use dotted placeholders: `prop: {{parent.child}}`
+reads `child` inside the YAML mapping `parent`. Matching is
+case-insensitive at each level, and hyphenated child keys work too,
+such as `prop: {{parent.child-name}}`. A literal property named
+`parent.child` takes precedence if present. Missing nested values
+exclude a note just like missing top-level properties; list values
+remain comma-joined.
 
 Because the whole template is filled from one note, values can't drift
 apart — the CR and the HP always belong to the monster in the link.

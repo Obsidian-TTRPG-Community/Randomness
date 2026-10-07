@@ -2,6 +2,14 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Fixed
+- `prop: {{parent.child}}` now resolves nested YAML properties in
+  both output rendering and the required-property candidate filter.
+  Literal dotted keys retain precedence, and nested matching remains
+  case-insensitive.
+
 ## 1.28.0
 
 ### Added
