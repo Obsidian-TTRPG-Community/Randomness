@@ -37,6 +37,7 @@ export type PromptDecl = {
 
 export type TableDecl = {
     name: string;
+    query?: { source: string; line: number; path?: string };
     type: "weighted" | "lookup" | "dictionary";
     rollExpr?: string;                    // Lookup tables: raw roll source, e.g. "1d10"
     defaultValue?: string;                // Default: line; raw source
@@ -76,6 +77,14 @@ export type TableItem = {
     // means parser stays simple and we can reparse if needed.
     rawContent: string;
 };
+
+export function tableRegistry(files: readonly GeneratorFile[]): Map<string, TableDecl> {
+    const tables = new Map<string, TableDecl>();
+    for (const file of files) {
+        for (const table of file.tables) tables.set(table.name.toLowerCase(), table);
+    }
+    return tables;
+}
 
 // ───────────────────── Content nodes ─────────────────────
 // Once a TableItem's rawContent is parsed into nodes, it becomes a Node[].

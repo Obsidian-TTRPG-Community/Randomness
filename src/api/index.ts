@@ -33,6 +33,7 @@ import { vaultFileSource } from "../views/vaultFileSource";
 import { discoverGenerators } from "../views/browserView";
 import { collectTablesFromBundle } from "../views/tableAutocomplete";
 import { Evaluator } from "../engine/evaluator";
+import { createVaultTableSource } from "../views/queryTableSource";
 import { RNG } from "../engine/rng";
 import { dirname } from "../resolver/fileResolver";
 import type RandomnessPlugin from "../views/main";
@@ -508,13 +509,14 @@ export function createApi(plugin: RandomnessPlugin): RandomnessAPI {
                 bundle.main,
                 bundle.extras,
                 {
+                    tableSource: createVaultTableSource(plugin, bundle, opts?.seed),
                     seed: opts?.seed,
                     promptValues: opts?.promptValues,
                 }
             );
             const resultText = opts?.dictKey
-                ? evaluator.runByKey(tableName, opts.dictKey)
-                : evaluator.runByName(tableName);
+                ? await evaluator.runByKeyAsync(tableName, opts.dictKey)
+                : await evaluator.runByNameAsync(tableName);
 
             const result: RollResult = {
                 result: resultText,

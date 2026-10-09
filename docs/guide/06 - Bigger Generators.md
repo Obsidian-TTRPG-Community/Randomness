@@ -27,6 +27,35 @@ golden sandwich
 map to somewhere
 ```
 
+## A table that picks from your notes
+
+Remember tag rolls from chapter 04? Give one a name with
+`QueryTable:` and your generator can call it like any other table:
+
+```randomness
+Table: Encounter
+You meet [@Merchants].
+
+QueryTable: Merchants=#npc|#merchant|link
+Default: a travelling stranger
+```
+
+This picks a note with both `#npc` and `#merchant` and prints its
+link. If you haven't tagged any yet, you meet "a travelling
+stranger" instead — that's the `Default:` doing its job.
+
+Everything after the `=` is the tag roll you already know.
+Use `|prop:{{name}} ({{job}})` to print properties, or leave off
+`|link` to pick a block from the chosen note. List properties
+stay together; they don't become separate choices.
+
+Your notes are checked again each time you roll.
+`[@3 Merchants >> implode]` picks three,
+and `[!3 Merchants >> implode]` picks three different notes.
+That lasts for this roll only: query tables don't support
+`Deck: persistent`. The tags and property filters are fixed text,
+not variables. No Dataview needed.
+
 ## Make some results rarer
 
 Put a number and a colon in front. Think of it as how many

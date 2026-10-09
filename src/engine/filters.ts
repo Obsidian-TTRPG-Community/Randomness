@@ -18,7 +18,8 @@
 
 import { FilterCall, Node } from "./ast";
 import { parseContent } from "./contentParser";
-import { ExprContext, evaluateExpression } from "./expressions";
+import { ExprContext, ExprExecutionContext, executeExpression } from "./expressions";
+import { Execution, resultOf, runSync } from "./execution";
 
 export type FilterValue = string | string[];
 
@@ -26,6 +27,11 @@ export interface FilterContext extends ExprContext {
     /** Run an inner table call (used by Each / EachChar filters). */
     evalTable(tableName: string, params: string[]): string;
     /** Formatting mode for bold/italic/underline. */
+    formatting: "html" | "text";
+}
+
+export interface FilterExecutionContext extends ExprExecutionContext {
+    evalTable(tableName: string, params: string[]): string | Execution<string>;
     formatting: "html" | "text";
 }
 
@@ -37,7 +43,7 @@ export interface FilterContext extends ExprContext {
  * We need this because filter args are stored as raw source by the parser —
  * filter implementations have to resolve them.
  */
-function renderArgs(args: string, ctx: FilterContext): string {
+function* renderArgs(args: string, ctx: FilterExecutionContext): Execution<string> {
     const nodes: Node[] = parseContent(args);
     let out = "";
     for (const n of nodes) {
@@ -51,7 +57,7 @@ function renderArgs(args: string, ctx: FilterContext): string {
                 else if (n.kind === "literal") out += n.literal ?? "";
                 else out += "";
                 break;
-            case "variable": out += String(ctx.getVar(n.name)); break;
+            case "variable": out += String(yield* resultOf(ctx.getVar(n.name))); break;
             case "dice": {
                 // simple dice render
                 const m = n.source.match(/^(\d+)\s*[dD]\s*(\d+)$/);
@@ -71,7 +77,7 @@ function renderArgs(args: string, ctx: FilterContext): string {
                 // try a minimal expression eval using ctx
                 // (Caller's full evaluator already handles the common case;
                 // this path is only hit when filters embed expressions.)
-                const r = evaluateExpression(n.source, ctx);
+                const r = yield* executeExpression(n.source, ctx);
                 if (!(r.assignedVarName !== undefined && r.quiet)) {
                     out += String(r.value);
                 }
@@ -83,7 +89,7 @@ function renderArgs(args: string, ctx: FilterContext): string {
             case "inline_table":
             case "literal_bracket":
                 // Re-serialise to source and let evalEmbeddedCall handle it
-                out += ctx.evalEmbeddedCall(args.slice(0));
+                out += yield* resultOf(ctx.evalEmbeddedCall(args.slice(0)));
                 break;
             default: break;
         }
@@ -99,16 +105,24 @@ export function applyFilters(
     filters: FilterCall[],
     ctx: FilterContext
 ): string {
+    return runSync(executeFilters(value, filters, ctx));
+}
+
+export function* executeFilters(
+    value: FilterValue,
+    filters: FilterCall[],
+    ctx: FilterExecutionContext
+): Execution<string> {
     let current: FilterValue = value;
     for (const f of filters) {
-        current = applyFilter(current, f, ctx);
+        current = yield* applyFilter(current, f, ctx);
     }
     // Coalesce array to string at the end (default separator: empty)
     if (Array.isArray(current)) return current.join("");
     return current;
 }
 
-function applyFilter(value: FilterValue, f: FilterCall, ctx: FilterContext): FilterValue {
+function* applyFilter(value: FilterValue, f: FilterCall, ctx: FilterExecutionContext): Execution<FilterValue> {
     switch (f.name) {
         case "upper": return mapText(value, s => s.toUpperCase());
         case "lower": return mapText(value, s => s.toLowerCase());
@@ -119,12 +133,12 @@ function applyFilter(value: FilterValue, f: FilterCall, ctx: FilterContext): Fil
         case "reverse": return mapText(value, s => s.split("").reverse().join(""));
         case "length": return String(asString(value).trim().length);
         case "left": {
-            const argText = renderArgs(f.args, ctx);
+            const argText = yield* renderArgs(f.args, ctx);
             const n = argText ? parseInt(argText, 10) : 1;
             return mapText(value, s => s.slice(0, n));
         }
         case "right": {
-            const argText = renderArgs(f.args, ctx);
+            const argText = yield* renderArgs(f.args, ctx);
             const n = argText ? parseInt(argText, 10) : 1;
             return mapText(value, s => s.slice(-n));
         }
@@ -132,7 +146,7 @@ function applyFilter(value: FilterValue, f: FilterCall, ctx: FilterContext): Fil
             // Args: "start [length]" — 1-indexed.
             // IPP3 behaviour: with only a start, returns 1 character (per
             // corpus usage). With explicit length 0, returns rest from start.
-            const argText = renderArgs(f.args, ctx);
+            const argText = yield* renderArgs(f.args, ctx);
             const parts = argText.trim().split(/\s+/).filter(Boolean);
             const start = parts.length >= 1 ? parseInt(parts[0], 10) - 1 : 0;
             if (parts.length >= 2) {
@@ -147,7 +161,7 @@ function applyFilter(value: FilterValue, f: FilterCall, ctx: FilterContext): Fil
         }
         case "at": {
             // Output position (1-indexed) of substring in text; 0 if not found
-            const needle = renderArgs(f.args, ctx).trim();
+            const needle = (yield* renderArgs(f.args, ctx)).trim();
             const hay = asString(value).trim();
             const idx = hay.indexOf(needle);
             return idx === -1 ? "0" : String(idx + 1);
@@ -166,7 +180,7 @@ function applyFilter(value: FilterValue, f: FilterCall, ctx: FilterContext): Fil
             return [...value].sort((a, b) => a.localeCompare(b));
         }
         case "implode": {
-            const sep = f.args === "" ? ", " : renderArgs(f.args, ctx);
+            const sep = f.args === "" ? ", " : yield* renderArgs(f.args, ctx);
             const arr = Array.isArray(value) ? value : [value];
             return arr.join(sep);
         }
@@ -194,14 +208,16 @@ function applyFilter(value: FilterValue, f: FilterCall, ctx: FilterContext): Fil
             // Pass each result through another table as parameter $1
             const tableName = f.args.trim();
             const arr = Array.isArray(value) ? value : [asString(value)];
-            return arr.map(item => ctx.evalTable(tableName, [item]));
+            const out: string[] = [];
+            for (const item of arr) out.push(yield* resultOf(ctx.evalTable(tableName, [item])));
+            return out;
         }
         case "eachchar": {
             const tableName = f.args.trim();
             const s = asString(value);
             const out: string[] = [];
             for (const ch of s) {
-                out.push(ctx.evalTable(tableName, [ch]));
+                out.push(yield* resultOf(ctx.evalTable(tableName, [ch])));
             }
             return out.join("");
         }

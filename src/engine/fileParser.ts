@@ -28,7 +28,7 @@ export class ParseError extends Error {
 const COMMAND_KEYWORDS = [
     "use", "set", "define", "table", "type", "roll", "default",
     "shuffle", "prompt", "header", "footer", "maxreps", "formatting",
-    "title", "endtable", "with", "deck", "flip", "turn", "hidden"
+    "title", "endtable", "with", "deck", "flip", "turn", "hidden", "querytable"
 ] as const;
 
 type CommandKeyword = typeof COMMAND_KEYWORDS[number];
@@ -44,7 +44,7 @@ type CommandKeyword = typeof COMMAND_KEYWORDS[number];
  * relying on undocumented (and inconsistent) IPP3 behaviour; we
  * follow the spec.
  */
-const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable|Deck|Flip|Turn|Hidden)\s*:/i;
+const DIRECTIVE_PREFIX = /^\s*(?:Set|Define|Table|QueryTable|Type|Roll|Use|Prompt|Title|Formatting|MaxReps|Default|Shuffle|EndTable|Deck|Flip|Turn|Hidden)\s*:/i;
 
 /** Split source into logical lines, applying line continuations (`&` at EOL). */
 function preprocessLines(source: string): { text: string; lineNum: number }[] {
@@ -254,7 +254,8 @@ export function parseGeneratorFile(source: string): GeneratorFile {
 
     for (const { text, lineNum } of lines) {
         // Skip blank lines and comments at file level
-        const stripped = stripComment(text);
+        // Query templates are native inline source; URLs and literal // must survive.
+        const stripped = /^\s*QueryTable\s*:/i.test(text) ? text : stripComment(text);
         if (stripped.trim() === "") continue;
 
         const cmd = matchCommand(stripped);
@@ -273,12 +274,25 @@ export function parseGeneratorFile(source: string): GeneratorFile {
             }
 
             // Table: starts a new table (closes the previous one if any)
-            if (keyword === "table") {
+            if (keyword === "table" || keyword === "querytable") {
+                let name = rest.trim();
+                let query: TableDecl["query"];
+                if (keyword === "querytable") {
+                    const eq = rest.indexOf("=");
+                    if (eq < 0) throw new ParseError("QueryTable: expected Name=query", lineNum);
+                    name = rest.slice(0, eq).trim();
+                    const source = rest.slice(eq + 1).trim();
+                    if (!name || !source) {
+                        throw new ParseError("QueryTable: name and query must not be empty", lineNum);
+                    }
+                    query = { source, line: lineNum };
+                }
                 if (currentTable) {
                     file.tables.push(currentTable);
                 }
                 currentTable = {
-                    name: rest.trim(),
+                    name,
+                    ...(query ? { query } : {}),
                     type: "weighted",
                     shuffleTargets: [],
                     inTableSets: [],
@@ -353,6 +367,9 @@ export function parseGeneratorFile(source: string): GeneratorFile {
             if (keyword === "type") {
                 if (!currentTable) throw new ParseError("Type: outside a Table", lineNum);
                 const t = rest.trim().toLowerCase();
+                if (currentTable.query && t !== "weighted") {
+                    throw new ParseError("QueryTable: only Type: weighted is supported", lineNum);
+                }
                 if (t === "lookup") currentTable.type = "lookup";
                 else if (t === "weighted") currentTable.type = "weighted";
                 else if (t === "dictionary") currentTable.type = "dictionary";
@@ -362,6 +379,7 @@ export function parseGeneratorFile(source: string): GeneratorFile {
 
             if (keyword === "roll") {
                 if (!currentTable) throw new ParseError("Roll: outside a Table", lineNum);
+                if (currentTable.query) throw new ParseError("QueryTable: Roll: is not supported", lineNum);
                 currentTable.rollExpr = rest.trim();
                 continue;
             }
@@ -385,6 +403,9 @@ export function parseGeneratorFile(source: string): GeneratorFile {
             if (keyword === "deck") {
                 if (!currentTable) throw new ParseError("Deck: outside a Table", lineNum);
                 const mode = rest.trim().toLowerCase();
+                if (currentTable.query && mode === "persistent") {
+                    throw new ParseError("QueryTable: Deck: persistent is not supported; use Deck: session and [!...] instead", lineNum);
+                }
                 if (mode === "persistent") currentTable.deckPersistent = true;
                 else if (mode === "session") currentTable.deckPersistent = false;
                 else {
@@ -500,6 +521,10 @@ export function parseGeneratorFile(source: string): GeneratorFile {
                 items: []
             };
             inTableHeader = false;
+        }
+
+        if (currentTable.query) {
+            throw new ParseError("QueryTable: rows come from the query; handwritten items are not supported", lineNum);
         }
 
         // Once we see an item, we're past the table header

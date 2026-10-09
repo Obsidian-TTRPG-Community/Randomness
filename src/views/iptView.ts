@@ -38,6 +38,7 @@ import {
 } from "obsidian";
 import type { HoverParent, HoverPopover } from "obsidian";
 import { Evaluator } from "../engine/evaluator";
+import { createVaultTableSource } from "./queryTableSource";
 import { resolveBundle } from "../resolver/fileResolver";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
 import { vaultFileSource } from "./vaultFileSource";
@@ -215,10 +216,11 @@ export class IptView extends TextFileView implements HoverParent {
         }
 
         const evaluator = new Evaluator(bundle.main, bundle.extras, {
+            tableSource: createVaultTableSource(this.plugin, bundle),
             promptValues: this.promptValues,
         });
         return {
-            output: evaluator.run(),
+            output: await evaluator.runAsync(),
             prompts: bundle.main.prompts,
         };
     }

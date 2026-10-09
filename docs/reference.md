@@ -1167,15 +1167,12 @@ The rules, briefly:
 
 These filters also work under the `dice:` compatibility prefix.
 
-Tag rolls use Obsidian's own metadata cache — no Dataview required.
-The note pick happens inside the engine, so seeded rolls are
-reproducible and every re-roll may pick a different note.
+Tag rolls need no Dataview. Every re-roll may pick a different
+note; the same seed and matching notes give the same result.
 
 `link`, `linkpath` and `prop:` rolls consider **every** matching note,
-however many there are — they only need the note's path and its
-properties. A block roll (`rdm:#tag` with no mode) has to read each
-candidate note's text, so it draws from a random sample of 50 of the
-matching notes rather than all of them.
+however many there are. A block roll (`rdm:#tag` with no mode) draws
+from a random sample of up to 50 matching notes instead.
 
 #### More than one note per call
 
@@ -1309,6 +1306,66 @@ humanoid]` → `fey, humanoid`), and property values are treated as
 plain text — a value containing `[` or `{` prints as itself rather
 than being read as a table call. (The template around it is yours, so
 `prop:{{name}} takes {1d4} damage` still rolls the d4.)
+
+#### Query tables — give a tag roll a name
+
+A tag roll can be a table too. `QueryTable: name=...` gives it a
+name you can call from the rest of your generator:
+
+```text
+Table: Encounter
+You meet [@Merchants].
+
+QueryTable: Merchants=#npc|#merchant|link
+Default: a travelling stranger
+```
+
+`Merchants` picks a note with both tags and prints its link, just
+like `` `rdm:#npc|#merchant|link` ``. No matching notes? It prints
+the `Default:` instead, or nothing if you haven't given one.
+This works in `.rdm` files and `randomness` blocks, and `Use:`
+can bring query tables into another file.
+
+Everything after the first `=` is the tag roll. The folders,
+properties, and output choices described above work here too:
+
+```text
+QueryTable: EldaraNPCs=#npc|universe=Eldara|linkpath
+QueryTable: Creatures=*|folder=Bestiary|prop:{{name}} (CR {{cr}})
+QueryTable: Rumours=#rumour
+```
+
+List properties stay together, and a block roll still picks a
+note before a block. A count, `|unique`, or `|sep:` are ignored.
+Anything after `prop:` is still template text.
+
+Table calls work as usual:
+
+```text
+[@3 Merchants >> implode]    three picks; repeats are possible
+[!3 Merchants >> implode]    three different notes
+[#2 Merchants]              the second matching note
+```
+
+Each new roll checks your notes again. Links and properties see
+every match; block rolls use a random sample of up to 50 notes,
+just like inline tag rolls. A seed repeats the result while the
+notes stay the same — it doesn't freeze them.
+
+Query tables can use `Default:`, `Hidden:`, `Set:`, `Define:`,
+`Shuffle:`, `Deck: session`, `Flip:`, and `Turn:`. They are weighted
+tables with one equally likely entry per matching note.
+Handwritten rows, lookup/dictionary types, and `Roll:` are not
+supported.
+If the first table is a query table, it is the main table as usual.
+
+**`Deck: persistent` is not supported on query tables.** `[!...]`
+draws without repeats for the current roll only. Filters are fixed
+text: variables and `with` arguments don't change which notes match.
+
+Unlike ordinary item lines, `//` stays literal in a `QueryTable:`
+line, so URLs in a template don't get cut off. Put comments on
+their own lines.
 
 ### How wikilinks resolve
 
@@ -1756,9 +1813,8 @@ group as your inline call: one `Ctrl-Z` undoes both the
 inserted table name AND the auto-added `Use:` line if you
 change your mind.
 
-If the `Use:` line is already present (e.g. the cache was
-stale and the table was actually in scope), the operation is a
-no-op — no duplicate lines.
+If the `Use:` line is already present, Randomness doesn't add
+a second one.
 
 ## Referencing generators by name
 
@@ -1930,8 +1986,8 @@ tR += note ? `Tonight: ${note.link}` : "_no notes in that folder_";
 `randomNote(folder?, { seed? })` searches the folder recursively
 (whole vault when omitted) and returns
 `{ path, basename, link, frontmatter }`, or `null` for an empty
-folder. `frontmatter` is the note's properties straight from
-Obsidian's metadata cache — `{}` when it has none, so
+folder. `frontmatter` holds the note's properties — `{}` when it
+has none, so
 `note.frontmatter.cr` is always safe to reach for.
 
 ## Scripting API

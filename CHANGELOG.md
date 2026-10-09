@@ -2,6 +2,33 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Fixed
+- **Query tables load only when used.** Untaken branches and
+  unselected rows no longer run their queries. Dynamic table names
+  load the chosen table, and block queries read only selected notes.
+  Rows and reads are reused for one roll, then cleared on completion
+  or error. Folder-deck queries wait until card text actually uses them.
+  Skipping unused block queries may change older multi-query seeded
+  results, while repeated rolls remain deterministic.
+- **Property names can start with a hyphen.** `prop:-value` and
+  `prop:-` now work in tag rolls, including query tables.
+
+### Added
+- **Give a tag roll a table name.** Write
+  `QueryTable: Merchants=#npc|#merchant|link`, then use
+  `[@Merchants]` anywhere in your generator. Folders, properties,
+  and `prop:` templates work just as they do inline; your notes are
+  checked again on every roll. `Default:` supplies text when
+  nothing matches. No Dataview needed.
+
+  Ask for several with `[@3 Merchants >> implode]`, or draw without
+  repeats with `[!3 Merchants >> implode]`. Query tables **don't
+  support `Deck: persistent`**. Filters are fixed text. A count,
+  `|unique`, or `|sep:` in the tag roll is accepted without changing
+  the table's entries.
+
 ## 1.28.0
 
 ### Added

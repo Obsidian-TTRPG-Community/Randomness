@@ -27,6 +27,8 @@ import { parseGeneratorFile } from "../../src/engine/fileParser";
 import { Evaluator } from "../../src/engine/evaluator";
 import { inMemorySource } from "../../src/resolver/fileResolver";
 import { buildInlineBundle } from "../../src/resolver/scope";
+import { createQueryTableSource } from "../../src/resolver/queryTables";
+import { matchesTagRollFilter } from "../../src/resolver/mdContent";
 
 const DOCS = path.join(__dirname, "..", "..", "docs");
 const REFERENCE = path.join(DOCS, "reference.md");
@@ -91,7 +93,7 @@ function isGeneratorSource(b: Block): boolean {
     if (b.lang !== "text" && b.lang !== "randomness") return false;
     // A nested fence means this is a wrapper showing what to type.
     if (/^\s*```/m.test(b.body)) return false;
-    return /^\s*(Table|Set|Define|Prompt|MaxReps|Use|Title|Header|Footer)\s*:/im.test(
+    return /^\s*(Table|QueryTable|Set|Define|Prompt|MaxReps|Use|Title|Header|Footer)\s*:/im.test(
         b.body
     );
 }
@@ -109,7 +111,7 @@ describe("documentation: every generator example parses and rolls", () => {
 
     test.each(
         generatorBlocks.map((b) => [`${shortName(b.file)}:${b.line}`, b] as const)
-    )("%s", (_label, b) => {
+    )("%s", async (_label, b) => {
         const file = parseGeneratorFile(b.body);
         expect(file.tables.length).toBeGreaterThan(0);
 
@@ -126,7 +128,21 @@ describe("documentation: every generator example parses and rolls", () => {
         try {
             // A fixed seed keeps failure messages stable; output itself
             // is random by design and is not asserted.
-            new Evaluator(file, [], { seed: 1 }).run();
+            const candidate = "Bestiary/Example.md";
+            const metadata = { cr: 3, universe: "Eldara", rumours: ["one", "two"] };
+            const bundle = { main: file, extras: [], loadedPaths: [] };
+            const source = createQueryTableSource(bundle, {
+                seed: 1,
+                source: {
+                    read: async (path) => path === candidate ? "A documentation example block." : null,
+                    exists: async (path) => path === candidate,
+                },
+                files: (filter) => matchesTagRollFilter(
+                    new Set(["npc", "merchant", "rumour"]), metadata, filter, candidate
+                ) ? [candidate] : [],
+                frontmatter: () => metadata,
+            });
+            await new Evaluator(file, [], { seed: 1, tableSource: source }).runAsync();
         } catch (e) {
             thrown = e as Error;
         }

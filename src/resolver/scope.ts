@@ -24,16 +24,15 @@
  */
 
 import { GeneratorFile, TableDecl } from "../engine/ast";
+import { nativeQueryItems } from "./nativeQuery";
 import { findBlocks } from "./mdExtractor";
 import {
-    BLOCKS_PREFIX,
     TAG_FILE_CAP,
     extractMarkdownContentTables,
     noteBaseName,
     parseDirectTagCall,
     implodeSuffix,
     parseDirectWikilinkCall,
-    renderPropTemplate,
     TagRollFilter,
 } from "./mdContent";
 import {
@@ -132,39 +131,14 @@ export function buildInlineBundle(
         if (files.length === 0) {
             throw new Error(`No notes found matching ${tag.label}.`);
         }
-        if (tag.mode === "prop") {
-            // One item per candidate note, each already rendered — the
-            // engine picks a whole rendered note, so every `{{key}}`
-            // in the template describes the SAME note.
-            if (!opts.tagFrontmatter) {
-                throw new Error(
-                    `Property rolls (${tag.label}) need the vault's ` +
-                        `metadata cache, which isn't available in this ` +
-                        `context.`
-                );
-            }
-            const fmOf = opts.tagFrontmatter;
-            const tpl = tag.template as string;
-            tagTable = makeTagTable(
-                files.map((p) => renderPropTemplate(tpl, p, fmOf(p)))
-            );
-        } else if (tag.mode === "link" || tag.mode === "linkpath") {
-            // `link` (default) shows the note's name; `linkpath` keeps
-            // the full vault path visible. Both point at the same note.
-            tagTable = makeTagTable(
-                files.map((p) => {
-                    const path = p.replace(/\.md$/i, "");
-                    return tag.mode === "linkpath"
-                        ? `[[${path}]]`
-                        : `[[${path}|${noteBaseName(p)}]]`;
-                })
-            );
-        } else {
-            tagTable = makeTagTable(
-                files.map(
-                    (p) => `[@${BLOCKS_PREFIX}${noteBaseName(p).toLowerCase()}]`
-                )
-            );
+        tagTable = {
+            name: "__tagroll",
+            type: "weighted",
+            shuffleTargets: [],
+            inTableSets: [],
+            items: nativeQueryItems(tag, files, opts.tagFrontmatter),
+        };
+        if (tag.mode === "block") {
             tagUses = files;
         }
         // Repetitions, mirroring the wikilink rolls: `[@N …]` may pick
@@ -353,17 +327,6 @@ function dirOf(p: string): string {
  * `__inline`. The engine treats it as a normal table and returns the
  * evaluated content.
  */
-/** Synthetic table backing a #tag roll: one item per tagged note. */
-function makeTagTable(items: string[]): TableDecl {
-    return {
-        name: "__tagroll",
-        type: "weighted",
-        shuffleTargets: [],
-        inTableSets: [],
-        items: items.map((rawContent) => ({ weight: 1, rawContent })),
-    };
-}
-
 function makeInlineFile(expr: string): GeneratorFile {
     const table: TableDecl = {
         name: "__inline",

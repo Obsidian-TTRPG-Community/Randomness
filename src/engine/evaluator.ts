@@ -13,12 +13,13 @@
  * their default values are used unless overridden via setPromptValue().
  */
 
-import { GeneratorFile, Node, TableDecl, TableItem } from "./ast";
+import { Assignment, GeneratorFile, Node, TableDecl, TableItem, tableRegistry } from "./ast";
 import { facingTurns, rollFacing } from "../decks/deckModel";
 import { parseContent } from "./contentParser";
 import { DiceTraceEntry } from "./dice";
-import { ExprContext, evaluateExpression, Value } from "./expressions";
-import { FilterContext, applyFilters } from "./filters";
+import { ExprExecutionContext, executeExpression, Value } from "./expressions";
+import { FilterExecutionContext, executeFilters } from "./filters";
+import { Execution, runAsync, runSync, waitFor } from "./execution";
 import { RNG } from "./rng";
 
 export interface EvaluatorOptions {
@@ -67,6 +68,18 @@ export interface EvaluatorOptions {
      * show what each die rolled instead of only the sum.
      */
     onDice?: (entry: DiceTraceEntry) => void;
+    /** Per-scope lazy loading for the async entrypoints. */
+    tableSource?: EvaluationTableSource;
+}
+
+export interface LoadedTables {
+    table?: TableDecl;
+    files: GeneratorFile[];
+}
+
+export interface EvaluationTableSource {
+    load(name: string, query?: TableDecl): Promise<LoadedTables | undefined>;
+    clear(): void;
 }
 
 /**
@@ -114,6 +127,7 @@ export interface FolderDeckHost {
      * embed, card text). Null when the deck is empty.
      */
     draw(name: string): string | null;
+    drawAsync?(name: string): Promise<string | null>;
     /** Reshuffle the named folder deck. */
     reset(name: string): void;
 }
@@ -240,6 +254,9 @@ export class Evaluator {
     private currentItemIndexStack: number[] = [];
     /** Resolved cap (option or default). */
     private maxDepth: number;
+    private initialized = false;
+    private evaluating = false;
+    private queryResults = new Map<TableDecl, TableDecl>();
 
     constructor(
         private file: GeneratorFile,
@@ -251,11 +268,7 @@ export class Evaluator {
         this.maxDepth = opts.maxRecursionDepth ?? DEFAULT_MAX_RECURSION_DEPTH;
 
         // Register tables from main and extras
-        for (const f of [file, ...extraFiles]) {
-            for (const t of f.tables) {
-                this.tables.set(t.name.toLowerCase(), t);
-            }
-        }
+        this.tables = tableRegistry([file, ...extraFiles]);
 
         // Seed built-in variables
         const now = opts.now ?? new Date();
@@ -296,24 +309,40 @@ export class Evaluator {
             if (/^[A-Za-z_]\w*$/.test(p.label)) this.setVar(p.label, value);
         }
 
-        // Apply Use'd files' top-level Sets/Defines
-        for (const f of extraFiles) {
-            for (const a of f.topLevelSets) {
-                if (a.kind === "define") {
-                    this.defines.set(a.name, a.valueSource);
-                } else {
-                    this.setVar(a.name, this.evalRawText(a.valueSource));
-                }
-            }
+        if (!opts.tableSource) runSync(this.initialize());
+    }
+
+    private *initialize(): Execution<void> {
+        if (this.initialized) return;
+        for (const file of this.extraFiles) yield* this.applyAssignments(file.topLevelSets);
+        yield* this.applyAssignments(this.file.topLevelSets);
+        this.initialized = true;
+    }
+
+    private *applyAssignments(assignments: Assignment[]): Execution<void> {
+        for (const assignment of assignments) {
+            if (assignment.kind === "define") this.defines.set(assignment.name, assignment.valueSource);
+            else this.setVar(assignment.name, yield* this.renderRawText(assignment.valueSource));
         }
-        // Then main file's
-        for (const a of file.topLevelSets) {
-            if (a.kind === "define") {
-                this.defines.set(a.name, a.valueSource);
-            } else {
-                this.setVar(a.name, this.evalRawText(a.valueSource));
-            }
+    }
+
+    private async evaluateAsync(execution: Execution<string>): Promise<string> {
+        if (this.evaluating) throw new Error("An evaluator cannot run concurrent evaluations.");
+        this.evaluating = true;
+        try {
+            return await runAsync(execution);
+        } finally {
+            this.tables = tableRegistry([this.file, ...this.extraFiles]);
+            this.queryResults.clear();
+            this.deckState.clear();
+            this.evaluating = false;
+            this.opts.tableSource?.clear();
         }
+    }
+
+    private evaluateSync(execution: Execution<string>): string {
+        if (this.opts.tableSource) throw new Error("Use an async evaluation method with an asynchronous table source.");
+        return runSync(execution);
     }
 
     /**
@@ -331,6 +360,15 @@ export class Evaluator {
      *     default would flood the note.
      */
     run(): string {
+        return this.evaluateSync(this.runMain());
+    }
+
+    runAsync(): Promise<string> {
+        return this.evaluateAsync(this.runMain());
+    }
+
+    private *runMain(): Execution<string> {
+        yield* this.initialize();
         const main = this.file.tables[0];
         if (!main) return "";
         let reps: number;
@@ -348,7 +386,7 @@ export class Evaluator {
         for (let i = 0; i < reps; i++) {
             this.setVar("rep", i + 1);
             this.deckState.clear();
-            results.push(this.runTable(main, []));
+            results.push(yield* this.runTable(main, []));
         }
         // Reps are joined with a BLANK LINE between them — `\n\n`
         // gives each result its own visual block when displayed
@@ -379,9 +417,18 @@ export class Evaluator {
 
     /** Run a specific table by name (for engine introspection / tests). */
     runByName(name: string): string {
-        const t = this.tables.get(name.toLowerCase());
+        return this.evaluateSync(this.runNamed(name));
+    }
+
+    runByNameAsync(name: string): Promise<string> {
+        return this.evaluateAsync(this.runNamed(name));
+    }
+
+    private *runNamed(name: string): Execution<string> {
+        yield* this.initialize();
+        const t = yield* this.evaluationTable(name);
         if (!t) throw new Error(`Unknown table: ${name}`);
-        return clearPendingArticles(this.runTable(t, []));
+        return clearPendingArticles(yield* this.runTable(t, []));
     }
 
     /**
@@ -397,7 +444,16 @@ export class Evaluator {
      * semantics). Throws for unknown tables or wrong table type.
      */
     runByKey(name: string, key: string): string {
-        const t = this.tables.get(name.toLowerCase());
+        return this.evaluateSync(this.runKey(name, key));
+    }
+
+    runByKeyAsync(name: string, key: string): Promise<string> {
+        return this.evaluateAsync(this.runKey(name, key));
+    }
+
+    private *runKey(name: string, key: string): Execution<string> {
+        yield* this.initialize();
+        const t = yield* this.evaluationTable(name);
         if (!t) throw new Error(`Unknown table: ${name}`);
         if (t.type !== "dictionary") {
             throw new Error(
@@ -409,13 +465,7 @@ export class Evaluator {
         // contract), so any value expression referring to a Set'd
         // variable still works. We don't push positional params —
         // dictionary lookups don't take positional args.
-        for (const a of t.inTableSets) {
-            if (a.kind === "define") {
-                this.defines.set(a.name, a.valueSource);
-            } else {
-                this.setVar(a.name, this.evalRawText(a.valueSource));
-            }
-        }
+        yield* this.applyAssignments(t.inTableSets);
         const item = this.pickDictItem(t, key);
         if (!item) return "";
         const nodes = this.parseItem(item);
@@ -423,7 +473,7 @@ export class Evaluator {
         // resolves (parallels runTable behaviour).
         this.currentItemIndexStack.push(t.items.indexOf(item) + 1);
         try {
-            return clearPendingArticles(this.renderNodes(nodes));
+            return clearPendingArticles(yield* this.renderNodes(nodes));
         } finally {
             this.currentItemIndexStack.pop();
         }
@@ -431,13 +481,72 @@ export class Evaluator {
 
     /** Evaluate a free-form content string (used for inline `rdm:` calls). */
     evalRawText(source: string): string {
+        return this.evaluateSync(this.renderRawText(source));
+    }
+
+    evalRawTextAsync(source: string): Promise<string> {
+        return this.evaluateAsync(this.renderText(source));
+    }
+
+    private *renderText(source: string): Execution<string> {
+        yield* this.initialize();
+        return yield* this.renderRawText(source);
+    }
+
+    private *renderRawText(source: string): Execution<string> {
         const nodes = parseContent(source);
-        return this.renderNodes(nodes);
+        return yield* this.renderNodes(nodes);
     }
 
     // ─────────── Table execution ───────────
 
-    private runTable(table: TableDecl, params: string[]): string {
+    private *addLoadedFiles(files: GeneratorFile[]): Execution<void> {
+        const added: GeneratorFile[] = [];
+        for (const file of files) {
+            let changed = false;
+            for (const table of file.tables) {
+                const key = table.name.toLowerCase();
+                if (this.tables.has(key)) continue;
+                this.tables.set(key, table);
+                changed = true;
+            }
+            if (changed) added.push(file);
+        }
+        for (const file of added) yield* this.applyAssignments(file.topLevelSets);
+    }
+
+    private *preparedTable(table: TableDecl): Execution<TableDecl> {
+        if (!table.query) return table;
+        const cached = this.queryResults.get(table);
+        if (cached) return cached;
+        if (!this.opts.tableSource) {
+            throw new Error(`QueryTable '${table.name}' must be prepared with a native query provider before evaluation.`);
+        }
+        const loaded = yield* waitFor(this.opts.tableSource.load(table.name, table));
+        if (!loaded?.table || loaded.table.query ||
+            loaded.table.name.toLowerCase() !== table.name.toLowerCase()) {
+            throw new Error(`QueryTable '${table.name}' could not be loaded.`);
+        }
+        this.queryResults.set(table, loaded.table);
+        if (this.tables.get(table.name.toLowerCase()) === table) {
+            this.tables.set(table.name.toLowerCase(), loaded.table);
+        }
+        yield* this.addLoadedFiles(loaded.files);
+        return loaded.table;
+    }
+
+    private *evaluationTable(name: string): Execution<TableDecl | undefined> {
+        let table = this.tables.get(name.toLowerCase());
+        if (!table && this.opts.tableSource) {
+            const loaded = yield* waitFor(this.opts.tableSource.load(name));
+            if (loaded) yield* this.addLoadedFiles(loaded.files);
+            table = this.tables.get(name.toLowerCase());
+        }
+        return table ? yield* this.preparedTable(table) : undefined;
+    }
+
+    private *runTable(table: TableDecl, params: string[]): Execution<string> {
+        table = yield* this.preparedTable(table);
         // Recursion guard — see RecursionLimitError. We check BEFORE
         // incrementing so the error names the table that tipped us over,
         // not the one that would have run next.
@@ -460,19 +569,13 @@ export class Evaluator {
                 this.shuffleTable(targetName);
             }
             // Apply in-table Sets/Defines
-            for (const a of table.inTableSets) {
-                if (a.kind === "define") {
-                    this.defines.set(a.name, a.valueSource);
-                } else {
-                    this.setVar(a.name, this.evalRawText(a.valueSource));
-                }
-            }
+            yield* this.applyAssignments(table.inTableSets);
             // Pick an item
-            const picked = this.pickItem(table);
+            const picked = yield* this.pickItem(table);
             if (!picked) {
                 // Use default if available
                 if (table.defaultValue) {
-                    return this.evalRawText(table.defaultValue);
+                    return yield* this.renderRawText(table.defaultValue);
                 }
                 return "";
             }
@@ -485,7 +588,7 @@ export class Evaluator {
             // don't permanently clobber outer indices.
             this.currentItemIndexStack.push(index + 1);
             try {
-                return this.renderNodes(nodes);
+                return yield* this.renderNodes(nodes);
             } finally {
                 this.currentItemIndexStack.pop();
             }
@@ -500,10 +603,10 @@ export class Evaluator {
     }
 
     /** Pick one item from a table according to its Type. */
-    private pickItem(
+    private *pickItem(
         table: TableDecl,
         forcedIndex?: number
-    ): { item: TableItem; index: number } | null {
+    ): Execution<{ item: TableItem; index: number } | null> {
         // Helper to wrap an item with its positional index. Lookup
         // tables care about the listing index (so authors can use
         // "current-index pick" cross-references like cross-indexed
@@ -568,7 +671,7 @@ export class Evaluator {
                 if (maxHi > 0) rollExpr = `1d${maxHi}`;
             }
             if (!rollExpr) return null;
-            const roll = this.evalRollExpression(rollExpr);
+            const roll = yield* this.evalRollExpression(rollExpr);
             for (const item of table.items) {
                 if (item.lookupRange && roll >= item.lookupRange[0] && roll <= item.lookupRange[1]) {
                     return wrap(item);
@@ -670,15 +773,15 @@ export class Evaluator {
     }
 
     /** Render an array of content nodes to a string. */
-    private renderNodes(nodes: Node[]): string {
+    private *renderNodes(nodes: Node[]): Execution<string> {
         let out = "";
         for (let i = 0; i < nodes.length; i++) {
-            out += this.renderNode(nodes[i], nodes, i);
+            out += yield* this.renderNode(nodes[i], nodes, i);
         }
         return resolveArticles(out);
     }
 
-    private renderNode(n: Node, allNodes: Node[], index: number): string {
+    private *renderNode(n: Node, allNodes: Node[], index: number): Execution<string> {
         switch (n.type) {
             case "text": return n.value;
             case "escape": {
@@ -718,23 +821,23 @@ export class Evaluator {
                 const def = this.defines.get(n.name);
                 if (def !== undefined) {
                     // Re-evaluate the define lazily each time it's referenced
-                    return this.evalRawText(def);
+                    return yield* this.renderRawText(def);
                 }
                 return "";
             }
             case "dice": {
-                const v = this.evalRollExpression(n.source);
+                const v = yield* this.evalRollExpression(n.source);
                 return String(v);
             }
             case "expression": {
-                const result = evaluateExpression(n.source, this.exprContext());
+                const result = yield* executeExpression(n.source, this.exprContext());
                 if (result.assignedVarName !== undefined && result.quiet) return "";
                 return String(result.value);
             }
-            case "subtable_roll": return this.runSubtableRollNode(n);
-            case "subtable_pick": return this.runSubtablePickNode(n);
-            case "deck_pick": return this.runDeckPickNode(n);
-            case "inline_table": return this.runInlineTableNode(n);
+            case "subtable_roll": return yield* this.runSubtableRollNode(n);
+            case "subtable_pick": return yield* this.runSubtablePickNode(n);
+            case "deck_pick": return yield* this.runDeckPickNode(n);
+            case "inline_table": return yield* this.runInlineTableNode(n);
             case "literal_bracket": {
                 // Two flavours of literal_bracket reach this path:
                 //
@@ -764,7 +867,7 @@ export class Evaluator {
                 const isMarker = /^\[(?:when not|when|do|else|end)\]$/i.test(n.text);
                 const innerText = isMarker
                     ? n.text
-                    : this.renderNodes(parseContent(n.text));
+                    : yield* this.renderNodes(parseContent(n.text));
                 // IPP3 convention: the literal text inside `[...]`
                 // is trimmed before filters apply. Authors write
                 // `[ this is bold >> Bold]` with a leading space
@@ -777,14 +880,14 @@ export class Evaluator {
                 // the same convention IPP3 uses for `implode` glue
                 // strings.
                 const trimmed = innerText.replace(/^\s+|\s+$/g, "");
-                const result = applyFilters(trimmed, n.filters, this.filterContext());
+                const result = yield* executeFilters(trimmed, n.filters, this.filterContext());
                 return result;
             }
             case "conditional": {
-                const cond = this.evalConditionTruthy(n.conditionSource);
+                const cond = yield* this.evalConditionTruthy(n.conditionSource);
                 const truthy = n.negated ? !cond : cond;
-                if (truthy) return this.evalRawText(n.thenSource);
-                if (n.elseSource) return this.evalRawText(n.elseSource);
+                if (truthy) return yield* this.renderRawText(n.thenSource);
+                if (n.elseSource) return yield* this.renderRawText(n.elseSource);
                 return "";
             }
         }
@@ -804,7 +907,7 @@ export class Evaluator {
         return s;
     }
 
-    private evalConditionTruthy(source: string): boolean {
+    private *evalConditionTruthy(source: string): Execution<boolean> {
         const trimmed = source.trim();
         if (trimmed === "") return false;
         // IPP3 conditions are textual: render the full condition source as content,
@@ -816,28 +919,29 @@ export class Evaluator {
         if (opMatch) {
             const lhsRaw = trimmed.slice(0, opMatch.pos);
             const rhsRaw = trimmed.slice(opMatch.pos + opMatch.op.length);
-            const lhs = this.evalRawText(lhsRaw).trim();
-            const rhs = this.evalRawText(rhsRaw).trim();
+            const lhs = (yield* this.renderRawText(lhsRaw)).trim();
+            const rhs = (yield* this.renderRawText(rhsRaw)).trim();
             return compareTextual(lhs, rhs, opMatch.op);
         }
         // No comparison operator — render and treat as truthy if non-empty
-        const rendered = this.evalRawText(trimmed).trim();
+        const rendered = (yield* this.renderRawText(trimmed)).trim();
         return rendered.length > 0 && rendered !== "0";
     }
 
     /** Evaluate a roll-style expression source (e.g. "1d10", "1d6+2"). */
-    private evalRollExpression(source: string): number {
-        const result = evaluateExpression(source, this.exprContext());
+    private *evalRollExpression(source: string): Execution<number> {
+        const result = yield* executeExpression(source, this.exprContext());
         return Math.floor(Number(result.value));
     }
 
     // ─────────── Sub-table call nodes ───────────
 
-    private runSubtableRollNode(n: import("./ast").SubtableRollNode): string {
-        const reps = n.repsSource ? Math.max(1, this.evalRollExpression(n.repsSource)) : 1;
-        const tableName = this.evalRawText(n.tableSource);
-        const params = n.withParams.map(p => this.evalRawText(p));
-        const table = this.tables.get(tableName.toLowerCase());
+    private *runSubtableRollNode(n: import("./ast").SubtableRollNode): Execution<string> {
+        const reps = n.repsSource ? Math.max(1, yield* this.evalRollExpression(n.repsSource)) : 1;
+        const tableName = yield* this.renderRawText(n.tableSource);
+        const params: string[] = [];
+        for (const param of n.withParams) params.push(yield* this.renderRawText(param));
+        const table = yield* this.evaluationTable(tableName);
         // Originally returned "" silently — but a user pasting an
         // inline `rdm:[@T]` call into a note without the matching
         // Use: line saw blank text with no clue why. Throwing surfaces
@@ -847,9 +951,9 @@ export class Evaluator {
         if (!table) throw new Error(`Unknown table: ${tableName}`);
         const results: string[] = [];
         for (let i = 0; i < reps; i++) {
-            results.push(this.runTable(table, params));
+            results.push(yield* this.runTable(table, params));
         }
-        const filtered = applyFilters(
+        const filtered = yield* executeFilters(
             results.length > 1 ? results : results[0] ?? "",
             n.filters,
             this.filterContext()
@@ -861,13 +965,14 @@ export class Evaluator {
         return filtered;
     }
 
-    private runSubtablePickNode(n: import("./ast").SubtablePickNode): string {
-        const tableName = this.evalRawText(n.tableSource);
-        const table = this.tables.get(tableName.toLowerCase());
+    private *runSubtablePickNode(n: import("./ast").SubtablePickNode): Execution<string> {
+        const tableName = yield* this.renderRawText(n.tableSource);
+        const table = yield* this.evaluationTable(tableName);
         // See runSubtableRollNode: throwing rather than silently
         // returning "" so missing-table mistakes surface as errors.
         if (!table) throw new Error(`Unknown table: ${tableName}`);
-        const params = n.withParams.map(p => this.evalRawText(p));
+        const params: string[] = [];
+        for (const param of n.withParams) params.push(yield* this.renderRawText(param));
         let result: string;
         if (table.type === "dictionary") {
             // Pick by key. literalKey (from [#"quoted" Table]) bypasses
@@ -878,13 +983,13 @@ export class Evaluator {
                 n.literalKey !== undefined
                     ? n.literalKey
                     : n.indexSource
-                    ? this.evalRawText(n.indexSource)
+                    ? yield* this.renderRawText(n.indexSource)
                     : "";
             const picked = this.pickDictItem(table, key);
             if (picked) {
-                result = this.renderNodes(this.parseItem(picked));
+                result = yield* this.renderNodes(this.parseItem(picked));
             } else if (table.defaultValue) {
-                result = this.evalRawText(table.defaultValue);
+                result = yield* this.renderRawText(table.defaultValue);
             } else {
                 result = "";
             }
@@ -902,7 +1007,7 @@ export class Evaluator {
             // level call before any item is picked), default to 1
             // — matching the previous fallback behaviour.
             const idx = n.indexSource
-                ? this.evalRollExpression(n.indexSource)
+                ? yield* this.evalRollExpression(n.indexSource)
                 : this.currentItemIndexStack[
                       this.currentItemIndexStack.length - 1
                   ] ?? 1;
@@ -914,7 +1019,7 @@ export class Evaluator {
                 this.setVar(k, params[i]);
             }
             try {
-                const picked = this.pickItem(table, idx);
+                const picked = yield* this.pickItem(table, idx);
                 if (picked) {
                     // Track the picked sub-table item's position too,
                     // so any further `[#nested]` inside its content
@@ -924,12 +1029,12 @@ export class Evaluator {
                     // mirrors runTable's bracket.
                     this.currentItemIndexStack.push(picked.index + 1);
                     try {
-                        result = this.renderNodes(this.parseItem(picked.item));
+                        result = yield* this.renderNodes(this.parseItem(picked.item));
                     } finally {
                         this.currentItemIndexStack.pop();
                     }
                 } else if (table.defaultValue) {
-                    result = this.evalRawText(table.defaultValue);
+                    result = yield* this.renderRawText(table.defaultValue);
                 } else {
                     result = "";
                 }
@@ -940,7 +1045,7 @@ export class Evaluator {
                 }
             }
         }
-        const filtered = applyFilters(result, n.filters, this.filterContext());
+        const filtered = yield* executeFilters(result, n.filters, this.filterContext());
         if (n.assignVar) {
             this.setVar(n.assignVar, filtered);
             if (n.assignQuiet) return "";
@@ -948,10 +1053,11 @@ export class Evaluator {
         return filtered;
     }
 
-    private runDeckPickNode(n: import("./ast").DeckPickNode): string {
-        const reps = n.repsSource ? Math.max(1, this.evalRollExpression(n.repsSource)) : 1;
-        const tableName = this.evalRawText(n.tableSource);
-        const params = n.withParams.map(p => this.evalRawText(p));
+    private *runDeckPickNode(n: import("./ast").DeckPickNode): Execution<string> {
+        const reps = n.repsSource ? Math.max(1, yield* this.evalRollExpression(n.repsSource)) : 1;
+        const tableName = yield* this.renderRawText(n.tableSource);
+        const params: string[] = [];
+        for (const param of n.withParams) params.push(yield* this.renderRawText(param));
 
         // `[!deck:Name]` — a folder deck, drawn through the host.
         // Folder decks are deliberately OUTSIDE the table namespace
@@ -975,11 +1081,13 @@ export class Evaluator {
             }
             const drawn: string[] = [];
             for (let i = 0; i < reps; i++) {
-                const card = host.draw(deckName);
+                const card = this.evaluating && host.drawAsync
+                    ? yield* waitFor(host.drawAsync(deckName))
+                    : host.draw(deckName);
                 if (card === null) break; // deck exhausted
                 drawn.push(card);
             }
-            const filteredDeck = applyFilters(
+            const filteredDeck = yield* executeFilters(
                 drawn.length > 1 ? drawn : drawn[0] ?? "",
                 n.filters,
                 this.filterContext()
@@ -991,7 +1099,7 @@ export class Evaluator {
             return filteredDeck;
         }
 
-        const table = this.tables.get(tableName.toLowerCase());
+        const table = yield* this.evaluationTable(tableName);
         // See runSubtableRollNode: surface missing tables instead of
         // returning empty silently.
         if (!table) throw new Error(`Unknown table: ${tableName}`);
@@ -1017,7 +1125,7 @@ export class Evaluator {
                 this.setVar(k, params[j]);
             }
             try {
-                results.push(this.renderNodes(this.parseItem(item)));
+                results.push(yield* this.renderNodes(this.parseItem(item)));
             } finally {
                 for (const sp of savedParams) {
                     if (sp.value === undefined) this.deleteVar(sp.name);
@@ -1025,7 +1133,7 @@ export class Evaluator {
                 }
             }
         }
-        const filtered = applyFilters(
+        const filtered = yield* executeFilters(
             results.length > 1 ? results : results[0] ?? "",
             n.filters,
             this.filterContext()
@@ -1037,17 +1145,17 @@ export class Evaluator {
         return filtered;
     }
 
-    private runInlineTableNode(n: import("./ast").InlineTableNode): string {
+    private *runInlineTableNode(n: import("./ast").InlineTableNode): Execution<string> {
         if (n.options.length === 0) return "";
         const idx = this.rng.pickIndex(n.options.length);
         const chosen = n.options[idx];
-        const rendered = this.evalRawText(chosen);
-        return applyFilters(rendered, n.filters, this.filterContext());
+        const rendered = yield* this.renderRawText(chosen);
+        return yield* executeFilters(rendered, n.filters, this.filterContext());
     }
 
     // ─────────── Context for sub-evaluators ───────────
 
-    private exprContext(): ExprContext {
+    private exprContext(): ExprExecutionContext {
         // When a variable's stored value looks like a number, return
         // it AS a number so arithmetic on variables works correctly.
         // Otherwise `Set: A=5` (which stores the string "5"), followed
@@ -1066,15 +1174,7 @@ export class Evaluator {
             return v;
         };
         return {
-            getVar: (name) => {
-                if (this.hasVar(name)) return coerceIfNumeric(this.getVar(name)!);
-                const def = this.defines.get(name);
-                if (def !== undefined) {
-                    // Lazy evaluation: parse the source as content, render, return.
-                    return coerceIfNumeric(this.evalRawText(def));
-                }
-                return "";
-            },
+            getVar: (name) => this.expressionVariable(name, coerceIfNumeric),
             setVar: (name, value) => { this.setVar(name, value); },
             evalEmbeddedCall: (raw) => {
                 // Wrap in [ ] so the content parser sees a complete bracket
@@ -1097,8 +1197,14 @@ export class Evaluator {
      * `1-50` / `51-100` rows counts 2. For the common case this backs
      * — one item per row, `{1d{count(T)}}` — that's exactly right.
      */
-    private countTableItems(rawNameSource: string): number {
-        let name = this.evalRawText(rawNameSource).trim();
+    private *expressionVariable(name: string, coerce: (value: Value) => Value): Execution<Value> {
+        if (this.hasVar(name)) return coerce(this.getVar(name)!);
+        const definition = this.defines.get(name);
+        return definition === undefined ? "" : coerce(yield* this.renderRawText(definition));
+    }
+
+    private *countTableItems(rawNameSource: string): Execution<number> {
+        let name = (yield* this.renderRawText(rawNameSource)).trim();
         if (
             name.length >= 2 &&
             ((name.startsWith('"') && name.endsWith('"')) ||
@@ -1106,24 +1212,25 @@ export class Evaluator {
         ) {
             name = name.slice(1, -1).trim();
         }
-        const table = this.tables.get(name.toLowerCase());
+        const table = yield* this.evaluationTable(name);
         // Same posture as [@Table] / [#Table]: an unknown table is an
         // authoring mistake and should surface, not silently roll 1d0.
         if (!table) throw new Error(`Unknown table: ${name}`);
         return table.items.length;
     }
 
-    private filterContext(): FilterContext {
+    private filterContext(): FilterExecutionContext {
         const exprCtx = this.exprContext();
         return {
             ...exprCtx,
             formatting: this.formatting,
-            evalTable: (name, params) => {
-                const t = this.tables.get(name.toLowerCase());
-                if (!t) return "";
-                return this.runTable(t, params);
-            }
+            evalTable: (name, params) => this.filterTable(name, params)
         };
+    }
+
+    private *filterTable(name: string, params: string[]): Execution<string> {
+        const table = yield* this.evaluationTable(name);
+        return table ? yield* this.runTable(table, params) : "";
     }
 }
 

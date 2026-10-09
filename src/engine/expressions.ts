@@ -23,6 +23,7 @@
  */
 
 import { RNG } from "./rng";
+import { Execution, resultOf, runSync } from "./execution";
 import {
     DiceTraceEntry,
     DieDetail,
@@ -67,6 +68,12 @@ export interface ExprContext {
     countTable?(rawNameSource: string): number;
 }
 
+export interface ExprExecutionContext extends Omit<ExprContext, "getVar" | "evalEmbeddedCall" | "countTable"> {
+    getVar(name: string): Value | Execution<Value>;
+    evalEmbeddedCall(rawBracketBody: string): string | Execution<string>;
+    countTable?(rawNameSource: string): number | Execution<number>;
+}
+
 export class ExpressionError extends Error {
     constructor(message: string) {
         super(`Expression error: ${message}`);
@@ -83,6 +90,13 @@ export function evaluateExpression(
     source: string,
     ctx: ExprContext
 ): { value: Value; assignedVarName?: string; quiet: boolean } {
+    return runSync(executeExpression(source, ctx));
+}
+
+export function* executeExpression(
+    source: string,
+    ctx: ExprExecutionContext
+): Execution<{ value: Value; assignedVarName?: string; quiet: boolean }> {
     // Detect top-level assignment: "name = expr" or "name == expr"
     // Use a careful scan, not a regex, because "=" appears in comparisons.
     const trimmed = source.trim();
@@ -90,12 +104,12 @@ export function evaluateExpression(
     if (assignMatch) {
         const { name, quiet, rhs } = assignMatch;
         const parser = new ExprParser(rhs, ctx);
-        const v = parser.parseAndFinish();
+        const v = yield* parser.parseAndFinish();
         ctx.setVar(name, v);
         return { value: v, assignedVarName: name, quiet };
     }
     const parser = new ExprParser(trimmed, ctx);
-    const v = parser.parseAndFinish();
+    const v = yield* parser.parseAndFinish();
     return { value: v, quiet: false };
 }
 
@@ -145,11 +159,11 @@ function matchAssignment(s: string): { name: string; quiet: boolean; rhs: string
 class ExprParser {
     private pos = 0;
 
-    constructor(private source: string, private ctx: ExprContext) {}
+    constructor(private source: string, private ctx: ExprExecutionContext) {}
 
-    parseAndFinish(): Value {
+    *parseAndFinish(): Execution<Value> {
         this.skipWs();
-        const v = this.parseExpr();
+        const v = yield* this.parseExpr();
         this.skipWs();
         if (this.pos < this.source.length) {
             throw new ExpressionError(
@@ -175,12 +189,12 @@ class ExprParser {
         return false;
     }
 
-    private parseExpr(): Value {
-        return this.parseComparison();
+    private *parseExpr(): Execution<Value> {
+        return yield* this.parseComparison();
     }
 
-    private parseComparison(): Value {
-        let left = this.parseAdditive();
+    private *parseComparison(): Execution<Value> {
+        let left = yield* this.parseAdditive();
         this.skipWs();
         // Comparison operators: <=, >=, <>, =, <, >
         while (true) {
@@ -193,81 +207,81 @@ class ExprParser {
             else if (this.match("<")) op = "<";
             else if (this.match(">")) op = ">";
             if (!op) break;
-            const right = this.parseAdditive();
+            const right = yield* this.parseAdditive();
             left = compareValues(left, right, op);
         }
         return left;
     }
 
-    private parseAdditive(): Value {
-        let left = this.parseMultiplicative();
+    private *parseAdditive(): Execution<Value> {
+        let left = yield* this.parseMultiplicative();
         while (true) {
             this.skipWs();
             const ch = this.peek();
             if (ch === "+") {
                 this.pos++;
-                const right = this.parseMultiplicative();
+                const right = yield* this.parseMultiplicative();
                 left = addValues(left, right);
             } else if (ch === "-") {
                 this.pos++;
-                const right = this.parseMultiplicative();
+                const right = yield* this.parseMultiplicative();
                 left = subValues(left, right);
             } else break;
         }
         return left;
     }
 
-    private parseMultiplicative(): Value {
-        let left = this.parsePower();
+    private *parseMultiplicative(): Execution<Value> {
+        let left = yield* this.parsePower();
         while (true) {
             this.skipWs();
             const ch = this.peek();
             if (ch === "*") {
                 this.pos++;
-                const right = this.parsePower();
+                const right = yield* this.parsePower();
                 left = mulValues(left, right);
             } else if (ch === "/") {
                 this.pos++;
-                const right = this.parsePower();
+                const right = yield* this.parsePower();
                 left = divValues(left, right);
             } else break;
         }
         return left;
     }
 
-    private parsePower(): Value {
-        let left = this.parseUnary();
+    private *parsePower(): Execution<Value> {
+        let left = yield* this.parseUnary();
         this.skipWs();
         if (this.peek() === "^") {
             this.pos++;
             // Right-associative
-            const right = this.parsePower();
+            const right = yield* this.parsePower();
             left = Math.pow(toNum(left), toNum(right));
         }
         return left;
     }
 
-    private parseUnary(): Value {
+    private *parseUnary(): Execution<Value> {
         this.skipWs();
         if (this.peek() === "-") {
             this.pos++;
-            return -toNum(this.parseUnary());
+            return -toNum(yield* this.parseUnary());
         }
         if (this.peek() === "+") {
             this.pos++;
-            return this.parseUnary();
+            return yield* this.parseUnary();
         }
-        return this.parsePrimary();
+        return yield* this.parsePrimary();
     }
 
-    private parsePrimary(): Value {
+    private *parsePrimary(): Execution<Value> {
         this.skipWs();
         const ch = this.peek();
 
         // Parenthesised
         if (ch === "(") {
             this.pos++;
-            const v = this.parseExpr();
+            const v = yield* this.parseExpr();
             this.skipWs();
             if (this.peek() !== ")") throw new ExpressionError("missing ')'");
             this.pos++;
@@ -281,17 +295,17 @@ class ExprParser {
 
         // Embedded bracket [...]
         if (ch === "[") {
-            return this.parseEmbeddedBracket();
+            return yield* this.parseEmbeddedBracket();
         }
 
         // Number — possibly leading into a dice roll
         if (/[0-9.]/.test(ch)) {
-            return this.parseNumberOrDice();
+            return yield* this.parseNumberOrDice();
         }
 
         // Identifier — variable or function call.  Also handle legacy $name form.
         if (/[A-Za-z_$]/.test(ch)) {
-            return this.parseIdentifierOrCall();
+            return yield* this.parseIdentifierOrCall();
         }
 
         // Embedded brace expression — {expr} inside an expression
@@ -307,51 +321,42 @@ class ExprParser {
             }
             const inner = this.source.slice(start, this.pos);
             this.pos++; // consume closing }
-            return evaluateExpression(inner, this.ctx).value;
+            return (yield* executeExpression(inner, this.ctx)).value;
         }
 
         throw new ExpressionError(`unexpected character '${ch}' at position ${this.pos}`);
     }
 
     private parseString(quote: string): string {
-        this.pos++; // opening quote
-        let buf = "";
+        this.pos++;
+        let value = "";
         while (this.pos < this.source.length && this.source[this.pos] !== quote) {
-            if (this.source[this.pos] === "\\" && this.pos + 1 < this.source.length) {
-                buf += this.source[this.pos + 1];
-                this.pos += 2;
-                continue;
-            }
-            buf += this.source[this.pos];
-            this.pos++;
+            if (this.source[this.pos] === "\\" && this.pos + 1 < this.source.length) this.pos++;
+            value += this.source[this.pos++];
         }
-        if (this.pos >= this.source.length) throw new ExpressionError(`unterminated string`);
-        this.pos++; // closing quote
-        return buf;
+        if (this.pos >= this.source.length) throw new ExpressionError("unterminated string");
+        this.pos++;
+        return value;
     }
 
-    private parseEmbeddedBracket(): Value {
-        // Read balanced bracket content, pass to evaluator callback
-        this.pos++; // [
+    private *parseEmbeddedBracket(): Execution<Value> {
+        this.pos++;
         let depth = 1;
         let braceDepth = 0;
         const start = this.pos;
         while (this.pos < this.source.length && depth > 0) {
-            const c = this.source[this.pos];
-            if (c === "\\" && this.pos + 1 < this.source.length) { this.pos += 2; continue; }
-            if (c === "{") braceDepth++;
-            else if (c === "}") braceDepth--;
-            else if (braceDepth === 0 && c === "[") depth++;
-            else if (braceDepth === 0 && c === "]") {
-                depth--;
-                if (depth === 0) break;
-            }
+            const ch = this.source[this.pos];
+            if (ch === "\\" && this.pos + 1 < this.source.length) { this.pos += 2; continue; }
+            if (ch === "{") braceDepth++;
+            else if (ch === "}") braceDepth--;
+            else if (braceDepth === 0 && ch === "[") depth++;
+            else if (braceDepth === 0 && ch === "]" && --depth === 0) break;
             this.pos++;
         }
         const inner = this.source.slice(start, this.pos);
-        if (this.peek() !== "]") throw new ExpressionError(`unclosed '[' in expression`);
-        this.pos++; // ]
-        const text = this.ctx.evalEmbeddedCall(inner);
+        if (this.peek() !== "]") throw new ExpressionError("unclosed '[' in expression");
+        this.pos++;
+        const text = yield* resultOf(this.ctx.evalEmbeddedCall(inner));
         // Try to coerce to number if it looks like one
         const trimmed = text.trim();
         if (trimmed !== "" && !Number.isNaN(Number(trimmed))) {
@@ -360,7 +365,7 @@ class ExprParser {
         return text;
     }
 
-    private parseNumberOrDice(): Value {
+    private *parseNumberOrDice(): Execution<Value> {
         // Remember where this term starts so a dice roll can report
         // its notation ("4d6dl1") to the trace sink verbatim.
         const termStart = this.pos;
@@ -408,7 +413,7 @@ class ExprParser {
                     };
                 } else {
                     // Sub-table call — evaluate as a value, expect numeric
-                    const v = this.parseEmbeddedBracket();
+                    const v = yield* this.parseEmbeddedBracket();
                     const sides = Math.floor(Number(v));
                     if (Number.isNaN(sides)) {
                         throw new ExpressionError(
@@ -419,7 +424,7 @@ class ExprParser {
                 }
             } else if (next === "{") {
                 // Nested {...} expression
-                const v = this.parsePrimary(); // handles { case at line ~268
+                const v = yield* this.parsePrimary();
                 const sides = Math.floor(Number(v));
                 if (Number.isNaN(sides)) {
                     throw new ExpressionError(
@@ -502,16 +507,14 @@ class ExprParser {
      * interpolation like `{$name}` — doesn't end the argument early.
      */
     private consumeRawCallArgs(): string {
-        // Caller has already checked that peek() === "(".
         this.pos++;
         const start = this.pos;
         let depth = 1;
         while (this.pos < this.source.length) {
-            const c = this.source[this.pos];
-            if (c === "(" || c === "[" || c === "{") depth++;
-            else if (c === ")" || c === "]" || c === "}") {
-                depth--;
-                if (depth === 0) {
+            const ch = this.source[this.pos];
+            if (ch === "(" || ch === "[" || ch === "{") depth++;
+            else if (ch === ")" || ch === "]" || ch === "}") {
+                if (--depth === 0) {
                     const raw = this.source.slice(start, this.pos);
                     this.pos++;
                     return raw;
@@ -522,7 +525,7 @@ class ExprParser {
         throw new ExpressionError("missing ')' in function call");
     }
 
-    private parseIdentifierOrCall(): Value {
+    private *parseIdentifierOrCall(): Execution<Value> {
         let id = "";
         // Consume optional $ prefix (legacy variable reference)
         if (this.source[this.pos] === "$") {
@@ -535,13 +538,13 @@ class ExprParser {
             // nested expression resolving to the variable name —
             // though that form is rarer.
             if (this.peek() === "[") {
-                const nameValue = this.parseEmbeddedBracket();
-                return this.ctx.getVar(String(nameValue).trim());
+                const nameValue = yield* this.parseEmbeddedBracket();
+                return yield* resultOf(this.ctx.getVar(String(nameValue).trim()));
             }
             if (this.peek() === "{") {
                 // Nested {...} returning the variable name
-                const nameValue = this.parsePrimary();
-                return this.ctx.getVar(String(nameValue).trim());
+                const nameValue = yield* this.parsePrimary();
+                return yield* resultOf(this.ctx.getVar(String(nameValue).trim()));
             }
         }
         while (this.pos < this.source.length && /[A-Za-z0-9_]/.test(this.source[this.pos])) {
@@ -563,17 +566,17 @@ class ExprParser {
                         "count() is not available in this context"
                     );
                 }
-                return this.ctx.countTable(raw);
+                return yield* resultOf(this.ctx.countTable(raw));
             }
             this.pos++;
             const args: Value[] = [];
             this.skipWs();
             if (this.peek() !== ")") {
-                args.push(this.parseExpr());
+                args.push(yield* this.parseExpr());
                 this.skipWs();
                 while (this.peek() === ",") {
                     this.pos++;
-                    args.push(this.parseExpr());
+                    args.push(yield* this.parseExpr());
                     this.skipWs();
                 }
             }
@@ -582,7 +585,7 @@ class ExprParser {
             return callFunction(id.toLowerCase(), args);
         }
         // Variable reference
-        return this.ctx.getVar(id);
+        return yield* resultOf(this.ctx.getVar(id));
     }
 }
 

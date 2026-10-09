@@ -31,9 +31,9 @@ import {
     MarkdownRenderChild,
 } from "obsidian";
 import { Evaluator } from "../engine/evaluator";
+import { createVaultTableSource } from "./queryTableSource";
 import { resolveBundle } from "../resolver/fileResolver";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
-import { discoverReferencedTables } from "../resolver/autoDiscover";
 import {
     makeLinkAwareBasenameResolver,
     vaultFileSource,
@@ -233,27 +233,6 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
         const noteScope = this.noteScopeFile(bundle.main, bundle.extras);
         if (noteScope !== null) extras = [...extras, noteScope];
 
-        // Step 2b: auto-discover tables referenced by name but not
-        // defined here, in a Use:'d file, or elsewhere in the note —
-        // the vault index maps a table name to the file that defines
-        // it. Purely additive and lowest-priority, so explicit
-        // definitions always win.
-        if (this.plugin.vaultIndex) {
-            await this.plugin.vaultIndex.prewarm();
-            const discovered = await discoverReferencedTables({
-                main: bundle.main,
-                extras: bundle.extras,
-                alreadyLoaded: bundle.loadedPaths,
-                resolveTableName: (n) =>
-                    this.plugin.vaultIndex.resolveTable(n),
-                source: asyncSource,
-                generatorRoot: settings.generatorRoot || undefined,
-            });
-            if (discovered.length > 0) {
-                extras = [...bundle.extras, ...discovered];
-            }
-        }
-
         // Seed prompt values on first render (we need the parsed file
         // to know what prompts exist). Subsequent renders preserve
         // whatever the user has selected.
@@ -289,13 +268,14 @@ class RandomnessCodeblockChild extends MarkdownRenderChild {
               )
             : undefined;
         const evaluator = new Evaluator(bundle.main, extras, {
+            tableSource: createVaultTableSource(this.plugin, { ...bundle, extras }, seed),
             seed,
             promptValues: this.promptValues,
             deckHost: hosts?.deckHost,
             folderDeckHost: hosts?.folderDeckHost,
         });
         return {
-            output: evaluator.run(),
+            output: await evaluator.runAsync(),
             prompts: bundle.main.prompts,
         };
     }

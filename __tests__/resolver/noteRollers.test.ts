@@ -507,6 +507,25 @@ describe("parseDirectTagCall: prop: templates", () => {
         expect(c?.template).toBe("{{cr}}");
     });
 
+    test.each(["-", "-value", "challenge-rating"])("hyphenated key %s works in shorthand and templates", (key) => {
+        for (const source of [`#npc|prop:${key}`, `#npc|prop:{{${key}}}`]) {
+            const query = parseDirectTagCall(source);
+            expect(query?.template).toBe(`{{${key}}}`);
+            expect(query?.filter.props).toEqual([{ key, values: ["*"] }]);
+            const fm = { [key]: "matched value" };
+            const bundle = buildInlineBundle(source, {
+                notePath: "Note.md",
+                noteSource: "",
+                source: inMemorySource({}),
+                tagFiles: (filter) => matchesTagRollFilter(new Set(["npc"]), fm, filter, "NPC.md")
+                    ? ["NPC.md"] : [],
+                tagFrontmatter: () => fm,
+            });
+            expect(new Evaluator(bundle.main, bundle.extras, { seed: 1 }).run()).toBe("matched value");
+            expect(translateDiceExpression(source).expr).toBe(source);
+        }
+    });
+
     test("template keeps its literal text, spacing and pipes", () => {
         const c = parseDirectTagCall(
             "#npc|prop:{{link}} — CR {{cr}}, {{hp}} HP"

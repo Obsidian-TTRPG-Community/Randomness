@@ -131,7 +131,8 @@ import { RNG } from "../engine/rng";
  * Dataview required.
  */
 export function makeTagFilesLookup(
-    plugin: RandomnessPlugin
+    plugin: RandomnessPlugin,
+    opts?: { strict?: boolean }
 ): (filter: TagRollFilter) => string[] {
     return (filter) => {
         const out: string[] = [];
@@ -158,7 +159,8 @@ export function makeTagFilesLookup(
                     out.push(f.path);
                 }
             }
-        } catch {
+        } catch (error: unknown) {
+            if (opts?.strict) throw error;
             // Defensive: metadata cache API drift degrades to "no
             // matching notes" (a clear error upstream), not a crash.
         }
@@ -213,12 +215,14 @@ export function makeTagRollLookup(
  * Returns undefined for a path with no cache entry or no frontmatter.
  */
 export function makeTagFrontmatterLookup(
-    plugin: RandomnessPlugin
+    plugin: RandomnessPlugin,
+    opts?: { strict?: boolean }
 ): (path: string) => Record<string, unknown> | undefined {
     return (path) => {
         try {
             return plugin.app.metadataCache.getCache(path)?.frontmatter;
-        } catch {
+        } catch (error: unknown) {
+            if (opts?.strict) throw error;
             // Defensive, matching makeTagFilesLookup: cache API drift
             // degrades to "no properties", not a crash.
             return undefined;

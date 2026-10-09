@@ -29,6 +29,7 @@ import {
 import type { HoverParent, HoverPopover } from "obsidian";
 import { parseGeneratorFile } from "../engine/fileParser";
 import { Evaluator } from "../engine/evaluator";
+import { createVaultTableSource } from "./queryTableSource";
 import { resolveBundle } from "../resolver/fileResolver";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
 import { vaultFileSource } from "./vaultFileSource";
@@ -1476,11 +1477,12 @@ export async function rollTable(
         ? await plugin.decks.buildEvalHosts(filePath, true)
         : undefined;
     const evaluator = new Evaluator(bundle.main, bundle.extras, {
+        tableSource: createVaultTableSource(plugin, bundle),
         deckHost: hosts?.deckHost,
         folderDeckHost: hosts?.folderDeckHost,
     });
     try {
-        return evaluator.runByName(tableName);
+        return await evaluator.runByNameAsync(tableName);
     } finally {
         hosts?.commitDraws();
     }

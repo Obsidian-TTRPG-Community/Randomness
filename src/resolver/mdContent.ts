@@ -1017,7 +1017,7 @@ const RESERVED_PROP_KEYS = new Set(["link", "linkpath", "path", "name"]);
 const PROP_PLACEHOLDER_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
 /** What a bare `prop:cr` shorthand is allowed to look like. */
-const BARE_PROP_KEY_RE = /^[A-Za-z0-9_][A-Za-z0-9_ .-]*$/;
+const BARE_PROP_KEY_RE = /^[A-Za-z0-9_-][A-Za-z0-9_ .-]*$/;
 
 /** Every distinct placeholder name used by a template, in order. */
 export function propTemplateKeys(template: string): string[] {

@@ -31,9 +31,9 @@ import {
 } from "obsidian";
 import { makeEditorSafe } from "./editorSafeControls";
 import { Evaluator } from "../engine/evaluator";
+import { createVaultTableSource } from "./queryTableSource";
 import { buildInlineBundle } from "../resolver/scope";
 import { prefetchUseGraph } from "../resolver/asyncPrefetcher";
-import { discoverReferencedTables } from "../resolver/autoDiscover";
 import {
     makeLinkAwareBasenameResolver,
     makeTagRollLookup,
@@ -642,25 +642,6 @@ export async function evaluateInlineExpression(
         tagFrontmatter: makeTagFrontmatterLookup(plugin),
     });
 
-    // Auto-discover tables referenced by name but not defined in the
-    // note's own codeblocks or a Use:'d file — same mechanism as the
-    // codeblock processor. Lowest-priority, so explicit scope wins.
-    let extras = bundle.extras;
-    if (plugin.vaultIndex) {
-        await plugin.vaultIndex.prewarm();
-        const discovered = await discoverReferencedTables({
-            main: bundle.main,
-            extras: bundle.extras,
-            alreadyLoaded: bundle.loadedPaths,
-            resolveTableName: (n) => plugin.vaultIndex.resolveTable(n),
-            source: asyncSource,
-            generatorRoot: settings.generatorRoot || undefined,
-        });
-        if (discovered.length > 0) {
-            extras = [...bundle.extras, ...discovered];
-        }
-    }
-
     // Deck hosts: preloaded so the synchronous evaluator can draw.
     // Draws only commit for explicit actions (see opts docs). The
     // optional chaining matters: API-shaped test fixtures (and any
@@ -673,7 +654,8 @@ export async function evaluateInlineExpression(
           )
         : undefined;
 
-    const evaluator = new Evaluator(bundle.main, extras, {
+    const evaluator = new Evaluator(bundle.main, bundle.extras, {
+        tableSource: createVaultTableSource(plugin, bundle, opts?.seed),
         // Thread seed + promptValues through when provided (used by
         // the public API's roll options). Both are first-class
         // EvaluatorOptions fields, so this is a clean pass-through:
@@ -689,7 +671,7 @@ export async function evaluateInlineExpression(
             : undefined,
     });
     try {
-        return evaluator.run();
+        return await evaluator.runAsync();
     } finally {
         hosts?.commitDraws();
     }

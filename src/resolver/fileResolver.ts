@@ -297,6 +297,9 @@ export function parseFileSource(absPath: string, source: string): GeneratorFile 
         const extracted = extractRandomnessCodeblocks(source);
         // If no codeblocks, an empty file produces an empty GeneratorFile.
         const file = parseGeneratorFile(extracted);
+        for (const table of file.tables) {
+            if (table.query) table.query.path = absPath;
+        }
         // Markdown content tables (Dice Roller merge Phase 2): block-id'd
         // markdown tables and lists in the note become rollable tables
         // named by their id (see mdContent.ts). Codeblock-defined tables
@@ -333,7 +336,11 @@ export function parseFileSource(absPath: string, source: string): GeneratorFile 
         }
         return file;
     }
-    return parseGeneratorFile(source);
+    const file = parseGeneratorFile(source);
+    for (const table of file.tables) {
+        if (table.query) table.query.path = absPath;
+    }
+    return file;
 }
 
 /**
