@@ -2,6 +2,15 @@
 
 All notable changes to the Randomness plugin.
 
+## Unreleased
+
+### Added
+- **Pick tag rolls by a range or a list item.** `cr>=3|cr<=5`
+  finds CR 3 through 5; `types has undead` finds a list with
+  an `undead` item. Comparisons accept numbers and numeric text.
+  `has` matches whole list items, not substrings. Both work
+  inline and under `dice:`.
+
 ## 1.28.0
 
 ### Added

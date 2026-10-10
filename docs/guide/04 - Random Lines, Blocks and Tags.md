@@ -64,6 +64,29 @@ Randomness is relaxed about how you wrote the value:
 - And `universe=*` means "I don't care what it says, as long as
   the note *has* a universe."
 
+## Pick a range, or an item in a list
+
+Numbers can be compared too:
+
+```text
+`rdm:#monster|cr>=3|cr<=5|link`    CR 3 through 5
+`rdm:#npc|age<30|link`            younger than 30
+```
+
+`>` and `<` leave out the number itself; `>=` and `<=` include
+it. Numeric text works too, but missing or nonnumeric properties
+don't match.
+
+For lists, `has` asks for a whole item:
+
+```text
+`rdm:#monster|types has undead|link`
+```
+
+That finds `types: [fey, undead]`, not `types: [undead warrior]`.
+Capital letters don't matter. `has` is for list properties,
+not a search inside a sentence.
+
 ## More than one at a time
 
 Put a number in front, exactly as you would for a line roll:

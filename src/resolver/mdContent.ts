@@ -938,9 +938,10 @@ export function extractNoteBlocks(md: string): string[] {
 export interface TagPropFilter {
     /** Property name (matched case-insensitively). */
     key: string;
+    operator?: "=" | ">" | ">=" | "<" | "<=" | "has";
     /**
-     * Accepted values (OR). `"*"` means "the property exists with any
-     * non-empty value".
+     * Accepted values (OR). With equality, `"*"` means the property
+     * exists with a non-empty value; with has it is literal.
      */
     values: string[];
 }
@@ -1228,16 +1229,29 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
             filter.tagGroups.push(g);
             continue;
         }
-        const eq = seg.indexOf("=");
-        if (eq > 0) {
-            const key = seg.slice(0, eq).trim();
-            const values = seg
-                .slice(eq + 1)
+        const membership = seg.match(/^([^<>=]+?)\s+has(?:\s+(.*))?$/i);
+        const comparison = membership === null
+            ? seg.match(/^([^<>=]+?)\s*(>=|<=|>|<|=)\s*(.*)$/)
+            : null;
+        if (comparison || membership) {
+            const key = (comparison?.[1] ?? membership?.[1] ?? "").trim();
+            const operator = comparison?.[2] ?? "has";
+            const values = (comparison?.[3] ?? membership?.[2] ?? "")
                 .split(",")
                 .map((v) => v.trim())
                 .filter((v) => v !== "");
-            if (key === "" || values.length === 0) return null;
+            if (key === "" || values.length === 0) {
+                if (operator === "=") return null;
+                throw new Error(`Invalid property filter '${seg}': expected a value.`);
+            }
+            if (operator !== "=" && operator !== "has" &&
+                values.some((value) => numericPropertyValue(value) === undefined)) {
+                throw new Error(`Invalid property filter '${seg}': comparisons require finite numbers.`);
+            }
             if (key.toLowerCase() === "folder") {
+                if (operator !== "=") {
+                    throw new Error("Folder filters only support folder=path.");
+                }
                 // Folder source restriction, not a frontmatter prop.
                 const folders = values
                     .map((v) =>
@@ -1247,7 +1261,18 @@ export function parseDirectTagCall(expr: string): DirectTagCall | null {
                 if (folders.length === 0) return null;
                 filter.folders = [...(filter.folders ?? []), ...folders];
             } else {
-                filter.props.push({ key, values });
+                switch (operator) {
+                    case "=":
+                        filter.props.push({ key, values });
+                        break;
+                    case ">":
+                    case ">=":
+                    case "<":
+                    case "<=":
+                    case "has":
+                        filter.props.push({ key, values, operator });
+                        break;
+                }
             }
             continue;
         }
@@ -1302,7 +1327,8 @@ export function describeTagFilter(f: TagRollFilter): string {
         parts.push(`folder=${f.folders.join(",")}`);
     }
     for (const p of f.props) {
-        parts.push(`${p.key}=${p.values.join(",")}`);
+        const operator = p.operator === "has" ? " has " : p.operator ?? "=";
+        parts.push(`${p.key}${operator}${p.values.join(",")}`);
     }
     return parts.length > 0 ? parts.join("|") : "*";
 }
@@ -1350,18 +1376,47 @@ export function matchesTagRollFilter(
     for (const k of Object.keys(fm)) byKey.set(k.toLowerCase(), fm[k]);
     for (const p of filter.props) {
         const raw = byKey.get(p.key.toLowerCase());
+        const operator = p.operator ?? "=";
+        if (operator === "has" && !Array.isArray(raw)) return false;
         const list = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+        if (operator !== "=" && operator !== "has") {
+            const ok = list.some((value) => {
+                const number = numericPropertyValue(value);
+                if (number === undefined) return false;
+                return p.values.some((want) => {
+                    const threshold = numericPropertyValue(want);
+                    if (threshold === undefined) return false;
+                    switch (operator) {
+                        case ">": return number > threshold;
+                        case ">=": return number >= threshold;
+                        case "<": return number < threshold;
+                        case "<=": return number <= threshold;
+                    }
+                });
+            });
+            if (!ok) return false;
+            continue;
+        }
         const forms = new Set<string>();
         for (const v of list) {
             for (const c of frontmatterValueForms(v)) forms.add(c);
         }
         if (forms.size === 0) return false;
         const ok = p.values.some((want) =>
-            want === "*" ? true : forms.has(want.toLowerCase())
+            operator === "=" && want === "*" ? true : forms.has(want.toLowerCase())
         );
         if (!ok) return false;
     }
     return true;
+}
+
+function numericPropertyValue(value: unknown): number | undefined {
+    if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+    if (typeof value !== "string" || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())) {
+        return undefined;
+    }
+    const number = Number(value.trim());
+    return Number.isFinite(number) ? number : undefined;
 }
 
 /**

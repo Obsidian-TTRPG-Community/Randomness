@@ -1167,6 +1167,35 @@ The rules, briefly:
 
 These filters also work under the `dice:` compatibility prefix.
 
+For numbers, use `>`, `>=`, `<`, or `<=`. Put two filters together
+to pick a range:
+
+```text
+`rdm:#monster|cr>3|link`          CR above 3
+`rdm:#monster|cr>=3|cr<=5|link`   CR 3 through 5, inclusive
+`rdm:#npc|age<30|link`           younger than 30
+```
+
+Numbers and numeric text both work — `cr: 4` and `cr: "4"` match
+the same range. Missing or nonnumeric values don't match. For a
+list of numbers, any matching entry is enough. The value after a
+comparison must be a number; `cr>high` raises an error.
+
+`has` checks whether a **list** has a particular item:
+
+```text
+`rdm:#monster|types has undead|link`
+`rdm:#monster|types has undead,fey|link`
+```
+
+`types: [fey, undead]` matches either example. Capital letters don't
+matter, but the whole item must match: `undead warrior` isn't
+`undead`. A plain text property doesn't match `has`; use `=`
+for that. Commas mean OR, just as with equality, and link names
+and aliases still count. `has *` looks for a literal `*`
+item, not any item. `folder=` remains a folder filter; it doesn't
+take comparison operators or `has`.
+
 Tag rolls use Obsidian's own metadata cache — no Dataview required.
 The note pick happens inside the engine, so seeded rolls are
 reproducible and every re-roll may pick a different note.
